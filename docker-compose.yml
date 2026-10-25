@@ -83,6 +83,8 @@ services:
   worker:
     <<: *backend
     command: ["snowcrawl", "worker"]
+    # An init process as PID 1 reaps the exited Chrome processes the worker does not wait on, so they do not pile up.
+    init: true
     # Chrome needs more shared memory than Docker's 64 MB default.
     shm_size: 1gb
     depends_on:
