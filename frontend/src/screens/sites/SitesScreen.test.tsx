@@ -172,6 +172,23 @@ function configApi(extra: Record<string, () => Response> = {}) {
 }
 
 describe("sites screen", () => {
+  it("opens the site of a page URL entered for its host", async () => {
+    stubApi({
+      [`GET /v1/sites/${HOST}/configs`]: json({ items: [] }),
+      "GET /v1/schemas": json({ items: [schema] }),
+    });
+    await open("/sites", "Sites");
+
+    await userEvent.type(
+      screen.getByRole("textbox", { name: "Host" }),
+      `https://${HOST}:8443/catalog/item-1?ref=x`,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Open site" }));
+
+    expect(await screen.findByRole("heading", { level: 1, name: HOST })).toBeInTheDocument();
+    expect(await screen.findByText("No configs yet")).toBeInTheDocument();
+  });
+
   it("starts learning a site that has no config yet, for the schema chosen", async () => {
     const calls = stubApi({
       [`GET /v1/sites/${HOST}/configs`]: json({ items: [] }),

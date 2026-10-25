@@ -17,17 +17,25 @@ export function SitesScreen() {
       <Card>
         <Card.Header>
           <Card.Title>Open a site</Card.Title>
-          <Card.Description>Enter the site's host name, as its records name it.</Card.Description>
+          <Card.Description>
+            Enter the site's host name, as its records name it, or any page URL of the site.
+          </Card.Description>
         </Card.Header>
         <Card.Content>
           <LookupForm
             label="Host"
             placeholder="shop.example.com"
             submitLabel="Open site"
-            onOpen={(host) => void navigate(sitePath(host))}
+            onOpen={(value) => void navigate(sitePath(hostOf(value)))}
           />
         </Card.Content>
       </Card>
     </section>
   );
+}
+
+/** The host a value names: a URL's host (WHATWG URL Standard `host` parser: lowercased, no port, the same host the
+ * backend reads from a page URL), else the value itself, taken as a host. */
+function hostOf(value: string): string {
+  return URL.parse(value)?.hostname || value;
 }
