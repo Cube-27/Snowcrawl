@@ -34,8 +34,13 @@ export function SitesScreen() {
   );
 }
 
-/** The host a value names: a URL's host (WHATWG URL Standard `host` parser: lowercased, no port, the same host the
- * backend reads from a page URL), else the value itself, taken as a host. */
+// RFC 3986 section 3.2: a URL's authority follows "//"; its host is what remains without userinfo ("...@") and port.
+const AUTHORITY_HOST = /^[a-z][a-z0-9+.-]*:\/\/(?:[^@/?#]*@)?(\[[^\]/?#]*\]|[^:/?#]*)/i;
+
+/** The host a value names: a URL's host read as the backend reads a page URL's (Python `urlsplit().hostname`:
+ * lowercased, no brackets, no port, an internationalized name kept as written, not converted to punycode as the WHATWG
+ * URL parser does), else the value itself, taken as a host. */
 function hostOf(value: string): string {
-  return URL.parse(value)?.hostname || value;
+  const host = AUTHORITY_HOST.exec(value)?.[1];
+  return host ? host.replace(/^\[|\]$/g, "").toLowerCase() : value;
 }

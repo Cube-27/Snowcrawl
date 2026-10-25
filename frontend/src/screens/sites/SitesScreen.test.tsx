@@ -172,20 +172,20 @@ function configApi(extra: Record<string, () => Response> = {}) {
 }
 
 describe("sites screen", () => {
-  it("opens the site of a page URL entered for its host", async () => {
+  it.each([
+    [`https://user@${HOST.toUpperCase()}:8443/catalog/item-1?ref=x`, HOST],
+    ["https://bücher.example.test/item-1", "bücher.example.test"],
+  ])("opens the site of a page URL entered for its host: %s", async (url, host) => {
     stubApi({
-      [`GET /v1/sites/${HOST}/configs`]: json({ items: [] }),
+      [`GET /v1/sites/${encodeURIComponent(host)}/configs`]: json({ items: [] }),
       "GET /v1/schemas": json({ items: [schema] }),
     });
     await open("/sites", "Sites");
 
-    await userEvent.type(
-      screen.getByRole("textbox", { name: "Host" }),
-      `https://${HOST}:8443/catalog/item-1?ref=x`,
-    );
+    await replaceText(screen.getByRole("textbox", { name: "Host" }), url);
     await userEvent.click(screen.getByRole("button", { name: "Open site" }));
 
-    expect(await screen.findByRole("heading", { level: 1, name: HOST })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1, name: host })).toBeInTheDocument();
     expect(await screen.findByText("No configs yet")).toBeInTheDocument();
   });
 
