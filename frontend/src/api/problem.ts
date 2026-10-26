@@ -17,6 +17,8 @@ export interface Problem extends ProblemSummary {
   errors: FieldProblem[];
   /** RFC 9110 §10.2.3, sent with 429: delay-seconds or an HTTP date, as sent. */
   retryAfter: string | null;
+  /** RFC 9110 §15 status of the answer the problem came with; absent for a failure that had no answer. */
+  status?: number;
 }
 
 // RFC 9457 §3: problem bodies are `application/problem+json`; RFC 9110 §8.3.1 allows parameters after `;`.
@@ -41,6 +43,7 @@ export function problemOf(response: Response, body: unknown): Problem | null {
     detail: typeof body.detail === "string" ? body.detail : null,
     errors: errors.filter(isFieldProblem).map(({ field, reason }) => ({ field, reason })),
     retryAfter: response.headers.get("Retry-After"),
+    status: response.status,
   };
 }
 

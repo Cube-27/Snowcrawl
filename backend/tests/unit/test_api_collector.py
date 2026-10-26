@@ -87,3 +87,46 @@ def test_a_listing_reads_row_fields_relative_to_each_row_and_page_fields_at_the_
         ("title", "api:cfg1:$['items'][0]", "api:cfg1:$['items'][0]['name']", "Desk Lamp"),
         ("title", "api:cfg1:$['items'][2]", "api:cfg1:$['items'][2]['name']", "Floor Lamp"),
     ]
+
+
+RECIPE = _schema(
+    "detail",
+    title=FieldSpec(type=FieldType.TEXT, description="d", required=True),
+    body=FieldSpec(type=FieldType.LONG_TEXT, description="d"),
+    images=FieldSpec(type=FieldType.LIST, description="d", item=FieldSpec(type=FieldType.IMAGE_URL, description="d")),
+)
+
+
+def test_a_list_field_reads_every_match_and_another_field_needs_exactly_one_scalar() -> None:
+    document = {
+        "p": {
+            "title": "Lamp",
+            "pics": [{"src": "https://img.example.test/a.png"}, {"src": "https://img.example.test/b.png"}],
+        }
+    }
+    collector = ApiCollector("cfg1", {"images": "$['p']['pics'][*]['src']", "title": "$['p']['pics'][*]['src']"})
+
+    executed = _collect(document, RECIPE, collector)
+
+    assert _values(executed) == [
+        (
+            "images",
+            PAGE,
+            "api:cfg1:$['p']['pics'][0]['src']",
+            ["https://img.example.test/a.png", "https://img.example.test/b.png"],
+        )
+    ]
+
+
+def test_a_list_field_with_no_match_is_no_candidate() -> None:
+    executed = _collect({"p": {"pics": []}}, RECIPE, ApiCollector("cfg1", {"images": "$['p']['pics'][*]['src']"}))
+
+    assert executed.candidates == ()
+
+
+def test_a_text_value_holding_markup_reads_as_its_rendered_text() -> None:
+    document = {"p": {"body": "<p>Warm <b>light</b></p><meta charset='utf-8'>"}}
+
+    executed = _collect(document, RECIPE, ApiCollector("cfg1", {"body": "$['p']['body']"}))
+
+    assert [value for *_, value in _values(executed)] == ["Warm light"]

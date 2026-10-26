@@ -81,13 +81,19 @@ export function fieldSources(recipe: CustomRecipe): ReadonlyMap<string, readonly
   return found;
 }
 
+/** A page step as people read it: an XPath as written, a JSON-LD path with its type, any other step as JSON. */
+function stepText(step: PageField["steps"][number]): string {
+  if ("xpath" in step) return step.xpath;
+  if ("jsonld" in step)
+    return `JSON-LD ${step.jsonld}${step.when_type == null ? "" : ` of type ${step.when_type}`}`;
+  return JSON.stringify(step);
+}
+
 /** A source as people read it: "main call at $.data.price", "call stock at $.qty", "page: //h1 (needs a render)". */
 export function sourceText(source: Source): string {
   if (source.kind === "main") return `main call at ${source.path}`;
   if (source.kind === "call") return `call ${source.callName} at ${source.path}`;
-  const steps = source.field.steps.map((step) =>
-    "xpath" in step ? step.xpath : JSON.stringify(step),
-  );
+  const steps = source.field.steps.map(stepText);
   const render = source.field.needs === "browser" ? " (needs a render)" : "";
   return `page: ${steps.join(", then ")}${render}`;
 }

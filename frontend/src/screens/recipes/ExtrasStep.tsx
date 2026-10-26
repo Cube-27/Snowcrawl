@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button, Card, Chip, Switch, Typography } from "@heroui/react";
 import { TrashBin } from "@gravity-ui/icons";
 import type { CustomRecipe, PageField } from "../../api/recipes";
@@ -68,7 +69,20 @@ function WarmUpEditor({
   );
 }
 
-/** One field read from the page's HTML by XPath 1.0; on the HTTP page, or flagged as one only a render states. */
+type PageStep = PageField["steps"][number];
+type FirstStep = "xpath" | "jsonld";
+
+function stepPath(step: PageStep): string {
+  if ("xpath" in step) return step.xpath;
+  return "jsonld" in step ? step.jsonld : "";
+}
+const FIRST_STEPS: readonly (readonly [FirstStep, string])[] = [
+  ["xpath", "XPath"],
+  ["jsonld", "JSON-LD"],
+];
+
+/** One field read from the page: by XPath 1.0 over its HTML or by JSONPath (RFC 9535) into its JSON-LD nodes,
+ * optionally of one schema.org type; on the HTTP page, or flagged as one only a render states. */
 function PageFieldRow({
   name,
   field,
@@ -80,22 +94,47 @@ function PageFieldRow({
 }>) {
   const steps = field?.steps ?? [];
   const [first] = steps;
-  const isXPath = first !== undefined && "xpath" in first;
-  const xpath = isXPath ? first.xpath : "";
-  // The XPath edited is the first step; the steps after it stay, in order (the first valid value wins).
-  const rest = isXPath ? steps.slice(1) : steps;
+  const [kind, setKind] = useState<FirstStep>(
+    first !== undefined && "jsonld" in first ? "jsonld" : "xpath",
+  );
+  // The step edited is the first, when it is of the chosen kind; the steps after it stay, in order (the first valid
+  // value wins).
+  const current = first !== undefined && kind in first ? first : undefined;
+  const rest = current === undefined ? steps : steps.slice(1);
   const needs = field?.needs ?? "http";
+  const replace = (step: PageStep | undefined) => {
+    const kept = step === undefined ? rest : [step, ...rest];
+    onChange(kept.length === 0 ? undefined : { steps: kept, needs });
+  };
   return (
     <li className="flex flex-wrap items-end gap-2">
-      <Line
-        label={`XPath of ${name}`}
-        value={xpath}
-        placeholder="//h1"
+      <Choices
+        label={`Reads ${name} with`}
+        options={FIRST_STEPS}
+        value={kind}
         onChange={(next) => {
-          const kept = next === "" ? rest : [{ ...(isXPath ? first : {}), xpath: next }, ...rest];
-          onChange(kept.length === 0 ? undefined : { steps: kept, needs });
+          // The step already written stays (the first valid value wins), with the field's `needs`.
+          setKind(next);
         }}
       />
+      <Line
+        label={`${kind === "jsonld" ? "JSON-LD path" : "XPath"} of ${name}`}
+        value={current === undefined ? "" : stepPath(current)}
+        placeholder={kind === "jsonld" ? "$['offers'][0]['availability']" : "//h1"}
+        onChange={(next) => {
+          replace(next === "" ? undefined : ({ ...current, [kind]: next } as PageStep));
+        }}
+      />
+      {current !== undefined && "jsonld" in current ? (
+        <Line
+          label={`JSON-LD type of ${name}`}
+          value={current.when_type ?? ""}
+          placeholder="Product"
+          onChange={(next) => {
+            replace({ ...current, when_type: next === "" ? null : next });
+          }}
+        />
+      ) : null}
       <Switch
         isSelected={needs === "browser"}
         isDisabled={field === undefined}

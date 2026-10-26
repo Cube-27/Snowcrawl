@@ -8,6 +8,7 @@ from uuid import UUID
 
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from pydantic import JsonValue
 
 from snowcrawl.config_ir.validation import Facts, HeldOutPage
 from snowcrawl.content.page import ParsedPage
@@ -91,3 +92,31 @@ def _check(endpoint: Endpoint, called: list[CaptureId], *, carried: int) -> None
     subtitle = fields["subtitle"]
     assert not subtitle.published
     assert [(p.path, p.samples) for p in subtitle.paths] == [("$['name']", len(called))]
+
+
+def test_a_slug_is_no_url_path_and_a_currency_stating_money_reading_drops_the_others() -> None:
+    schema = SchemaDef(
+        id=SchemaId(uuid7()),
+        origin="user",
+        status="active",
+        name="synthetic",
+        page_kind="detail",
+        fields={
+            "url": FieldSpec(type=FieldType.URL, description="d"),
+            "price": FieldSpec(type=FieldType.MONEY, description="d"),
+        },
+    )
+    body = {"handle": "desk-lamp", "path": "/p/desk-lamp", "price": "19.50", "currency": "EUR"}
+    url = "https://shop.example.test/p/desk-lamp"
+    published: dict[str, JsonValue] = {"url": url, "price": {"amount": "19.5", "currency": "EUR"}}
+    network = (call(0, "https://api.example.test/p?id=1", json.dumps(body).encode(), method="GET"),)
+    bundle = capture(b"<html><body></body></html>", url=url, method="browser", network=network)
+    ctx = Context(captured_at=datetime(2026, 10, 14, tzinfo=UTC), base_url=url, page_url=url)
+    page = HeldOutPage(CaptureId(UUID(int=1)), ParsedPage.of(bundle), ctx, Facts(published=published))
+
+    (endpoint,) = listed([page], schema).endpoints
+
+    paths = {match.field: [p.path for p in match.paths] for match in endpoint.fields}
+    assert paths["url"] == ["$['path']"]
+    assert paths["price"]
+    assert all("+" in path for path in paths["price"])  # the pair, never the amount alone

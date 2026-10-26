@@ -25,14 +25,16 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from snowcrawl.collect import json_doc
 from snowcrawl.collect.network_match import SUCCESS, EndpointKey, data_calls, endpoint_key
-from snowcrawl.config_ir.api_recipe.discovery import Normalized, body_readings
+from snowcrawl.config_ir.api_recipe.discovery import BodyReadings, Normalized, body_readings
 from snowcrawl.config_ir.held_out import load_captures, read_bundle
 from snowcrawl.config_ir.validation import Facts, HeldOutPage
 from snowcrawl.content.page import answer_text
 from snowcrawl.core.errors import Refusal
 from snowcrawl.db.models import Capture, CaptureId, Extraction, Job, Record, SchemaId, TaskRecord, UrlTask
+from snowcrawl.normalize.base import Context, Ok
+from snowcrawl.normalize.dispatch import normalize
 from snowcrawl.schemas import registry
-from snowcrawl.schemas.types import SchemaDef
+from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
 from snowcrawl.services.captures import CaptureNotFound, bundle_of
 from snowcrawl.storage.base import ObjectStore
 from snowcrawl.storage.capture_bundle import NetworkBody, is_html, network_json
@@ -60,6 +62,10 @@ _TYPED_PATHS_MAX: Final = 20
 # RFC 9535 §2.5.1.2: an array index selector, which a row's paths write as the wildcard `[*]`.
 INDEX: Final = re.compile(r"\[\d+\]")
 _WHITESPACE: Final = re.compile(r"\s+")
+# RFC 3986 §3.1: a URI reference starting with a scheme is a URI (§4.3, absolute); `/` starts a network-path or an
+# absolute-path reference (§4.2). Any other reference, a bare segment, resolves only against a base the JSON lacks.
+_SCHEME: Final = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*:")
+_URL_TYPES: Final = frozenset({FieldType.URL, FieldType.IMAGE_URL})
 
 
 class NoSamples(Refusal, LookupError):
@@ -278,13 +284,58 @@ def _match(group: _Group, number: int, entry: NetworkBody, data: bytes, page: He
         return
     published = page.facts.published
     readings = body_readings(document, page.ctx, schema)
-    typed, hits = readings.typed, readings.hits(published)
+    typed, hits = readings.typed, _restricted(readings.hits(published), readings, page.ctx)
     for row in page.rows:
-        for name, paths in readings.hits(row.published).items():
+        for name, paths in _restricted(readings.hits(row.published), readings, page.ctx).items():
             hits.setdefault(name, {}).update(dict.fromkeys(INDEX.sub("[*]", path) for path in paths))
     _add(group.published, hits, number)
     stated = hits.keys() | published.keys() | {name for row in page.rows for name in row.published}
-    _add(group.typed, _typed_paths(typed, stated), number)
+    _add(group.typed, _typed_paths(_restricted_readings(typed, schema, page.ctx), stated), number)
+
+
+def _restricted(
+    hits: Mapping[str, Mapping[str, None]], readings: BodyReadings, ctx: Context
+) -> dict[str, dict[str, None]]:
+    """`hits` without the paths a field cannot be drafted from (`_usable`)."""
+    kept: dict[str, dict[str, None]] = {}
+    for name, paths in hits.items():
+        raws = {reading.path: reading.raw for reading, _ in readings.matching[name].readings}
+        usable = _usable(readings.schema.fields[name], {path: raws.get(path) for path in paths}, ctx)
+        if usable:
+            kept[name] = dict.fromkeys(usable)
+    return kept
+
+
+def _restricted_readings(typed: Mapping[str, Normalized], schema: SchemaDef, ctx: Context) -> dict[str, Normalized]:
+    """`typed` with only the readings a field can be drafted from (`_usable`)."""
+    kept: dict[str, Normalized] = {}
+    for name, readings in typed.items():
+        usable = set(_usable(schema.fields[name], {reading.path: reading.raw for reading, _ in readings}, ctx))
+        kept[name] = [(reading, value) for reading, value in readings if reading.path in usable]
+    return kept
+
+
+def _usable(spec: FieldSpec, raws: Mapping[str, JsonValue], ctx: Context) -> list[str]:
+    """The paths of `raws` (path -> raw value) a field is drafted from. A url or image_url field (or a list of them)
+    reads a leaf that is a URI or starts with `/` (RFC 3986 §4.2, §4.3), never a bare segment. A money field reads
+    only the leaves whose raw value states its currency (`Ok.basis` is None) when some leaf does, so an amount alone
+    or a coincidental pair is no reading where the answer states an amount with its currency."""
+    leaf = spec.item if spec.item is not None else spec
+    if leaf.type in _URL_TYPES:
+        return [path for path, raw in raws.items() if not isinstance(raw, str) or _referenced(raw)]
+    if spec.type is FieldType.MONEY:
+        stating = [
+            path
+            for path, raw in raws.items()
+            if isinstance(result := normalize(raw, spec, ctx), Ok) and result.basis is None
+        ]
+        return stating or list(raws)
+    return list(raws)
+
+
+def _referenced(raw: str) -> bool:
+    text = raw.strip()
+    return text.startswith("/") or _SCHEME.match(text) is not None
 
 
 def _typed_paths(typed: Mapping[str, Normalized], stated: set[str]) -> dict[str, dict[str, None]]:

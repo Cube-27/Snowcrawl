@@ -311,10 +311,21 @@ class RecipeRung:
         page = await _in(jar, self.fetch_page(url, policy))
         if slow_down(page):
             return page  # a 429 or 503 asks for fewer requests: `acquire` keeps it, with no fallback request
-        if page.block_class != "ok":
+        if page.block_class != "ok" and not self._read_as_is(page):
             return _after(page, self._unserved(url, policy, f"page_{page.block_class}"))
         # Parsing is CPU work: a thread keeps the event loop serving other tasks meanwhile.
         return (page, *await asyncio.to_thread(_page_data, page))
+
+    def _read_as_is(self, page: FetchResult) -> bool:
+        """Whether a page the HTTP rung classed `shell` is still read for a custom recipe's page fields: a shell says
+        a render would state more (its script state, its unrendered text), not that the document states nothing, and
+        a step that finds nothing in it publishes nothing (C7). One a challenge labels is a stand-in for the page."""
+        return (
+            self.custom is not None
+            and self.custom.page_fields
+            and page.block_class == "shell"
+            and page.attempts[-1].challenge is None
+        )
 
     async def _warm_up(
         self, url: str, policy: FetchPolicy, jar: FetchCookies | None, served: Served

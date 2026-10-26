@@ -34,11 +34,11 @@ from snowcrawl.collect import json_doc
 from snowcrawl.collect.base import ARRAY_ROW, PAGE, Candidate, Entity
 from snowcrawl.collect.config import ROW_KIND, Executed, Refusal
 from snowcrawl.collect.locator import format_locator
-from snowcrawl.collect.schema_org_map import candidate
+from snowcrawl.collect.schema_org_map import candidate, fragment_read
 from snowcrawl.content.page import ParsedPage
 from snowcrawl.core import json_text
 from snowcrawl.normalize.base import Context
-from snowcrawl.schemas.types import SchemaDef
+from snowcrawl.schemas.types import FieldSpec, SchemaDef
 
 Scalar = str | int | float
 
@@ -126,7 +126,7 @@ class ApiCollector:
         except ValueError as e:
             refusal = Refusal(kind="document", source=f"api:{self.recipe_id}", reason=f"not JSON ({e})")
             return Executed(rows=(), candidates=(), refusals=(refusal,))
-        reading = _Reading("api", self.recipe_id, schema, ctx)
+        reading = _Reading("api", self.recipe_id, schema, ctx, recipe=True)
         known = {name: path for name, path in self.map.items() if name in schema.fields}
         refusals = tuple(
             Refusal(kind="field", source=f"api:{self.recipe_id}", field=name, reason="not a field of the schema")
@@ -189,19 +189,33 @@ class _Reading:
     schema: SchemaDef
     ctx: Context
     notes: list[str] = field(default_factory=list)
+    # A recipe's reading (`ApiCollector`) gives a list field every match of its path and reads a text value holding
+    # markup as its rendered text, as the config executor does (`config_ir.executor`); a captured call's does not.
+    recipe: bool = False
 
     def candidates(self, fields: Mapping[str, str], document: JsonValue, at: str, owner: str) -> list[Candidate]:
         found: list[Candidate] = []
         for name, path in fields.items():
-            read = _read(path, document, at)
+            spec = self.schema.fields[name]
+            read = self._read(path, spec, document, at)
             if read is None:
                 continue  # the value is absent or not one scalar here: no candidate, as for any source
             raw, located = read
             locator = format_locator(self.kind, self.address, located)
-            made = candidate(name, self.schema.fields[name], owner, self.kind, raw, locator, self.ctx, self.notes)
+            structured = fragment_read(raw, spec) if self.recipe else None
+            made = candidate(name, spec, owner, self.kind, raw, locator, self.ctx, self.notes, read=structured)
             if made is not None:
                 found.append(made)
         return found
+
+    def _read(self, path: str, spec: FieldSpec, document: JsonValue, at: str) -> tuple[JsonValue, str] | None:
+        """What a field's path reads in `document`: for a recipe's list field with one path, the scalars it selects in
+        document order (RFC 9535 §2.5.1.2), none being no value; otherwise `_read`."""
+        if not (self.recipe and spec.item is not None and len(map_paths(path)) == 1):
+            return _read(path, document, at)
+        nodes = json_doc.select(path, document, at)
+        scalars: list[JsonValue] = [value for _, value in nodes if json_doc.is_scalar(value)]
+        return (scalars, nodes[0][0]) if scalars else None  # located at its first item
 
     def rows(self, query: str, fields: Mapping[str, str], document: JsonValue) -> tuple[list[Entity], list[Candidate]]:
         """The rows `query` selects, each with its `fields` read relative to it."""
