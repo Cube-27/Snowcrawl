@@ -22,6 +22,7 @@ from pydantic import BaseModel, ConfigDict, NonNegativeInt, ValidationError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 from snowcrawl.collect import json_doc
+from snowcrawl.collect.api import map_paths
 from snowcrawl.collect.network_match import SUCCESS, DataCall, EndpointKey, endpoint_key
 from snowcrawl.config_ir.api_recipe.binding import (
     Ambiguous,
@@ -99,7 +100,7 @@ async def propose_recipe(engine: AsyncEngine, store: ObjectStore, request: Propo
 def drafted(samples: Samples, main: CallRef | EndpointRef) -> Proposal:
     """The draft of `samples` for the `main` call; raises `InvalidRecipe` as `propose_recipe` does."""
     key, chosen = _main_key(samples, main)
-    endpoint = next((found for found in listed(samples.pages, samples.schema).endpoints if _key(found) == key), None)
+    endpoint = next(iter(listed(samples.pages, samples.schema, key).endpoints), None)
     if endpoint is None:
         raise InvalidRecipe([("main", "no sample made a call of the main endpoint")])
     calls = _sample_calls(endpoint, chosen)
@@ -134,7 +135,7 @@ def _main_key(samples: Samples, main: CallRef | EndpointRef) -> tuple[EndpointKe
     return endpoint_key(entry.method, entry.url, entry.request_body, entry.request_headers), main
 
 
-def _key(endpoint: Endpoint | EndpointRef) -> EndpointKey:
+def _key(endpoint: EndpointRef) -> EndpointKey:
     body = None if endpoint.body_shape is None else tuple(endpoint.body_shape)
     shape = (endpoint.origin, endpoint.has_path, endpoint.segments, endpoint.suffix, tuple(endpoint.query))
     return EndpointKey(endpoint.method, shape, body)
@@ -239,13 +240,15 @@ def _map(endpoint: Endpoint) -> dict[str, str]:
 
 
 def _row_map(endpoint: Endpoint, rows: str) -> dict[str, str]:
-    """`_map` with each path relative to a row (RFC 9535 §2.2: `$` is the row), for the paths inside the rows."""
+    """`_map` with each path relative to a row (RFC 9535 §2.2: `$` is the row), for the paths inside the rows; each
+    path of a joined money pair (`+`) is."""
     # The call list writes an array's items as one (`[*]`), its row query too.
-    prefix = _INDEX.sub("[*]", rows).removesuffix("[*]")
+    row = _INDEX.sub("[*]", rows)
     relative: dict[str, str] = {}
     for name, path in _map(endpoint).items():
-        if path.startswith(prefix + "[*]"):
-            relative[name] = "$" + path.removeprefix(prefix + "[*]")
+        parts = map_paths(path)
+        if all(part.startswith(row) for part in parts):
+            relative[name] = "+".join("$" + part.removeprefix(row) for part in parts)
     return relative
 
 

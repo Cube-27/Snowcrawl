@@ -9,6 +9,7 @@ from uuid import UUID
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from pydantic import JsonValue
 
 from snowcrawl.config_ir.api_recipe.model import OnePagePagination
 from snowcrawl.config_ir.custom_recipe import InvalidRecipe
@@ -28,7 +29,10 @@ SCHEMA = SchemaDef(
     status="active",
     name="synthetic",
     page_kind="listing",
-    fields={"title": FieldSpec(type=FieldType.TEXT, description="d", required=True)},
+    fields={
+        "title": FieldSpec(type=FieldType.TEXT, description="d", required=True),
+        "price": FieldSpec(type=FieldType.MONEY, description="d"),
+    },
 )
 _MAIN = EndpointRef(method="GET", origin="https://api.example.test", has_path=True, segments=1, suffix="", query=["c"])
 
@@ -36,13 +40,14 @@ _MAIN = EndpointRef(method="GET", origin="https://api.example.test", has_path=Tr
 def _page(number: int, rows: int, published: int) -> tuple[HeldOutPage, str]:
     """Sample `number`: its call answers `rows` items, the page shows them and the engine published `published`."""
     titles = [f"Item {number} title {i}" for i in range(rows)]
-    body = json.dumps({"items": [{"title": title} for title in titles]}).encode()
+    price: JsonValue = {"amount": "12.50", "currency": "USD"}
+    body = json.dumps({"items": [{"title": title, "price": price} for title in titles]}).encode()
     url = f"https://shop.example.test/c/{number}"
     network = (call(0, f"https://api.example.test/items?c={number}", body, method="GET"),)
     shown = "".join(f"<li>{title}</li>" for title in titles)
     bundle = capture(f"<html><body><ul>{shown}</ul></body></html>".encode(), url=url, method="browser", network=network)
     ctx = Context(captured_at=datetime(2026, 10, 26, tzinfo=UTC), base_url=url, page_url=url)
-    facts = tuple(Facts(published={"title": title}) for title in titles[:published])
+    facts = tuple(Facts(published={"title": title, "price": price}) for title in titles[:published])
     return HeldOutPage(CaptureId(UUID(int=number + 1)), ParsedPage.of(bundle), ctx, Facts(), facts), url
 
 
@@ -55,7 +60,8 @@ def test_a_listing_whose_one_call_returns_every_row_has_no_pagination(plan: list
     if all(whole for _, whole in plan):
         recipe = drafted(samples, _MAIN).recipe
         assert recipe.main.pagination == OnePagePagination(kind="none", rows="$['items'][*]")
-        assert recipe.main.map == {"title": "$['title']"}
+        # A joined money pair's paths are both relative to the row.
+        assert recipe.main.map == {"title": "$['title']", "price": "$['price']['amount']+$['price']['currency']"}
     else:
         with pytest.raises(InvalidRecipe):
             drafted(samples, _MAIN)
