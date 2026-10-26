@@ -397,14 +397,20 @@ async def json_bodies(
             *(read_early.get(response.request) or _read(response, mode) for response, _ in batch)
         )
         for (response, action), read in zip(batch, answers, strict=True):
-            answer = read
-            if answer is not None and total + len(answer.data) > caps.page_bytes:
-                answer = replace(answer, data=b"", omitted=_OVER_PAGE_CAP) if mode == "all" else None
+            answer = _within(read, total, caps, mode)
             if answer is None:
                 continue
             captured.append((_entry(response, action, answer, len(captured), page_url, mode), answer.data))
             total += len(answer.data)
     return tuple(captured)
+
+
+def _within(answer: Answer | None, total: int, caps: Caps, mode: CallsMode) -> Answer | None:
+    """`answer` when the capture, holding `total` bytes, has room for it; past its cap, in `all` mode the answer
+    without its body (`_OVER_PAGE_CAP`), else None."""
+    if answer is None or total + len(answer.data) <= caps.page_bytes:
+        return answer
+    return replace(answer, data=b"", omitted=_OVER_PAGE_CAP) if mode == "all" else None
 
 
 def _request_size(response: Response) -> int:
