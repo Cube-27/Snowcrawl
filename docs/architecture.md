@@ -22,6 +22,9 @@ handler of the job kind (`worker/handlers/`); `scheduler/loop.py` enqueues sched
    a JS shell, or `render.mode` asks. The browser is headless by default, with the client-hint override and a per-profile
    screen (`browser_session.py`, `desktop_screen.py`), or headful per the Patchright README
    (`SNOWCRAWL_BROWSER_HEADLESS=false`; Xvfb on Linux without a display, `display.py`). `classify.py`/`challenge.py` set the block class (`ok|blocked|shell|not_found|error`).
+   The browser's identity (its naming headers and client hints, which the HTTP and JSON rungs send too) and the
+   impersonation built on it are read once per process at startup: after a Chrome upgrade, restart the workers and the
+   API, or they keep presenting the old Chrome's headers over the new one's renders.
    Politeness, robots (off by default), SSRF guard and redirects: `politeness.py`, `robots.py`, `ssrf.py`, `redirects.py`.
    Site memory (the rung a site's pages start with): `memory.py`. The result is a capture bundle (`core/capture.py`,
    `storage/capture_bundle.py`); every record can be replayed from it (`POST /v1/captures/{id}/replay`).
