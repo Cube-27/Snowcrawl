@@ -113,8 +113,8 @@ function PageFieldRow({
         options={FIRST_STEPS}
         value={kind}
         onChange={(next) => {
+          // The step already written stays (the first valid value wins), with the field's `needs`.
           setKind(next);
-          onChange(rest.length === 0 ? undefined : { steps: rest, needs });
         }}
       />
       <Line
