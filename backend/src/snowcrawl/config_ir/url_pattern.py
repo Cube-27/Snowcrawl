@@ -207,7 +207,8 @@ def most_specific(texts: Iterable[str], url: str) -> str | None:
 
 def generalize(urls: Sequence[str]) -> list[str]:
     """Patterns for sample URLs: the samples of one host and one path length make one pattern whose segments equal on
-    every sample stay literal and the rest become `{p<i>}`, `i` the segment's index. Query parameters are left out."""
+    every sample stay literal and the rest become `{p<i>}`, `i` the segment's index (`segment_param`). Query
+    parameters are left out."""
     groups: dict[tuple[str, int], list[list[str]]] = {}
     for url in urls:
         parts = urlsplit(url)
@@ -220,8 +221,14 @@ def generalize(urls: Sequence[str]) -> list[str]:
     return patterns
 
 
+def segment_param(index: int) -> str:
+    """The name of the parameter a generalized pattern gives path segment `index` (from 0): `p<index>`. A recipe's
+    binder of that segment (`path:<index>`) has the same name, so one name is one value."""
+    return f"p{index}"
+
+
 def _general(index: int, column: tuple[str, ...]) -> str:
     first = column[0]
     if all(segment == first for segment in column) and _LITERAL.fullmatch(first):
         return first
-    return f"{{p{index}}}"
+    return f"{{{segment_param(index)}}}"
