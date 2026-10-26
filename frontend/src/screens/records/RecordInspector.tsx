@@ -3,9 +3,9 @@ import type { FieldTypes } from "../../api/field";
 import { problemOf } from "../../api/hooks/query";
 import { useReplay } from "../../api/hooks/records";
 import type { StoredRecord } from "../../api/records";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { RecordFieldsTable, RecordSummary } from "../../components/RecordFields";
-import { changedFieldsText } from "../../components/RecordTable";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { RecordFieldsTable, RecordSummary } from "../../components/organisms/RecordFields";
+import { changedFieldsText } from "../../components/organisms/RecordTable";
 import { ReplayView } from "./ReplayView";
 
 /** The capture the record came from, and a replay of it with the current engine and config. */

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Problem } from "../../api/problem";
-import { LoadingView } from "../../components/LoadingView";
-import { ProblemAlert } from "../../components/ProblemAlert";
+import { LoadingView } from "../../components/molecules/LoadingView";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
 
 /** What a run shows: on its way (the loading state's name), refused or failed, or its output. */
 export type OutputState =

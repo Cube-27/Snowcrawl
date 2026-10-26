@@ -3,11 +3,11 @@ import { useNavigate, useParams } from "react-router";
 import { problemOf } from "../../api/hooks/query";
 import { useRetireSchema, useSchema } from "../../api/hooks/schemas";
 import type { SchemaDef } from "../../api/schemas";
-import { ConfirmDialog } from "../../components/ConfirmDialog";
-import { LoadingView } from "../../components/LoadingView";
-import { PageHeader } from "../../components/PageHeader";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { SchemaStatusLabel } from "../../components/SchemaStatusLabel";
+import { ConfirmDialog } from "../../components/molecules/ConfirmDialog";
+import { LoadingView } from "../../components/molecules/LoadingView";
+import { PageHeader } from "../../components/templates/PageHeader";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { SchemaStatusLabel } from "../../components/molecules/SchemaStatusLabel";
 import { adoptSchemaPath, editSchemaPath } from "./paths";
 import { FieldsTable, SchemaJson } from "./SchemaViews";
 

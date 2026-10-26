@@ -1,6 +1,6 @@
 import { Label, Link, Table, TextArea, TextField, Typography } from "@heroui/react";
 import type { Artifact, Chunk, PageMetadata, ScrapeResponse } from "../../../api/scrape";
-import { FetchAttemptsTable } from "../../../components/FetchAttempts";
+import { FetchAttemptsTable } from "../../../components/organisms/FetchAttempts";
 
 /** A text format (markdown, html, raw_html) in a read-only text area, to read, scroll and copy as sent. */
 export function TextFormat({ label, text }: Readonly<{ label: string; text: string }>) {

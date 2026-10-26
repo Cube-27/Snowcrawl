@@ -1,6 +1,6 @@
 import { Table } from "@heroui/react";
 import type { DayUsage, JobUsage, LlmUsage, ModelRoleUsage } from "../../api/usage";
-import { Timestamp } from "../../components/Timestamp";
+import { Timestamp } from "../../components/atoms/Timestamp";
 import { KIND_LABELS } from "../jobs/kinds";
 import { jobPath } from "../jobs/paths";
 import { formatCost, formatCount, roleLabel } from "./costs";

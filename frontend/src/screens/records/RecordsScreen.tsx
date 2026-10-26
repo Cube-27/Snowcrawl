@@ -5,11 +5,11 @@ import { problemOf } from "../../api/hooks/query";
 import { useRecords } from "../../api/hooks/records";
 import { useSchema } from "../../api/hooks/schemas";
 import { activeFilters, type RecordFilters, type StoredRecord } from "../../api/records";
-import { useCursorPages } from "../../components/cursors";
-import { EmptyView } from "../../components/EmptyView";
-import { PageHeader } from "../../components/PageHeader";
-import { PagedTable } from "../../components/PagedTable";
-import { RecordTable } from "../../components/RecordTable";
+import { useCursorPages } from "../../components/lib/cursors";
+import { EmptyView } from "../../components/molecules/EmptyView";
+import { PageHeader } from "../../components/templates/PageHeader";
+import { PagedTable } from "../../components/organisms/PagedTable";
+import { RecordTable } from "../../components/organisms/RecordTable";
 import { RecordFiltersForm } from "./RecordFilters";
 import { RecordInspector } from "./RecordInspector";
 

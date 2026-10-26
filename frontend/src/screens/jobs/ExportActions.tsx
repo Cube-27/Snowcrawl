@@ -3,8 +3,8 @@ import { useExportJob } from "../../api/hooks/jobs";
 import { problemOf } from "../../api/hooks/query";
 import type { ExportFormat } from "../../api/jobs";
 import { saveExportPages } from "../../app/download";
-import { MoreExports } from "../../components/MoreExports";
-import { ProblemAlert } from "../../components/ProblemAlert";
+import { MoreExports } from "../../components/molecules/MoreExports";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
 
 // Each export format's label and file: RFC 8259 JSON, RFC 4180 CSV, RFC 7763 Markdown.
 interface FileFormat {

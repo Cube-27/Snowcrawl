@@ -1,7 +1,7 @@
 import { Card } from "@heroui/react";
 import { useNavigate } from "react-router";
-import { LookupForm } from "../../components/LookupForm";
-import { PageHeader } from "../../components/PageHeader";
+import { LookupForm } from "../../components/molecules/LookupForm";
+import { PageHeader } from "../../components/templates/PageHeader";
 import { sitePath } from "./paths";
 
 /** Opens a site's configs by host. The API reads configs per host (`GET /v1/sites/{host}/configs`) and has no list

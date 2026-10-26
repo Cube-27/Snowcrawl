@@ -1,7 +1,7 @@
 import { Button, Form } from "@heroui/react";
 import { Pencil } from "@gravity-ui/icons";
 import type { ReactNode } from "react";
-import { PageHeader } from "../../components/PageHeader";
+import { PageHeader } from "../../components/templates/PageHeader";
 import { CommandBar } from "./CommandBar";
 import { GetCode } from "./getCode/GetCode";
 import type { ModeId } from "./modes";

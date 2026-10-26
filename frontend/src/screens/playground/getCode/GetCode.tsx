@@ -2,7 +2,7 @@ import { Button, Drawer, Tabs, Typography } from "@heroui/react";
 import { Code, Copy } from "@gravity-ui/icons";
 import { useMemo, useState, type Key } from "react";
 import { copyText } from "../../../app/clipboard";
-import { Collapsible } from "../../../components/Collapsible";
+import { Collapsible } from "../../../components/molecules/Collapsible";
 import type { ModeId } from "../modes";
 import { ENDPOINTS, type Endpoint } from "./endpoints";
 import { agentPrompts } from "./prompts";

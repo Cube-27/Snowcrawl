@@ -1,5 +1,5 @@
 import type { StoredJobRequest, StoredRequestOf } from "../../../api/jobs";
-import { orderedFormats } from "../../../components/formats";
+import { orderedFormats } from "../../../components/lib/formats";
 import type { PageFormat } from "../FormatSelect";
 import type { WebhookSettings } from "../pageRequest";
 

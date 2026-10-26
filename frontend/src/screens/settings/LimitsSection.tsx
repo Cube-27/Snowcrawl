@@ -12,9 +12,9 @@ import { useState } from "react";
 import { problemOf } from "../../api/hooks/query";
 import { useProjectSettings, useSaveProjectSettings } from "../../api/hooks/project";
 import type { Problem } from "../../api/problem";
-import { FormActions } from "../../components/FormActions";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { Section } from "../../components/Section";
+import { FormActions } from "../../components/molecules/FormActions";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { Section } from "../../components/templates/Section";
 
 /** What the form edits: the LLM call cap of a run whose request sets none, the draft call cap of an API key,
  * and whether a learned config waits for approval before it serves. */

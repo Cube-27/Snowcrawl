@@ -2,10 +2,10 @@ import { Link } from "@heroui/react";
 import { useJobs } from "../../../api/hooks/jobs";
 import { problemOf } from "../../../api/hooks/query";
 import type { JobKind } from "../../../api/jobs";
-import { EmptyView } from "../../../components/EmptyView";
-import { LoadingView } from "../../../components/LoadingView";
-import { ProblemAlert } from "../../../components/ProblemAlert";
-import { Section } from "../../../components/Section";
+import { EmptyView } from "../../../components/molecules/EmptyView";
+import { LoadingView } from "../../../components/molecules/LoadingView";
+import { ProblemAlert } from "../../../components/molecules/ProblemAlert";
+import { Section } from "../../../components/templates/Section";
 import { JobRows } from "../../jobs/JobRows";
 
 /** How many runs the list shows. */

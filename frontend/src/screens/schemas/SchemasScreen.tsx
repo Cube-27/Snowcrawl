@@ -3,11 +3,11 @@ import { useNavigate } from "react-router";
 import { problemOf } from "../../api/hooks/query";
 import { useSchemas } from "../../api/hooks/schemas";
 import type { SchemaDef } from "../../api/schemas";
-import { EmptyView } from "../../components/EmptyView";
-import { LoadingView } from "../../components/LoadingView";
-import { PageHeader } from "../../components/PageHeader";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { SchemaStatusLabel } from "../../components/SchemaStatusLabel";
+import { EmptyView } from "../../components/molecules/EmptyView";
+import { LoadingView } from "../../components/molecules/LoadingView";
+import { PageHeader } from "../../components/templates/PageHeader";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { SchemaStatusLabel } from "../../components/molecules/SchemaStatusLabel";
 import { schemaPath } from "./paths";
 
 function NewSchemaButton() {

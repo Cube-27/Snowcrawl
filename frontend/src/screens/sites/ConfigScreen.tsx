@@ -9,10 +9,10 @@ import {
 } from "../../api/hooks/configs";
 import { problemOf } from "../../api/hooks/query";
 import { useSchema } from "../../api/hooks/schemas";
-import { ConfigStatusLabel } from "../../components/ConfigStatusLabel";
-import { LoadingView } from "../../components/LoadingView";
-import { PageHeader } from "../../components/PageHeader";
-import { ProblemAlert } from "../../components/ProblemAlert";
+import { ConfigStatusLabel } from "../../components/molecules/ConfigStatusLabel";
+import { LoadingView } from "../../components/molecules/LoadingView";
+import { PageHeader } from "../../components/templates/PageHeader";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
 import { ConfigFieldsTable, ConfigVersionsTable, useSchemaLabel } from "./ConfigTables";
 import { CorrectionForm } from "./CorrectionForm";
 import { ExportPanel } from "./ExportPanel";

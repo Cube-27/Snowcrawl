@@ -1,5 +1,5 @@
 import type { ConfigDetail, Correction, FieldSteps } from "../../api/configs";
-import { draftOf, sameSteps, toCorrectedStep, type DraftStep } from "../../components/steps";
+import { draftOf, sameSteps, toCorrectedStep, type DraftStep } from "../../components/lib/steps";
 
 /** One schema field in the correction form: the steps the config has for it, the steps as edited, and whether the
  * operator confirms the stored steps. */

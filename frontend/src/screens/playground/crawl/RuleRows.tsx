@@ -1,8 +1,8 @@
 import { Button, Description, Input, Label, TextField } from "@heroui/react";
 import { Plus, TrashBin } from "@gravity-ui/icons";
 import type { PageKind } from "../../../api/scrape";
-import { isOptionOf, OptionSelect } from "../../../components/OptionSelect";
-import { PAGE_KIND_LABELS } from "../../../components/requestOptions";
+import { isOptionOf, OptionSelect } from "../../../components/molecules/OptionSelect";
+import { PAGE_KIND_LABELS } from "../../../components/lib/requestOptions";
 import type { RuleRow } from "./form";
 
 const isPageKind = isOptionOf(PAGE_KIND_LABELS);

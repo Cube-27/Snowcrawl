@@ -1,4 +1,4 @@
-import { PageHeader } from "../../components/PageHeader";
+import { PageHeader } from "../../components/templates/PageHeader";
 import { LimitsSection } from "./LimitsSection";
 import { LlmCostSection } from "./LlmCostSection";
 

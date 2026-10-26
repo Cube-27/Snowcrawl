@@ -1,7 +1,7 @@
 import { Button, Card, Chip, Table, Typography } from "@heroui/react";
 import { useState } from "react";
 import type { CallSummary, Endpoint } from "../../api/captures";
-import { keyedTexts } from "../../components/keys";
+import { keyedTexts } from "../../components/lib/keys";
 import { CallDrawer } from "./CallDrawer";
 import { endpointKey, endpointText, isOwnSite, matchLines, sizeText } from "./endpoints";
 

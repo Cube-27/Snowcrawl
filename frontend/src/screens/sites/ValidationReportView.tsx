@@ -1,9 +1,9 @@
 import { Alert, Table, Typography } from "@heroui/react";
 import type { FieldReport, ValidationReport } from "../../api/configs";
-import { confidenceText } from "../../components/ConfidenceCell";
-import { EmptyView } from "../../components/EmptyView";
-import { FieldConfigStatusLabel } from "../../components/ConfigStatusLabel";
-import { StatusLabel } from "../../components/StatusLabel";
+import { confidenceText } from "../../components/molecules/ConfidenceCell";
+import { EmptyView } from "../../components/molecules/EmptyView";
+import { FieldConfigStatusLabel } from "../../components/molecules/ConfigStatusLabel";
+import { StatusLabel } from "../../components/atoms/StatusLabel";
 import { ofPages, withNextPage } from "./report";
 
 function FieldOutcome({ report }: Readonly<{ report: FieldReport }>) {

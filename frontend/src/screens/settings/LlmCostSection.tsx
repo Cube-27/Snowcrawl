@@ -3,10 +3,10 @@ import { useId, useState, type ReactNode } from "react";
 import { problemOf } from "../../api/hooks/query";
 import { useLlmCostReport } from "../../api/hooks/usage";
 import type { CostReport } from "../../api/usage";
-import { EmptyView } from "../../components/EmptyView";
-import { LoadingView } from "../../components/LoadingView";
-import { OptionSelect } from "../../components/OptionSelect";
-import { ProblemAlert } from "../../components/ProblemAlert";
+import { EmptyView } from "../../components/molecules/EmptyView";
+import { LoadingView } from "../../components/molecules/LoadingView";
+import { OptionSelect } from "../../components/molecules/OptionSelect";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
 import { isRange, rangeStart, RANGES, type RangeKey } from "./costs";
 import { BreakdownTable, DayTable, TopJobsTable, TotalTable } from "./LlmCostTables";
 

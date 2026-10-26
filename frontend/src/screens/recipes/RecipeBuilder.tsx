@@ -16,13 +16,13 @@ import {
   type WrittenRecipe,
 } from "../../api/recipes";
 import type { SchemaDef } from "../../api/schemas";
-import { EmptyView } from "../../components/EmptyView";
-import { keyedTexts } from "../../components/keys";
-import { LoadingView } from "../../components/LoadingView";
-import { PageHeader } from "../../components/PageHeader";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { SchemaSelect } from "../../components/SchemaSelect";
-import { Section } from "../../components/Section";
+import { EmptyView } from "../../components/molecules/EmptyView";
+import { keyedTexts } from "../../components/lib/keys";
+import { LoadingView } from "../../components/molecules/LoadingView";
+import { PageHeader } from "../../components/templates/PageHeader";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { SchemaSelect } from "../../components/molecules/SchemaSelect";
+import { Section } from "../../components/templates/Section";
 import type { EditHandlers } from "./CallEditor";
 import { CallList, type SampleNumber } from "./CallList";
 import { applied, fieldSources, NO_EDITS, withEdit, withoutEdit, type Edits } from "./draft";

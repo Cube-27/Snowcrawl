@@ -5,10 +5,10 @@ import { useFieldsDraft } from "../../../api/hooks/schemas";
 import type { Problem } from "../../../api/problem";
 import type { PageKind } from "../../../api/scrape";
 import type { SchemaDef } from "../../../api/schemas";
-import { LoadingView } from "../../../components/LoadingView";
-import { ProblemAlert } from "../../../components/ProblemAlert";
-import { SchemaForm } from "../../../components/SchemaForm";
-import { formOf } from "../../../components/schemaDocument";
+import { LoadingView } from "../../../components/molecules/LoadingView";
+import { ProblemAlert } from "../../../components/molecules/ProblemAlert";
+import { SchemaForm } from "../../../components/organisms/SchemaForm";
+import { formOf } from "../../../components/lib/schemaDocument";
 import { reviewOf, type ReviewedSchema } from "./review";
 
 /** The drafted schema in the schema editor; Run sends what `reviewOf` makes of it. */

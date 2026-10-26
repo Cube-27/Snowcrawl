@@ -1,7 +1,7 @@
 import { Button } from "@heroui/react";
 import { useMapUrls } from "../../../api/hooks/jobs";
 import { problemOf } from "../../../api/hooks/query";
-import { EmptyView } from "../../../components/EmptyView";
+import { EmptyView } from "../../../components/molecules/EmptyView";
 import { OutputArea, type OutputState } from "../OutputArea";
 import { NO_ERRORS, optionsChanged } from "../pageRequest";
 import { PlaygroundLayout } from "../PlaygroundLayout";

@@ -1,4 +1,4 @@
-import { SchemaSelect } from "../../components/SchemaSelect";
+import { SchemaSelect } from "../../components/molecules/SchemaSelect";
 import { FormatSelect } from "./FormatSelect";
 import { withSchema, type FormatForm } from "./pageRequest";
 

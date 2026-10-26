@@ -1,7 +1,7 @@
 import { Drawer, Typography } from "@heroui/react";
 import type { Artifact, FetchSummary } from "../../../api/scrape";
-import { FetchTrail } from "../../../components/FetchAttempts";
-import { JsonView } from "../../../components/JsonView";
+import { FetchTrail } from "../../../components/organisms/FetchAttempts";
+import { JsonView } from "../../../components/molecules/JsonView";
 import { ArtifactViews } from "../output/FormatViews";
 
 /** One page's JSON in a drawer from the right, over the results table: its clean records, or its

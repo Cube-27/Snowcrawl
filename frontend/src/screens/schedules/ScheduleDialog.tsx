@@ -5,7 +5,7 @@ import { useNavigate } from "react-router";
 import type { ScheduleKind } from "../../api/schedules";
 import { problemOf } from "../../api/hooks/query";
 import { useCreateSchedule } from "../../api/hooks/schedules";
-import { ProblemAlert } from "../../components/ProblemAlert";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
 import { draftErrors, scheduleBody, type ScheduleDraft } from "./cadence";
 import { DraftFields, viewerZone } from "./DraftFields";
 import { schedulePath } from "./paths";

@@ -1,6 +1,6 @@
 import { Link, Table } from "@heroui/react";
 import { useState } from "react";
-import { PAGE_SIZE, PagedTable } from "../../../components/PagedTable";
+import { PAGE_SIZE, PagedTable } from "../../../components/organisms/PagedTable";
 import { SelectionCheckbox, selectOnPage } from "../run/scrapeAsBatch";
 
 /** The URLs a map found, a page at a time in the order the server returned them, with row selection

@@ -4,11 +4,11 @@ import type { FieldTypes } from "../../api/field";
 import { problemOf } from "../../api/hooks/query";
 import type { useTestRecipe } from "../../api/hooks/recipes";
 import { MAX_TEST_URLS, type CustomRecipe, type TestRun, type UrlTest } from "../../api/recipes";
-import { Collapsible } from "../../components/Collapsible";
-import { ExtractedRecords } from "../../components/ExtractedRecords";
-import { FetchTrail } from "../../components/FetchAttempts";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { Section } from "../../components/Section";
+import { Collapsible } from "../../components/molecules/Collapsible";
+import { ExtractedRecords } from "../../components/organisms/ExtractedRecords";
+import { FetchTrail } from "../../components/organisms/FetchAttempts";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { Section } from "../../components/templates/Section";
 import { Lines } from "./Fields";
 
 // RFC 9110 §15.5, §15.6: an error status.

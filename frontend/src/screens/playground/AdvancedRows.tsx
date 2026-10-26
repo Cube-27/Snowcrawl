@@ -2,7 +2,7 @@ import { Button, Description, Input, Label, TextField } from "@heroui/react";
 import { ArrowDown, ArrowUp, Plus, TrashBin } from "@gravity-ui/icons";
 import { useId } from "react";
 import type { CacheMode } from "../../api/scrape";
-import { isOptionOf, OptionSelect } from "../../components/OptionSelect";
+import { isOptionOf, OptionSelect } from "../../components/molecules/OptionSelect";
 import {
   ACTION_MODES,
   MAX_ACTIONS,

@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router";
-import { LookupForm } from "../../components/LookupForm";
-import { PageHeader } from "../../components/PageHeader";
+import { LookupForm } from "../../components/molecules/LookupForm";
+import { PageHeader } from "../../components/templates/PageHeader";
 import { JobTable } from "./JobTable";
 import { jobPath } from "./paths";
 

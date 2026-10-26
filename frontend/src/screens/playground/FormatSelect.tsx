@@ -1,8 +1,8 @@
 import { FieldError, ListBox, Select } from "@heroui/react";
 import type { Key } from "react";
 import type { ScrapeFormat } from "../../api/scrape";
-import { FORMATS, orderedFormats } from "../../components/formats";
-import { HANGING_ERROR } from "../../components/OptionSelect";
+import { FORMATS, orderedFormats } from "../../components/lib/formats";
+import { HANGING_ERROR } from "../../components/molecules/OptionSelect";
 
 /** A page format: every format but `records`, which a chosen schema asks for. */
 export type PageFormat = Exclude<ScrapeFormat, "records">;

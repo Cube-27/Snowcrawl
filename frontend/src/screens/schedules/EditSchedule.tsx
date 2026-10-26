@@ -3,7 +3,7 @@ import { useState } from "react";
 import { problemOf } from "../../api/hooks/query";
 import { useUpdateSchedule } from "../../api/hooks/schedules";
 import type { Schedule } from "../../api/schedules";
-import { ProblemAlert } from "../../components/ProblemAlert";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
 import { draftErrors, draftOf, parseRequest, scheduleChange, type ScheduleDraft } from "./cadence";
 import { DraftFields } from "./DraftFields";
 

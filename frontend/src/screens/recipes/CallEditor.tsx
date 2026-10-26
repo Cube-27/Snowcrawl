@@ -2,7 +2,7 @@ import { Button, Switch, Typography } from "@heroui/react";
 import { Plus, TrashBin } from "@gravity-ui/icons";
 import { useState } from "react";
 import type { RecipeCall, RecipeHeader } from "../../api/recipes";
-import { isOptionOf, OptionSelect } from "../../components/OptionSelect";
+import { isOptionOf, OptionSelect } from "../../components/molecules/OptionSelect";
 import { isEdited, type Edits, type Part } from "./draft";
 import { EditedMark, Line, Lines } from "./Fields";
 

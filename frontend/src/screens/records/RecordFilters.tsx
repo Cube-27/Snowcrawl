@@ -3,8 +3,8 @@ import { Button, DateField, Description, Form, Input, Label, TextField } from "@
 import { parseAbsolute, toZoned, today, type ZonedDateTime } from "@internationalized/date";
 import { useMemo, useState } from "react";
 import type { RecordFilters } from "../../api/records";
-import { FormActions } from "../../components/FormActions";
-import { SchemaSelect } from "../../components/SchemaSelect";
+import { FormActions } from "../../components/molecules/FormActions";
+import { SchemaSelect } from "../../components/molecules/SchemaSelect";
 
 function OptionalText({
   label,

@@ -6,16 +6,16 @@ import { problemOf } from "../../api/hooks/query";
 import { useSchema } from "../../api/hooks/schemas";
 import type { PageOutput } from "../../api/jobs";
 import type { StoredRecord } from "../../api/records";
-import { useCursorPages } from "../../components/cursors";
-import { EmptyView } from "../../components/EmptyView";
-import { TaskStatusLabel } from "../../components/JobStatusLabel";
-import { LoadingView } from "../../components/LoadingView";
-import { OutcomeLabel } from "../../components/OutcomeLabel";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { RecordTable } from "../../components/RecordTable";
-import { Timestamp } from "../../components/Timestamp";
-import { PagedTable } from "../../components/PagedTable";
-import { TruncatedText } from "../../components/TruncatedText";
+import { useCursorPages } from "../../components/lib/cursors";
+import { EmptyView } from "../../components/molecules/EmptyView";
+import { TaskStatusLabel } from "../../components/molecules/JobStatusLabel";
+import { LoadingView } from "../../components/molecules/LoadingView";
+import { OutcomeLabel } from "../../components/molecules/OutcomeLabel";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { RecordTable } from "../../components/organisms/RecordTable";
+import { Timestamp } from "../../components/atoms/Timestamp";
+import { PagedTable } from "../../components/organisms/PagedTable";
+import { TruncatedText } from "../../components/atoms/TruncatedText";
 import { RecordInspector } from "../records/RecordInspector";
 
 /** The job's records in the columns of their schema, each opening the record inspector. */

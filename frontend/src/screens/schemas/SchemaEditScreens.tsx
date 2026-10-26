@@ -5,10 +5,10 @@ import { problemOf } from "../../api/hooks/query";
 import { useCreateSchema, useSchema, useUpdateSchema } from "../../api/hooks/schemas";
 import type { Problem } from "../../api/problem";
 import type { SchemaDef } from "../../api/schemas";
-import { LoadingView } from "../../components/LoadingView";
-import { PageHeader } from "../../components/PageHeader";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { SchemaForm } from "../../components/SchemaForm";
+import { LoadingView } from "../../components/molecules/LoadingView";
+import { PageHeader } from "../../components/templates/PageHeader";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { SchemaForm } from "../../components/organisms/SchemaForm";
 import {
   contentOf,
   EMPTY_FORM,
@@ -16,7 +16,7 @@ import {
   newSchemaOf,
   type FormMode,
   type SchemaFormState,
-} from "../../components/schemaDocument";
+} from "../../components/lib/schemaDocument";
 import { schemaPath } from "./paths";
 
 /** Opens the schema the server stored, with a confirmation; `note` follows the name. */

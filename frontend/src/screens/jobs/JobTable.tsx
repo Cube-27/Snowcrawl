@@ -3,11 +3,11 @@ import { useSearchParams } from "react-router";
 import { useJobs } from "../../api/hooks/jobs";
 import { problemOf } from "../../api/hooks/query";
 import type { JobFilters, JobKind, JobStatus, JobSummary } from "../../api/jobs";
-import { useCursorPages } from "../../components/cursors";
-import { EmptyView } from "../../components/EmptyView";
-import { JOB_STATUS_TEXT } from "../../components/JobStatusLabel";
-import { isOptionOf, OptionSelect } from "../../components/OptionSelect";
-import { PagedTable } from "../../components/PagedTable";
+import { useCursorPages } from "../../components/lib/cursors";
+import { EmptyView } from "../../components/molecules/EmptyView";
+import { JOB_STATUS_TEXT } from "../../components/molecules/JobStatusLabel";
+import { isOptionOf, OptionSelect } from "../../components/molecules/OptionSelect";
+import { PagedTable } from "../../components/organisms/PagedTable";
 import { JobRows } from "./JobRows";
 import { KIND_LABELS } from "./kinds";
 

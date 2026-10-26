@@ -5,10 +5,10 @@ import { useJobEvents } from "../../api/hooks/events";
 import { useJob } from "../../api/hooks/jobs";
 import { useLearnSite } from "../../api/hooks/configs";
 import { problemOf } from "../../api/hooks/query";
-import { FormActions } from "../../components/FormActions";
-import { JobStatusLabel } from "../../components/JobStatusLabel";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { SchemaSelect } from "../../components/SchemaSelect";
+import { FormActions } from "../../components/molecules/FormActions";
+import { JobStatusLabel } from "../../components/molecules/JobStatusLabel";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { SchemaSelect } from "../../components/molecules/SchemaSelect";
 import { jobPath } from "../jobs/paths";
 
 /** "Learn now" for a site and schema (`POST /v1/sites/{host}/learn`). The server refuses while a

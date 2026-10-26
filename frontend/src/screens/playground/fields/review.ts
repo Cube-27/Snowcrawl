@@ -1,6 +1,6 @@
 import type { Problem } from "../../../api/problem";
 import type { NewSchema, SchemaDef } from "../../../api/schemas";
-import { formOf, newSchemaOf, type SchemaFormState } from "../../../components/schemaDocument";
+import { formOf, newSchemaOf, type SchemaFormState } from "../../../components/lib/schemaDocument";
 
 /** What a run sends for a reviewed draft: the field names while the draft is unchanged, so the request
  * is the one Get code shows and the server reads the same stored draft; else the edited schema, inline. */

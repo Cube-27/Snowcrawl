@@ -4,10 +4,10 @@ import type { CallDetail, HeaderLines } from "../../api/captures";
 import { useCall, useHarExport } from "../../api/hooks/recipes";
 import { problemOf } from "../../api/hooks/query";
 import { saveJson } from "../../app/download";
-import { JsonView } from "../../components/JsonView";
-import { LoadingView } from "../../components/LoadingView";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { Section } from "../../components/Section";
+import { JsonView } from "../../components/molecules/JsonView";
+import { LoadingView } from "../../components/molecules/LoadingView";
+import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { Section } from "../../components/templates/Section";
 import { sizeText } from "./endpoints";
 
 /** Header field lines in the order sent (RFC 9110 §5.3: a repeated name is not merged); "None" without any. */

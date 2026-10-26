@@ -1,7 +1,7 @@
 import type { WebhookEvent } from "../../api/jobs";
 import type { PageKind, SchemaRef, ScrapeFormat, ScreenshotArea } from "../../api/scrape";
 import type { SchemaPageKind } from "../../api/schemas";
-import { orderedFormats } from "../../components/formats";
+import { orderedFormats } from "../../components/lib/formats";
 import type { PageFormat } from "./FormatSelect";
 
 /** The non-blank lines of `text`, trimmed: a list entered one entry per line. */

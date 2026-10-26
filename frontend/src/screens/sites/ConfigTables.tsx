@@ -1,11 +1,11 @@
 import { Table, Typography } from "@heroui/react";
 import { useSchemas } from "../../api/hooks/schemas";
 import type { ConfigDetail, ConfigSummary, FieldConfigStatus } from "../../api/configs";
-import { confidenceText } from "../../components/ConfidenceCell";
-import { ConfigStatusLabel, FieldConfigStatusLabel } from "../../components/ConfigStatusLabel";
-import { keyedTexts } from "../../components/keys";
-import { LocatorText } from "../../components/LocatorText";
-import { stepText } from "../../components/steps";
+import { confidenceText } from "../../components/molecules/ConfidenceCell";
+import { ConfigStatusLabel, FieldConfigStatusLabel } from "../../components/molecules/ConfigStatusLabel";
+import { keyedTexts } from "../../components/lib/keys";
+import { LocatorText } from "../../components/atoms/LocatorText";
+import { stepText } from "../../components/lib/steps";
 import { configuredFields } from "./correction";
 import { configPath } from "./paths";
 
