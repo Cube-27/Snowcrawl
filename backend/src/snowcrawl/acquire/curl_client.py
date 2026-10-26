@@ -56,6 +56,7 @@ __all__ = [
     "pinned",
     "reason",
     "send",
+    "set_field",
 ]
 
 _CURLPROXY_HTTP = 0  # curl's `curl_proxytype` for an HTTP proxy (CURLOPT_PROXYTYPE)
@@ -285,8 +286,10 @@ async def _checked(check: Awaitable[Target], deadline: float, last: Wire | None)
 async def _send(transport: Transport, target: Target, hop: Hop, cookies: FetchCookies, caller: _Caller) -> Wire:
     # The fetch sends only its own cookies, and the guard's host is the request's (RFC 9110 §7.2).
     headers = {name: value for name, value in hop.headers.items() if name.lower() not in ("cookie", "host")}
-    # The caller's headers replace the profile's of the same name, keeping its position.
-    headers.update(caller.headers_for(target.url))
+    # The caller's headers replace the profile's and the hop's of the same name in any case, keeping the profile's
+    # position.
+    for name, value in caller.headers_for(target.url):
+        set_field(headers, name, value)
     if (cookie := cookies.header(target.url)) is not None:
         headers["Cookie"] = cookie
     response = await transport(target, replace(hop, headers=headers))
@@ -396,11 +399,25 @@ async def _request(
     return _wire(target, response, sent, body.getvalue())
 
 
+def set_field(headers: dict[str, str | None], name: str, value: str | None) -> None:
+    """Set `name` in `headers`, replacing a field of the same name in any case (RFC 9110 §5.1) in its place and
+    spelling, as the impersonated browser sends it."""
+    same = [key for key in headers if key.lower() == name.lower()]
+    for duplicate in same[1:]:
+        del headers[duplicate]
+    headers[same[0] if same else name] = value
+
+
 def _merged(defaults: HeaderList, headers: Mapping[str, str | None]) -> dict[str, str | None]:
-    """`defaults` (lowercase names) with `headers` set over them, a field of the same name in any case replaced
-    (RFC 9110 §5.1)."""
+    """`defaults` with `headers` set over them, a field of the same name in any case replaced in the default's spelling
+    (RFC 9110 §5.1). A name goes out as spelled here, which HTTP/1.1 keeps (RFC 9112 §5) and HTTP/2 lowercases
+    (RFC 9113 §8.2.1)."""
     given = {name.lower() for name in headers}
-    return {**{name: value for name, value in defaults if name not in given}, **headers}
+    spelled = {name.lower(): name for name, _ in defaults}
+    return {
+        **{name: value for name, value in defaults if name.lower() not in given},
+        **{spelled.get(name.lower(), name): value for name, value in headers.items()},
+    }
 
 
 def reason(error: RequestException) -> str:

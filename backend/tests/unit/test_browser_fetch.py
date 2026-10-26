@@ -458,7 +458,7 @@ def test_the_probe_reads_what_every_request_of_a_page_its_frame_and_workers_pres
     scripts = {"/worker.js", "/service-worker.js", "/shared-worker.js"}
     assert set(sent) >= {"/with-worker", "/framed", "/api/n/7", "/api/n/8", *scripts}
     assert {headers["user-agent"] for headers in sent.values()} == {identity.agent}
-    named = dict(identity.headers)
+    named = {name.lower(): value for name, value in identity.headers}
     for document in ("/with-worker", "/framed"):
         assert {name: sent[document].get(name) for name in named} == named
     page = lxml_html.fromstring(result.bundle.body)

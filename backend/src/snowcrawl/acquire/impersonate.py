@@ -49,8 +49,8 @@ class BrowserUnread(RuntimeError):
 @dataclass(frozen=True)
 class Impersonation:
     """The curl_cffi target whose TLS, HTTP/2 and header order the rungs send, the headers that replace the
-    target's own of the same name (lowercase names; none: the target's own), and those that replace them on a request
-    that carries cookies the browser rung earned (none: `headers`)."""
+    target's own of the same name in any case (each spelled as the browser sends it; none: the target's own), and
+    those that replace them on a request that carries cookies the browser rung earned (none: `headers`)."""
 
     target: BrowserTypeLiteral
     headers: HeaderList = ()
@@ -71,7 +71,7 @@ async def rung_impersonation(settings: AcquireSettings, *, browser_rung: bool) -
         headers = await _read_headers(settings.browser_headless)
     except (PlaywrightError, OSError) as e:  # the driver or the browser could not be started
         return _unread("did not start", configured, browser_rung, e)
-    agent = next((value for name, value in headers if name == _USER_AGENT), "")
+    agent = next((value for name, value in headers if name.lower() == _USER_AGENT), "")
     major = _CHROME_PRODUCT.search(agent)
     if major is None:
         return _unread("names no Chrome in its user agent", configured, browser_rung)
@@ -86,9 +86,9 @@ def _naming(headers: HeaderList, major: int) -> HeaderList:
     """The browser's headers that name its platform and its user, not its version (`_OWN`), the user agent's product
     token naming `major` as Chromium's reduced user agent does (`Chrome/<major>.0.0.0`)."""
     return tuple(
-        (name, _CHROME_PRODUCT.sub(f"Chrome/{major}.0.0.0", value, count=1) if name == _USER_AGENT else value)
+        (name, _CHROME_PRODUCT.sub(f"Chrome/{major}.0.0.0", value, count=1) if name.lower() == _USER_AGENT else value)
         for name, value in headers
-        if name in _OWN
+        if name.lower() in _OWN
     )
 
 
