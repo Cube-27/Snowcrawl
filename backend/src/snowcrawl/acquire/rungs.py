@@ -1,5 +1,6 @@
 """Rung selection: HTTP by default, the browser on a block, and what the site's memory says
-(`acquire.memory`): the rung its pages of the kind start with. The fetch plan of the page's field sources
+(`acquire.memory`): the rung its pages of the kind start with; a browser start memory chose that is blocked or fails
+asks HTTP once more. The fetch plan of the page's field sources
 (`FetchPlan`) starts it in the browser when a located field source is the browser's
 render (or the surface renders every page), and adds the companion calls of its `call` sources to an HTTP page. An
 HTTP detail page of a platform that documents its product JSON is joined with that JSON, always (`_joined`).
@@ -104,6 +105,8 @@ NOT_ADMITTED: Final = "not_admitted"
 # The HTTP outcomes the browser may pass where HTTP did not: a block, and a shell (a challenge's, or a script-only
 # document's, rendered once per page).
 _BROWSER_EVIDENCE: frozenset[BlockClass] = frozenset({"shell", "blocked"})
+# The browser outcomes of a remembered browser start that HTTP is asked once more for (`_remembered_browser`).
+_HTTP_AGAIN: frozenset[BlockClass] = frozenset({"blocked", "error"})
 # The reason of a request a transport failure left unanswered (`curl_client.reason`), such as a reset
 # HTTP/2 stream (curl 92) or connection. A filter may reset a client whose TLS or HTTP/2 fingerprint it does not trust;
 # the browser's own network stack may pass. A timeout (`policy.timeout_s`) counts too: a filter may hold a
@@ -228,7 +231,7 @@ async def _ladder(
     refer = (
         None if send is None or not (served is None or by_recipe) else _Referral(url, policy, rungs, send, admit_next)
     )
-    page = await _page(url, ready, planned, rungs, _Retry(admit_next, deadline, refer))
+    page = await _page(url, ready, planned, rungs, _Retry(admit_next, deadline, refer, remembered=not plan.browser))
     if refer is not None:
         page = await refer(page)
     page = await _joined(policy, page, admit_next, send)
@@ -338,6 +341,8 @@ class _Retry:
     admit_next: Admit | None
     deadline: float | None
     refer: _Referral | None = None
+    # Whether a browser start is memory's (`_remembered_browser`), not a field source's (`FetchPlan.browser`).
+    remembered: bool = False
 
     def in_budget(self) -> bool:
         return self.deadline is None or self.deadline - time.monotonic() >= BROWSER_MIN_S
@@ -350,6 +355,8 @@ async def _page(url: str, policy: FetchPolicy, remembered: Remembered, rungs: Ru
     would retry for lacking content (`_referable`) asks its referral first (`retry.refer`), and an `ok` answer is kept
     without the render."""
     method = remembered.method if policy.method_hint == "auto" else policy.method_hint
+    if method == "browser" and policy.method_hint == "auto" and retry.remembered:
+        return await _remembered_browser(url, policy, rungs, retry)
     if method == "http":
         result = await rungs.http(url, policy)
     else:
@@ -516,6 +523,22 @@ async def _interstitial_unavailable(result: FetchResult) -> bool:
     return await asyncio.to_thread(
         interstitial, manifest.status_code, manifest.headers.response, text, manifest.final_url
     )
+
+
+async def _remembered_browser(url: str, policy: FetchPolicy, rungs: Rungs, retry: _Retry) -> Fetched:
+    """The page of a fetch memory starts in the browser (`acquire.memory`): a browser outcome `blocked` or `error`
+    (`_HTTP_AGAIN`) is fetched once more over HTTP when the site's rate admits it, and an HTTP `ok` is kept. Memory is
+    advisory, and a failed render is no evidence that HTTP still fails: a kept HTTP `ok` teaches HTTP again. A
+    browser outcome asking for fewer requests (RFC 6585 §4, RFC 9110 §15.6.4) sends none. Otherwise the browser's
+    page, the last rung's (`_as_last_page`)."""
+    rendered = await rungs.browser(url, policy)
+    again = rendered.block_class in _HTTP_AGAIN and not slow_down(rendered)
+    if not again or not await _admitted(retry.admit_next):
+        return await _as_last_page(rendered, policy, last=True), rendered.attempts, rendered.duration_ms
+    fetched = await rungs.http(url, policy)
+    attempts, duration_ms = rendered.attempts + fetched.attempts, rendered.duration_ms + fetched.duration_ms
+    kept = fetched if fetched.block_class == "ok" else await _as_last_page(rendered, policy, last=True)
+    return kept, attempts, duration_ms
 
 
 def _paused_by(result: FetchResult) -> timedelta:

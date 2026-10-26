@@ -5,10 +5,11 @@ durable strategy and a short-lived safety bias age differently.
   start with, the browser engine that taught it, whether the browser was needed only to pass a block (`handoff`: the
   pages stay on HTTP with the cookies that browser `ok` held, `acquire.session`), and the field coverage of the last
   extraction with a record; the site's platform is on `site.platform`. It is learned from a fetch that tried HTTP in
-  `auto` (`learn_fetch`), and goes stale after `STALE_FAILURES` consecutive extractions without a record
-  (`learn_extraction`); a block is never one. A stale contract is kept but not used; an extraction with a record makes
-  it fresh again. The 7-day re-check (`scheduler.recheck`) still sets a `browser` contract back to `http` when HTTP
-  passes.
+  `auto` (`learn_fetch`), the browser only from HTTP evidence about the method (`lesson`), and goes stale after
+  `STALE_FAILURES` consecutive extractions without a record (`learn_extraction`); a block is never one. A stale
+  contract is kept but not used; an extraction with a record makes it fresh again. The 7-day re-check
+  (`scheduler.recheck`) still sets a `browser` contract back to `http` when HTTP passes, and a browser start that
+  fails asks HTTP once more (`rungs`), whose `ok` teaches HTTP again.
 - The block history (`site_block`), short-lived, per site: each HTTP request the site refused (`refused`) counts, the
   count starting over when the last one is older than `BLOCK_TTL`; at `BROWSER_FIRST_BLOCKS`, once the browser has
   passed (a browser `ok` after the refusal), the site's pages start in the browser for one `BLOCK_TTL`: a browser the
@@ -126,22 +127,29 @@ def refused(attempt: AttemptRecord) -> bool:
 def lesson(result: FetchResult) -> Lesson | None:
     """What an `auto` fetch that tried HTTP and kept an `ok` teaches; None for any other fetch (a job's own method, a
     page that started in the browser or was served by an API: nothing new about HTTP). An HTTP `ok` teaches the
-    default. A browser `ok` teaches the browser (one its attempt classed `shell`, kept as the last rung's page by
-    `rungs`, teaches nothing: the browser passed nothing HTTP did not), unless HTTP was `refused`, the render ran no
-    browser steps, and its cookies went on to HTTP (an attempt's `site_session`): then it was needed only to pass the
-    block, `handoff`, and the pages stay on HTTP."""
+    default. A browser `ok` teaches the browser only when the last HTTP attempt was evidence about the method
+    (`_method_evidence`: a `shell`, or `refused`), not a transient failure (a timeout, a network error, a 429 or 503,
+    a server error), which says nothing of the next request. One its attempt classed `shell`, kept as the last rung's
+    page by `rungs`, teaches nothing: the browser passed nothing HTTP did not. A browser that passed a refusal is a
+    `handoff` instead when the render ran no browser steps and its cookies went on to HTTP (an attempt's
+    `site_session`): it was needed only to pass the block, and the pages stay on HTTP."""
     http = [attempt for attempt in result.attempts if attempt.method == "http"]
     if stored_fetch(result.bundle.manifest).method_hint != "auto" or result.block_class != "ok" or not http:
         return None
     if result.method == "http":
         return Lesson("http")
     rendered = [attempt.block_class for attempt in result.attempts if attempt.method == "browser"]
-    if result.method != "browser" or rendered[-1:] != ["ok"]:
+    if result.method != "browser" or rendered[-1:] != ["ok"] or not _method_evidence(http[-1]):
         return None
     stepped = any(attempt.steps for attempt in result.attempts if attempt.method == "browser")
     carried = any(attempt.site_session for attempt in result.attempts)
     handoff = refused(http[-1]) and carried and not stepped
     return Lesson(method="http" if handoff else "browser", engine=ENGINE, handoff=handoff)
+
+
+def _method_evidence(attempt: AttemptRecord) -> bool:
+    """Whether an HTTP attempt says HTTP does not get the page: a `shell` (the page needs a script) or `refused`."""
+    return attempt.block_class == "shell" or refused(attempt)
 
 
 async def learn_fetch(engine: AsyncEngine, site_id: SiteId, result: FetchResult) -> None:

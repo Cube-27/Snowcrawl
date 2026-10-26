@@ -11,7 +11,7 @@ from typing import get_args
 
 from snowcrawl.acquire.api import JsonRequest
 from snowcrawl.acquire.memory import Remembered
-from snowcrawl.acquire.rungs import BROWSER_MIN_S, Rungs, acquire
+from snowcrawl.acquire.rungs import BROWSER_MIN_S, FetchPlan, Rungs, acquire
 from snowcrawl.acquire.types import FetchPolicy, FetchResult
 from snowcrawl.adapters.base import AdapterMatch, PageRefs, Shape
 from snowcrawl.adapters.registry import Registry
@@ -156,6 +156,22 @@ def test_no_browser_retry_starts_too_close_to_the_deadline() -> None:
     result = asyncio.run(acquire(URL, FetchPolicy(), Remembered(), rungs, deadline=deadline))
 
     assert (result.method, stubs.browser.calls) == ("http", [])
+
+
+def test_a_remembered_browser_start_that_fails_asks_http_once_and_keeps_only_its_ok() -> None:
+    for browser in ("blocked", "error"):
+        for http, kept in (("ok", ("http", "ok")), ("shell", ("browser", browser))):
+            stubs = web(http, browser)
+            result = stubs.acquire(remembered="browser")
+            assert (result.method, result.block_class) == kept
+            assert _attempts(result) == [("browser", browser), ("http", http)]
+    # A browser `ok`, a job's own browser and a field source's render ask nothing over HTTP.
+    passed, own, planned = web("ok", "ok"), web("ok", "blocked"), web("ok", "blocked")
+    passed.acquire(remembered="browser")
+    own.acquire(FetchPolicy(method_hint="browser"))
+    rungs = Rungs(http=planned.http, browser=planned.browser)
+    asyncio.run(acquire(URL, POLICY, Remembered(), rungs, plan=FetchPlan(browser=True)))
+    assert passed.http.calls == own.http.calls == planned.http.calls == []
 
 
 # --- an HTTP listing shell kept for want of a browser outcome is the fetch's last page ---
