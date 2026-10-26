@@ -42,32 +42,30 @@ export function ScheduleScreen() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const query = useSchedule(id);
-  const schedule = query.data;
+  const loaded = query.data;
   return (
     <Screen
-      title={schedule?.name ?? "Schedule"}
+      title={loaded?.name ?? "Schedule"}
       actions={
-        schedule === undefined ? undefined : (
-          <ScheduleActions schedule={schedule} onDeleted={() => void navigate("/schedules")} />
+        loaded === undefined ? undefined : (
+          <ScheduleActions schedule={loaded} onDeleted={() => void navigate("/schedules")} />
         )
       }
-      badges={
-        <>{schedule === undefined ? null : <ScheduleStateLabel paused={schedule.paused} />}</>
-      }
+      badges={loaded === undefined ? null : <ScheduleStateLabel paused={loaded.paused} />}
     >
       <QueryView query={query} loading="Loading the schedule">
-        {(data) => (
+        {(schedule) => (
           <>
-            <Facts schedule={data} />
+            <Facts schedule={schedule} />
             <Section title="Request">
               <JsonView
                 label="Request JSON"
-                value={data.request}
-                filename={`schedule-${data.id}.json`}
+                value={schedule.request}
+                filename={`schedule-${schedule.id}.json`}
               />
             </Section>
             <Section title="Runs">
-              <JobPages filters={{ kind: null, status: null, scheduleId: data.id }} />
+              <JobPages filters={{ kind: null, status: null, scheduleId: schedule.id }} />
             </Section>
           </>
         )}

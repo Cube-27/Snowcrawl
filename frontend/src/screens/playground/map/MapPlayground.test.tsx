@@ -8,7 +8,7 @@ import { closeOptions, fill, openOptions, openPlayground, posted } from "../../.
 // `fetch` answers `POST /v1/map` with the shape the API defines.
 
 /** 25 URLs: more than one page of the table. */
-const URLS = Array.from({ length: 25 }, (_, i) => `https://shop.test/items/${String(i + 1)}`);
+const URLS = Array.from({ length: 30 }, (_, i) => `https://shop.test/items/${String(i + 1)}`);
 
 function mapApi(result: MapResult): Call[] {
   return stubApi({ "POST /v1/map": () => Response.json(result) });
@@ -51,19 +51,19 @@ describe("map playground", () => {
   });
 
   it("lists the URLs found a page at a time, with where they came from and whether the list was cut", async () => {
-    mapApi({ urls: URLS, sources: { sitemap: 20, links: 5 }, truncated: true });
+    mapApi({ urls: URLS, sources: { sitemap: 25, links: 5 }, truncated: true });
     await openPlayground("/map");
 
     await map();
 
     const grid = await screen.findByRole("grid", { name: "Links" });
-    expect(screen.getByText("25 URLs: 20 from sitemaps, 5 from links.")).toBeInTheDocument();
+    expect(screen.getByText("30 URLs: 25 from sitemaps, 5 from links.")).toBeInTheDocument();
     expect(screen.getByText("The list is cut short.")).toBeInTheDocument();
-    expect(shownUrls(grid)).toEqual(URLS.slice(0, 20));
+    expect(shownUrls(grid)).toEqual(URLS.slice(0, 25));
 
     await userEvent.click(screen.getByRole("button", { name: /Next/ }));
 
-    expect(shownUrls(grid)).toEqual(URLS.slice(20));
+    expect(shownUrls(grid)).toEqual(URLS.slice(25));
     expect(screen.getByText("Page 2")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Next/ })).toBeDisabled();
   });
