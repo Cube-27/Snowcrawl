@@ -13,7 +13,7 @@ import asyncio
 import time
 from collections import Counter
 from collections.abc import Awaitable, Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import islice
 from typing import Final, cast
 from urllib.parse import urlsplit
@@ -102,6 +102,11 @@ _SNIFFED_TYPES = frozenset({"text/plain", ""})
 # a JSON MIME type, RFC 9110 §12.5.1). Calls to other sites that ask for no JSON (analytics beacons, ad and tag-manager
 # pings) are always in flight on some pages and carry nothing the page shows.
 _CALLS = frozenset({"fetch", "xhr"})
+# HTML Standard §4.6.7.12 `<link rel=preload as=fetch>`: a fetch the page starts before its script asks for it (Fetch
+# Standard §2.2.5: destination the empty string, as fetch()'s), whose answer the script's own fetch() is then served
+# from without a request of its own. Playwright names its resource type `other`; it is a data call when its answer is
+# labelled data (`_data_label`).
+_PRELOAD = "other"
 _WEBSOCKET = "websocket"
 # A screenshot or PDF past this size is dropped rather than stored: the capture is kept without it.
 _ARTIFACT_MAX_BYTES = 25_000_000
@@ -126,11 +131,22 @@ _MEASURED_BLOCKS_MAX = 2_000
 @dataclass(frozen=True)
 class Answer:
     """A kept answer as read from the browser: its body, and the headers of its request and its response as a capture
-    records them (`_headers`)."""
+    records them (`_headers`); `omitted` says why an engineer capture keeps the call without its body (`_OVER_CAP`)."""
 
     data: bytes
     request_headers: HeaderList | None
     response_headers: HeaderList | None
+    omitted: str | None = None
+
+
+# An engineer capture keeps a call whose answer is past a cap as a row without its body, saying so
+# (`NetworkBody.omitted`), so that the call list shows it was made.
+_OVER_CAP: Final = f"body not kept: over {_JSON_BODY_MAX_BYTES // 1_000_000} MB"
+_OVER_PAGE_CAP: Final = f"body not kept: the capture holds {CAPS['all'].page_bytes // 1_000_000} MB of bodies"
+
+
+class _OverCap(Exception):
+    """The answer is past the per-body cap."""
 
 
 @dataclass
@@ -170,7 +186,7 @@ class DataCalls:
             self.answered += 1
             if not self.in_flight:
                 self.idle_since = time.monotonic()
-        if request.resource_type in DATA_REQUESTS:
+        if request.resource_type in DATA_REQUESTS or request.resource_type == _PRELOAD:
             self.done.add(request)
         response = self.kept.pop(request, None)
         if response is not None and len(self.early) < _EARLY_READS_PER_BODY * CAPS[self.mode].bodies:
@@ -201,7 +217,7 @@ class DataCalls:
         else:
             # The main frame's navigation responses are the page itself, not data it loaded.
             data = request.resource_type in DATA_REQUESTS and _data_label(response) is not None
-            kept = not navigation and (data or _fragment(response, main_frame.url))
+            kept = not navigation and (data or _preloaded(response) or _fragment(response, main_frame.url))
         if kept:
             self.responses.append((response, self.actions))
             if self.mode == "all":
@@ -289,8 +305,13 @@ def _any_call(response: Response, navigation: bool, actions: int) -> bool:
     """Whether an engineer capture keeps `response`: a fetch or XMLHttpRequest answer, or a document the main frame
     navigated to after a page step (`actions` > 0: the first is the page itself), unless it is unkept (`_unkept`)."""
     request = response.request
-    called = request.resource_type in _CALLS or (navigation and actions > 0)
+    called = request.resource_type in _CALLS or _preloaded(response) or (navigation and actions > 0)
     return called and not _unkept(response.headers.get("content-type", ""))
+
+
+def _preloaded(response: Response) -> bool:
+    """Whether `response` answers a preload the page made of data (`_PRELOAD`)."""
+    return response.request.resource_type == _PRELOAD and _data_label(response) is True
 
 
 def _unkept(content_type: str) -> bool:
@@ -375,8 +396,11 @@ async def json_bodies(
         answers = await asyncio.gather(
             *(read_early.get(response.request) or _read(response, mode) for response, _ in batch)
         )
-        for (response, action), answer in zip(batch, answers, strict=True):
-            if answer is None or total + len(answer.data) > caps.page_bytes:
+        for (response, action), read in zip(batch, answers, strict=True):
+            answer = read
+            if answer is not None and total + len(answer.data) > caps.page_bytes:
+                answer = replace(answer, data=b"", omitted=_OVER_PAGE_CAP) if mode == "all" else None
+            if answer is None:
                 continue
             captured.append((_entry(response, action, answer, len(captured), page_url, mode), answer.data))
             total += len(answer.data)
@@ -388,14 +412,21 @@ def _request_size(response: Response) -> int:
 
 
 async def _read(response: Response, mode: CallsMode) -> Answer | None:
-    """The answer to `response`'s request a capture under `mode` keeps (`_json_body`), None when it keeps none."""
-    data = await _json_body(response, mode)
+    """The answer to `response`'s request a capture under `mode` keeps (`_json_body`), None when it keeps none; in
+    `all` mode one past the per-body cap is kept without its body (`_OVER_CAP`)."""
+    omitted = None
+    try:
+        data = await _json_body(response, mode)
+    except _OverCap:
+        if mode != "all":
+            return None
+        data, omitted = b"", _OVER_CAP
     if data is None:
         return None
     request_headers, response_headers = await asyncio.gather(
         _headers(response.request.headers_array()), _headers(response.headers_array())
     )
-    return Answer(data, request_headers, response_headers)
+    return Answer(data, request_headers, response_headers, omitted)
 
 
 def _entry(response: Response, action: int, answer: Answer, index: int, page_url: str, mode: CallsMode) -> NetworkBody:
@@ -416,21 +447,23 @@ def _entry(response: Response, action: int, answer: Answer, index: int, page_url
         action=action,
         same_site=_same_site(response.url, page_url),
         guard_prefix=guard_prefix(data) if mode == "all" else None,
+        omitted=answer.omitted,
     )
 
 
 async def _json_body(response: Response, mode: CallsMode) -> bytes | None:
-    """The response's body when it is within the per-body cap and, in `data` mode, not empty and data: labelled JSON,
-    Flight or HTML (an admitted fragment, `_fragment`), or sniffed as JSON text holding an object or an array
-    (`network_json`). In `all` mode any answer `DataCalls.on_response` admitted is kept, an empty one too."""
+    """The response's body when, in `data` mode, it is not empty and data: labelled JSON, Flight or HTML (an admitted
+    fragment, `_fragment`), or sniffed as JSON text holding an object or an array (`network_json`). In `all` mode any
+    answer `DataCalls.on_response` admitted is kept, an empty one too. Raises `_OverCap` for a body past the per-body
+    cap."""
     if await _json_size(response) > _JSON_BODY_MAX_BYTES:
-        return None
+        raise _OverCap
     try:
         data = await response.body()
     except PlaywrightError:
         return None  # no body to read: a redirect, or a request that failed or was evicted
     if len(data) > _JSON_BODY_MAX_BYTES:
-        return None
+        raise _OverCap
     if mode == "all":
         return data
     if not data:

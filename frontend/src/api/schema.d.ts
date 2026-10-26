@@ -1379,8 +1379,8 @@ export interface components {
          * CallDetail
          * @description One call a capture kept (`GET /v1/captures/{id}/calls/{n}`): the request as sent (headers as recorded: no
          *     cookies, the caller's own values masked), the answer's status, headers and text (its UTF-8 decoding, at most
-         *     `ANSWER_MAX_BYTES`), the page step it followed and whether it went to the page's own site, and the guard prefix
-         *     its JSON opens with.
+         *     `ANSWER_MAX_BYTES`), the page step it followed and whether it went to the page's own site, the guard prefix its JSON
+         *     opens with, and why its body was not kept (past a cap), when it was not.
          */
         CallDetail: {
             /** Answer */
@@ -1393,6 +1393,8 @@ export interface components {
             index: number;
             /** Method */
             method: string | null;
+            /** Omitted */
+            omitted: string | null;
             /** Request Body */
             request_body: string | null;
             /** Request Headers */
@@ -1451,7 +1453,7 @@ export interface components {
          * CallSummary
          * @description One call of a sample: its index among the capture's network bodies (`GET /v1/captures/{id}/calls/{n}`), its
          *     answer's status, content type and size, the request's Fetch destination, the page step it followed (0: the page's
-         *     load), and whether it went to the page's own site.
+         *     load), whether it went to the page's own site, and why its body was not kept (past a cap), when it was not.
          */
         CallSummary: {
             /**
@@ -1463,6 +1465,8 @@ export interface components {
             content_type: string | null;
             /** Index */
             index: number;
+            /** Omitted */
+            omitted: string | null;
             /** Resource Type */
             resource_type: string | null;
             /** Same Site */

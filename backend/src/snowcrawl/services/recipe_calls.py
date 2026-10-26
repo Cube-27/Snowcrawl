@@ -69,7 +69,7 @@ class NoSamples(Refusal, LookupError):
 class CallSummary(BaseModel):
     """One call of a sample: its index among the capture's network bodies (`GET /v1/captures/{id}/calls/{n}`), its
     answer's status, content type and size, the request's Fetch destination, the page step it followed (0: the page's
-    load), and whether it went to the page's own site."""
+    load), whether it went to the page's own site, and why its body was not kept (past a cap), when it was not."""
 
     capture_id: CaptureId
     index: int
@@ -79,6 +79,7 @@ class CallSummary(BaseModel):
     step: int | None
     same_site: bool | None
     size: int
+    omitted: str | None
 
 
 class PathCount(BaseModel):
@@ -257,6 +258,7 @@ def _summary(capture_id: CaptureId, index: int, entry: NetworkBody, data: bytes)
         step=entry.action,
         same_site=entry.same_site,
         size=len(data),
+        omitted=entry.omitted,
     )
 
 

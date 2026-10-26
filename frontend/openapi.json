@@ -1029,7 +1029,7 @@
         "type": "object"
       },
       "CallDetail": {
-        "description": "One call a capture kept (`GET /v1/captures/{id}/calls/{n}`): the request as sent (headers as recorded: no\ncookies, the caller's own values masked), the answer's status, headers and text (its UTF-8 decoding, at most\n`ANSWER_MAX_BYTES`), the page step it followed and whether it went to the page's own site, and the guard prefix\nits JSON opens with.",
+        "description": "One call a capture kept (`GET /v1/captures/{id}/calls/{n}`): the request as sent (headers as recorded: no\ncookies, the caller's own values masked), the answer's status, headers and text (its UTF-8 decoding, at most\n`ANSWER_MAX_BYTES`), the page step it followed and whether it went to the page's own site, the guard prefix its JSON\nopens with, and why its body was not kept (past a cap), when it was not.",
         "properties": {
           "answer": {
             "title": "Answer",
@@ -1071,6 +1071,17 @@
               }
             ],
             "title": "Method"
+          },
+          "omitted": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Omitted"
           },
           "request_body": {
             "anyOf": [
@@ -1191,7 +1202,8 @@
           "request_body",
           "response_headers",
           "size",
-          "answer"
+          "answer",
+          "omitted"
         ],
         "title": "CallDetail",
         "type": "object"
@@ -1251,7 +1263,7 @@
         "type": "object"
       },
       "CallSummary": {
-        "description": "One call of a sample: its index among the capture's network bodies (`GET /v1/captures/{id}/calls/{n}`), its\nanswer's status, content type and size, the request's Fetch destination, the page step it followed (0: the page's\nload), and whether it went to the page's own site.",
+        "description": "One call of a sample: its index among the capture's network bodies (`GET /v1/captures/{id}/calls/{n}`), its\nanswer's status, content type and size, the request's Fetch destination, the page step it followed (0: the page's\nload), whether it went to the page's own site, and why its body was not kept (past a cap), when it was not.",
         "properties": {
           "capture_id": {
             "format": "uuid",
@@ -1272,6 +1284,17 @@
           "index": {
             "title": "Index",
             "type": "integer"
+          },
+          "omitted": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Omitted"
           },
           "resource_type": {
             "anyOf": [
@@ -1323,7 +1346,8 @@
           "resource_type",
           "step",
           "same_site",
-          "size"
+          "size",
+          "omitted"
         ],
         "title": "CallSummary",
         "type": "object"

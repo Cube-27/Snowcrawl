@@ -165,6 +165,7 @@ class CallDetail(BaseModel):
     guard_prefix: Annotated[str | None, Field(title="Guard Prefix")] = None
     index: Annotated[int, Field(title="Index")]
     method: Annotated[str | None, Field(title="Method")] = None
+    omitted: Annotated[str | None, Field(title="Omitted")] = None
     request_body: Annotated[str | None, Field(title="Request Body")] = None
     request_headers: Annotated[
         list[RequestHeader] | None, Field(title="Request Headers")
@@ -192,6 +193,7 @@ class CallSummary(BaseModel):
     capture_id: Annotated[UUID, Field(title="Capture Id")]
     content_type: Annotated[str | None, Field(title="Content Type")] = None
     index: Annotated[int, Field(title="Index")]
+    omitted: Annotated[str | None, Field(title="Omitted")] = None
     resource_type: Annotated[str | None, Field(title="Resource Type")] = None
     same_site: Annotated[bool | None, Field(title="Same Site")] = None
     size: Annotated[int, Field(title="Size")]

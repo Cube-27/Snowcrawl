@@ -96,6 +96,16 @@ _ENGINEER = b"""<html><body><main><p>A page whose calls an engineer reads, with 
 })();
 </script></main></body></html>"""
 _RESULT = b"<html><body><main><p>The results the form asked for, with enough text to be read.</p></main></body></html>"
+# A page that preloads its data (HTML Standard `<link rel=preload as=fetch>`) and calls one answer past 2 MB.
+_PRELOADING = b"""<html><head><link rel="preload" as="fetch" href="/api/items" crossorigin="anonymous"></head><body>
+<main><p>A page whose data is preloaded, with enough text to be read as the page's own content.</p><p id="done"></p>
+<script>
+(async () => {
+  await (await fetch('/api/items')).text();
+  await (await fetch('/api/big')).text();
+  document.getElementById('done').textContent = 'loaded';
+})();
+</script></main></body></html>"""
 # Six bodies of 1.9 MB each: past 10 MB in all at the sixth.
 _HEAVY = b"""<html><body><p id="done"></p><script>
 (async () => {
@@ -258,6 +268,7 @@ def server() -> Iterator[Server]:
             "/sniffed": Reply(body=_SNIFFED),
             "/api/guarded": Reply(content_type="text/plain; charset=utf-8", body=_GUARDED),
             "/engineer": Reply(body=_ENGINEER),
+            "/preloading": Reply(body=_PRELOADING),
             "/result": Reply(body=_RESULT),
             "/pixel.png": Reply(content_type="image/png", body=b"\x89PNG\r\n\x1a\n"),
             "/api/plain-json": Reply(content_type="text/plain", body=b'[{"id": 1}, {"id": 2}]'),
@@ -428,6 +439,22 @@ def test_an_engineer_capture_keeps_its_own_site_s_calls_first_within_its_cap(
     result = browser.fetch(server.url("/engineer"), policy)
 
     assert [e.url for e in result.bundle.manifest.network_bodies] == [server.url("/api/items")]
+
+
+def test_an_engineer_capture_keeps_a_preloaded_call_and_one_past_the_cap_without_its_body(
+    browser: Browser, server: Server
+) -> None:
+    result = browser.fetch(
+        server.url("/preloading"), FetchPolicy(method_hint="browser", browser_timeout_s=10, calls="all")
+    )
+
+    entries = result.bundle.manifest.network_bodies
+    assert [(e.url, e.omitted) for e in entries] == [
+        (server.url("/api/items"), None),
+        (server.url("/api/big"), "body not kept: over 2 MB"),
+    ]
+    assert result.bundle.network == (_ITEMS, b"")
+    assert decode(encode(result.bundle)) == result.bundle
 
 
 def test_a_data_call_whose_body_never_ends_is_left_out_and_the_page_kept(browser: Browser, server: Server) -> None:

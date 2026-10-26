@@ -62,7 +62,7 @@ function CallBody({ call, filename }: Readonly<{ call: CallDetail; filename: str
   return (
     <div className="flex flex-col gap-6">
       <Typography.Paragraph size="sm">
-        {call.status}, {call.content_type ?? "no content type"}, {sizeText(call.size)}
+        {call.status}, {call.content_type ?? "no content type"}, {call.omitted ?? sizeText(call.size)}
         {call.step === null || call.step === 0
           ? ", on load"
           : `, after page step ${String(call.step)}`}

@@ -57,6 +57,7 @@ def har(bundle: CaptureBundle) -> dict[str, JsonValue]:
             response_headers=entry.response_headers or (),
             content_type=entry.content_type,
             answer=data,
+            comment=entry.omitted,
         )
         for index, (entry, data) in enumerate(zip(manifest.network_bodies, bundle.network, strict=True))
         if index != navigated
@@ -96,6 +97,7 @@ def _entry(
     response_headers: HeaderList,
     content_type: str | None,
     answer: bytes,
+    comment: str | None = None,
 ) -> JsonValue:
     request: dict[str, JsonValue] = {
         "method": method,
@@ -110,7 +112,7 @@ def _entry(
     if request_body is not None:
         mime = _header(request_headers, "content-type") or ""
         request["postData"] = {"mimeType": mime, "text": request_body}
-    return {
+    entry: dict[str, JsonValue] = {
         "pageref": _PAGE,
         "startedDateTime": started,
         "time": 0,
@@ -129,6 +131,9 @@ def _entry(
         "cache": {},
         "timings": {"send": 0, "wait": 0, "receive": 0},
     }
+    if comment is not None:
+        entry["comment"] = comment  # HAR 1.2 §entries: a comment provided by the user or the application
+    return entry
 
 
 def _content(answer: bytes, content_type: str | None) -> JsonValue:
