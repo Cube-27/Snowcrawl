@@ -230,13 +230,17 @@ function config(id: string, overrides: Partial<ConfigDetail>): ConfigDetail {
   };
 }
 
-const run = (title: string, recipeStatus: number): TestRun => ({
+const run = (
+  title: string,
+  recipeStatus: number,
+  more: TestRun["records"][number]["fields"] = {},
+): TestRun => ({
   records: [
     {
       complete: true,
       confidence: 0.9,
       mode: "adhoc",
-      fields: { title: recordField({ value: title }) },
+      fields: { title: recordField({ value: title }), ...more },
     },
   ],
   fetch: {
@@ -373,7 +377,11 @@ describe("recipes screen", () => {
     let saves = 0;
     const tested: RecipeTestResult = {
       job_id: "0192a000-0000-7000-8000-000000000901",
-      urls: replies.map(({ url }) => ({ url, recipe: run("Lamp", 403), normal: run("Lamp", 200) })),
+      urls: replies.map(({ url }) => ({
+        url,
+        recipe: run("Lamp", 403),
+        normal: run("Lamp", 200, { sku: recordField({ value: "L-1" }) }),
+      })),
       usage: {
         http_requests: 6,
         browser_seconds: 0,
@@ -465,6 +473,11 @@ describe("recipes screen", () => {
         calls: { call_1: { map: { title: "$.name" } } },
       },
     });
+
+    // Normal extraction filled a field the recipe leaves unfilled: saving needs a confirmation.
+    expect(screen.getByText(/normal extraction filled sku/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save recipe" })).toBeDisabled();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Save it anyway" }));
 
     // A refusal names the recipe of the same shape; saving again opens the saved one.
     await userEvent.click(screen.getByRole("button", { name: "Save recipe" }));

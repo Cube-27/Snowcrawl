@@ -1,17 +1,76 @@
-import { Button, Link, Typography } from "@heroui/react";
+import { Alert, Button, Checkbox, Label, Link, Typography } from "@heroui/react";
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import type { ConfigSummary } from "../../api/configs";
 import { useSiteConfigs } from "../../api/hooks/configs";
 import { problemOf } from "../../api/hooks/query";
 import { useSaveRecipe } from "../../api/hooks/recipes";
 import type { Problem } from "../../api/problem";
-import type { CustomRecipe } from "../../api/recipes";
+import type { CustomRecipe, RecipeTestResult, TestRun } from "../../api/recipes";
 import { FormActions } from "../../components/molecules/FormActions";
 import { ProblemAlert } from "../../components/molecules/ViewStates";
 import { Section } from "../../components/templates/Screen";
 import { NumberRow, SwitchRow } from "../playground/OptionsPanel";
 import type { EditHandlers } from "./CallEditor";
 import { recipePath } from "./paths";
+
+/** The fields a run's records publish. */
+function published(run: TestRun): Set<string> {
+  return new Set(
+    run.records.flatMap((record) =>
+      Object.entries(record.fields)
+        .filter(([, field]) => field.status === "published")
+        .map(([name]) => name),
+    ),
+  );
+}
+
+/** The fields normal extraction published that the recipe left unfilled, on each URL of the last test where the recipe
+ * filled fewer fields than normal extraction, in name order. */
+function fewerFields(tested: RecipeTestResult | undefined): string[] {
+  const missing = new Set<string>();
+  for (const { recipe, normal } of tested?.urls ?? []) {
+    const byRecipe = published(recipe);
+    const byNormal = published(normal);
+    if (byRecipe.size < byNormal.size) {
+      for (const name of byNormal) if (!byRecipe.has(name)) missing.add(name);
+    }
+  }
+  return [...missing].sort((a, b) => a.localeCompare(b));
+}
+
+/** The warning that the recipe fills fewer fields than normal extraction did on the last test, naming them, with the
+ * engineer's explicit confirmation that saving it is meant. */
+function FewerFields({
+  fields,
+  isConfirmed,
+  onConfirm,
+}: Readonly<{
+  fields: readonly string[];
+  isConfirmed: boolean;
+  onConfirm: (isSelected: boolean) => void;
+}>) {
+  return (
+    <Alert status="warning">
+      <Alert.Indicator />
+      <Alert.Content>
+        <Alert.Title>The recipe fills fewer fields than normal extraction</Alert.Title>
+        <Alert.Description>
+          On the last test, normal extraction filled {fields.join(", ")}, which the recipe leaves
+          unfilled on the URLs it serves.
+        </Alert.Description>
+        <Checkbox isSelected={isConfirmed} onChange={onConfirm}>
+          <Checkbox.Content>
+            <Checkbox.Control>
+              <Checkbox.Indicator />
+            </Checkbox.Control>
+            <Label>Save it anyway</Label>
+          </Checkbox.Content>
+        </Checkbox>
+      </Alert.Content>
+    </Alert>
+  );
+}
 
 /** The site's active recipes a refusal names: the one serving a pattern of the same shape (409). */
 function namedRecipes(problem: Problem, configs: readonly ConfigSummary[]): ConfigSummary[] {
@@ -39,24 +98,31 @@ function Conflicting({ host, problem }: Readonly<{ host: string; problem: Proble
 }
 
 /** Step 8: who sends the calls, the least interval between them, and saving: a new recipe, or the next version of
- * the one edited (`replaces`). Saving opens the saved recipe; a refusal says why, naming the recipe whose patterns
- * have the same shape. */
+ * the one edited (`replaces`). When the last test (`tested`) shows the recipe filling fewer fields than normal
+ * extraction, saving needs the engineer's confirmation. Saving opens the saved recipe; a refusal says why, naming the
+ * recipe whose patterns have the same shape. */
 export function SaveStep({
   host,
   recipe,
   replaces,
+  tested,
   isDrafting,
   handlers,
 }: Readonly<{
   host: string;
   recipe: CustomRecipe;
   replaces: string | null;
+  tested: RecipeTestResult | undefined;
   isDrafting: boolean;
   handlers: EditHandlers;
 }>) {
   const save = useSaveRecipe(host, replaces);
   const navigate = useNavigate();
   const problem = problemOf(save.error);
+  const fewer = fewerFields(tested);
+  // A confirmation holds for the test it was given on; a new test asks again.
+  const [confirmed, setConfirmed] = useState<RecipeTestResult | null>(null);
+  const isConfirmed = tested !== undefined && confirmed === tested;
   return (
     <Section title="8. Save">
       <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-4">
@@ -83,10 +149,19 @@ export function SaveStep({
       <Typography.Paragraph size="sm" color="muted">
         Saving serves the URLs the patterns match from now on; the learned config serves the rest.
       </Typography.Paragraph>
+      {fewer.length === 0 ? null : (
+        <FewerFields
+          fields={fewer}
+          isConfirmed={isConfirmed}
+          onConfirm={(isSelected) => {
+            setConfirmed(isSelected ? (tested ?? null) : null);
+          }}
+        />
+      )}
       <FormActions>
         <Button
           isPending={save.isPending}
-          isDisabled={isDrafting}
+          isDisabled={isDrafting || (fewer.length > 0 && !isConfirmed)}
           onPress={() => {
             save.mutate(recipe, {
               onSuccess: (saved) => {

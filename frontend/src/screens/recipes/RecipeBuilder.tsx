@@ -199,6 +199,7 @@ function RecipeSteps({
         host={host}
         recipe={recipe}
         replaces={replaces}
+        tested={test.data}
         isDrafting={isDrafting}
         handlers={handlers}
       />
