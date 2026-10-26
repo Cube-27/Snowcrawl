@@ -86,6 +86,7 @@ function endpoint(overrides: Partial<Endpoint>): Endpoint {
     origin: `https://${HOST}`,
     has_path: true,
     segments: 2,
+    suffix: "",
     query: [],
     body_shape: null,
     rows: null,

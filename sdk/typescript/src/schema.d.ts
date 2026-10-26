@@ -2304,9 +2304,9 @@ export interface components {
         };
         /**
          * Endpoint
-         * @description One endpoint group: its request method, URL shape (origin, whether there is a path, its segment count, the
-         *     query names in order) and request body shape, the samples it was called on, its calls, the fields it carries and
-         *     the row query of the rows it lists.
+         * @description One endpoint group: its request method, URL shape (origin, whether there is a path, its segment count, its last
+         *     segment's format suffix such as `.json`, "" for none, and the query names in order) and request body shape, the
+         *     samples it was called on, its calls, the fields it carries and the row query of the rows it lists.
          */
         Endpoint: {
             /** Body Shape */
@@ -2329,6 +2329,8 @@ export interface components {
             samples: string[];
             /** Segments */
             segments: number;
+            /** Suffix */
+            suffix: string;
         };
         /**
          * EndpointRef
@@ -2347,6 +2349,8 @@ export interface components {
             query: string[];
             /** Segments */
             segments: number;
+            /** Suffix */
+            suffix: string;
         };
         /**
          * ExportPage

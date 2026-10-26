@@ -456,6 +456,7 @@ class EndpointRef(BaseModel):
     origin: Annotated[str, Field(title="Origin")]
     query: Annotated[list[str], Field(title="Query")]
     segments: Annotated[int, Field(ge=0, title="Segments")]
+    suffix: Annotated[str, Field(title="Suffix")]
 
 
 class Format5(Enum):
@@ -2412,6 +2413,7 @@ class Endpoint(BaseModel):
     rows: Annotated[str | None, Field(title="Rows")] = None
     samples: Annotated[list[UUID], Field(title="Samples")]
     segments: Annotated[int, Field(title="Segments")]
+    suffix: Annotated[str, Field(title="Suffix")]
 
 
 class ExtractRequestInput(BaseModel):

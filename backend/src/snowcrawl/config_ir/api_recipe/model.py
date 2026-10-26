@@ -234,16 +234,16 @@ class ContextHeader(_Model):
 RecipeHeader = HeaderValue | ContextHeader
 
 
+# How a request body writes its values: JSON text, or application/x-www-form-urlencoded (`RequestBody`).
+BodyEncoding = Literal["json", "form"]
+
+
 class RequestBody(_Model):
     """A request body with `{name}` placeholders: JSON, where a value is written JSON-escaped (RFC 8259 §7), or
     `form`, application/x-www-form-urlencoded (HTML §4.10.21.7), where a value is written percent-encoded."""
 
     template: str = Field(min_length=1)
-    encoding: Literal["json", "form"] = "json"
-
-
-# HTML §4.10.21.7: the media type of a `form` body.
-FORM_TYPE: Final = "application/x-www-form-urlencoded"
+    encoding: BodyEncoding = "json"
 
 
 # Where a listing's next request carries its page value: a query parameter (RFC 3986 §3.4), named; or a value of the

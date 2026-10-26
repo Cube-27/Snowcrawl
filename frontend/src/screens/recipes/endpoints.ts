@@ -1,14 +1,15 @@
 import type { Endpoint, FieldMatch } from "../../api/captures";
 import type { EndpointRef } from "../../api/recipes";
 
-/** One endpoint group as text, stable while samples are added: method, origin, path shape, query names and body
- * shape, as the server groups calls by them. */
+/** One endpoint group as text, stable while samples are added: method, origin, path shape (with its format suffix),
+ * query names and body shape, as the server groups calls by them. */
 export function endpointKey(endpoint: Endpoint): string {
   return JSON.stringify([
     endpoint.method,
     endpoint.origin,
     endpoint.has_path,
     endpoint.segments,
+    endpoint.suffix,
     endpoint.query,
     endpoint.body_shape,
   ]);
@@ -16,43 +17,28 @@ export function endpointKey(endpoint: Endpoint): string {
 
 /** The endpoint as a draft names it: by the members of its key. */
 export function endpointRef(endpoint: Endpoint): EndpointRef {
-  const { method, origin, has_path: hasPath, segments, query, body_shape: bodyShape } = endpoint;
-  return { method, origin, has_path: hasPath, segments, query, body_shape: bodyShape };
+  const { method, origin, has_path: hasPath, segments, suffix, query, body_shape: bodyShape } = endpoint;
+  return { method, origin, has_path: hasPath, segments, suffix, query, body_shape: bodyShape };
 }
 
-/** The request shape people read: `GET https://example.test/{3 segments}?page&size`, and the body's shape after it
- * when the calls send one (`POST https://example.test/{1 segment} body {$.operationName, $.variables['id']}`), so groups
- * of one URL that differ by their body read apart, as the server tells them apart. */
+/** The request shape people read: `GET https://example.test/{3 segments}.json?page&size`, and the body's shape after
+ * it when the calls send one (`POST https://example.test/{1 segment} body {$.operationName, $.variables['id']}`), so
+ * groups of one URL that differ by their body read apart, as the server tells them apart. */
 export function endpointText(endpoint: Endpoint): string {
-  const path = endpoint.has_path ? `/{${segmentsText(endpoint.segments)}}` : "/";
+  const path = endpoint.has_path ? `/{${segmentsText(endpoint.segments)}}${endpoint.suffix}` : "/";
   const query = endpoint.query.length === 0 ? "" : `?${endpoint.query.join("&")}`;
   return `${endpoint.method ?? "GET"} ${endpoint.origin}${path}${query}${bodyText(endpoint.body_shape)}`;
 }
 
-// A body that is not JSON is its own shape: its text, cut to this many characters in a title.
-const BODY_TEXT_MAX = 60;
-
-/** A JSON body's shape is the paths of its leaves (RFC 9535); any other body's is its whole text, cut with a digest
- * of the whole after it so that two bodies with one beginning still read apart. */
+/** A JSON body's shape is the paths of its leaves (RFC 9535); any other body's is its media type, then a form body's
+ * names (`body application/x-www-form-urlencoded {q, page}`). */
 function bodyText(shape: Endpoint["body_shape"]): string {
   if (shape == null) return "";
-  const [first] = shape;
-  if (shape.length === 1 && first !== undefined && !first.startsWith("$")) {
-    const cut =
-      first.length > BODY_TEXT_MAX ? `${first.slice(0, BODY_TEXT_MAX)}… #${digest(first)}` : first;
-    return ` body ${cut}`;
+  const [first, ...names] = shape;
+  if (first !== undefined && !first.startsWith("$")) {
+    return names.length === 0 ? ` body ${first}` : ` body ${first} {${names.join(", ")}}`;
   }
   return ` body {${shape.join(", ")}}`;
-}
-
-/** FNV-1a, 32 bits (IETF draft-eastlake-fnv), as 8 hex digits: a short name for a long text, not a security hash. */
-function digest(text: string): string {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < text.length; i++) {
-    hash ^= text.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function segmentsText(segments: number): string {

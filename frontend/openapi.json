@@ -3425,7 +3425,7 @@
         "type": "object"
       },
       "Endpoint": {
-        "description": "One endpoint group: its request method, URL shape (origin, whether there is a path, its segment count, the\nquery names in order) and request body shape, the samples it was called on, its calls, the fields it carries and\nthe row query of the rows it lists.",
+        "description": "One endpoint group: its request method, URL shape (origin, whether there is a path, its segment count, its last\nsegment's format suffix such as `.json`, \"\" for none, and the query names in order) and request body shape, the\nsamples it was called on, its calls, the fields it carries and the row query of the rows it lists.",
         "properties": {
           "body_shape": {
             "anyOf": [
@@ -3503,6 +3503,10 @@
           "segments": {
             "title": "Segments",
             "type": "integer"
+          },
+          "suffix": {
+            "title": "Suffix",
+            "type": "string"
           }
         },
         "required": [
@@ -3510,6 +3514,7 @@
           "origin",
           "has_path",
           "segments",
+          "suffix",
           "query",
           "body_shape",
           "samples",
@@ -3568,12 +3573,17 @@
             "minimum": 0.0,
             "title": "Segments",
             "type": "integer"
+          },
+          "suffix": {
+            "title": "Suffix",
+            "type": "string"
           }
         },
         "required": [
           "origin",
           "has_path",
           "segments",
+          "suffix",
           "query"
         ],
         "title": "EndpointRef",

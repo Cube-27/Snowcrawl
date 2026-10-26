@@ -61,6 +61,7 @@ class EndpointRef(Input):
     origin: str
     has_path: bool
     segments: NonNegativeInt
+    suffix: str
     query: list[str]
     body_shape: list[str] | None = None
 
@@ -129,12 +130,12 @@ def _main_key(samples: Samples, main: CallRef | EndpointRef) -> tuple[EndpointKe
     if main.index >= len(page.page.network_entries):
         raise InvalidRecipe([("main.index", f"capture {main.capture_id} has no call {main.index}")])
     entry = page.page.network_entries[main.index]
-    return endpoint_key(entry.method, entry.url, entry.request_body), main
+    return endpoint_key(entry.method, entry.url, entry.request_body, entry.request_headers), main
 
 
 def _key(endpoint: Endpoint | EndpointRef) -> EndpointKey:
     body = None if endpoint.body_shape is None else tuple(endpoint.body_shape)
-    shape = (endpoint.origin, endpoint.has_path, endpoint.segments, tuple(endpoint.query))
+    shape = (endpoint.origin, endpoint.has_path, endpoint.segments, endpoint.suffix, tuple(endpoint.query))
     return EndpointKey(endpoint.method, shape, body)
 
 

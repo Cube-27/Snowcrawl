@@ -29,7 +29,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from typing import Final
 
-from snowcrawl.collect.network_match import EndpointKey, endpoint_key, url_shape
+from snowcrawl.collect.network_match import FORM_TYPE, EndpointKey, endpoint_key, url_shape
 from snowcrawl.config_ir.api_recipe.binding import (
     Ambiguous,
     CapturedRequest,
@@ -230,7 +230,10 @@ def _preferred[T](found: Sequence[T], endpoint: Callable[[T], EndpointKey], pref
     query names: a listing's series key reads the URL without its query (`network_match.series_key`)."""
     if prefer is not None:
         body = None if prefer.body is None else prefer.body.template
-        wanted = _query_free(endpoint_key(prefer.method, prefer.url, body))
+        form = prefer.body is not None and prefer.body.encoding == "form"
+        wanted = _query_free(
+            endpoint_key(prefer.method, prefer.url, body, (("content-type", FORM_TYPE),) if form else ())
+        )
         for item in found:
             if _query_free(endpoint(item)) == wanted:
                 return item
@@ -238,13 +241,13 @@ def _preferred[T](found: Sequence[T], endpoint: Callable[[T], EndpointKey], pref
 
 
 def _query_free(key: EndpointKey) -> EndpointKey:
-    origin, has_path, segments, _ = key.url
-    return replace(key, url=(origin, has_path, segments, ()))
+    origin, has_path, segments, suffix, _ = key.url
+    return replace(key, url=(origin, has_path, segments, suffix, ()))
 
 
 def _request_endpoint(candidate: EndpointCandidate) -> EndpointKey:
     request = candidate.requests[0]
-    return endpoint_key(request.method, request.url, request.body)
+    return endpoint_key(request.method, request.url, request.body, request.headers)
 
 
 def _series_endpoint(endpoint: ListingEndpoint) -> EndpointKey:

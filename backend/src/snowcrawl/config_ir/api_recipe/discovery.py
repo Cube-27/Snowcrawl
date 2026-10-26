@@ -72,7 +72,7 @@ def endpoint_request(bundle: CaptureBundle, endpoint: EndpointCandidate) -> Capt
     """The request to `endpoint` a capture holds a readable answer to, the first in capture order; `None` when it holds
     none. Held-out validation reads the captures that hold one."""
     first = endpoint.requests[0]
-    key = endpoint_key(first.method, first.url, first.body)
+    key = endpoint_key(first.method, first.url, first.body, first.headers)
     return next((_request(call) for call in _replayable(bundle) if call.endpoint == key), None)
 
 

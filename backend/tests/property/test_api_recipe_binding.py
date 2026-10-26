@@ -176,3 +176,30 @@ def test_a_constant_token_like_query_value_no_page_value_holds_is_left_out() -> 
     spec = _spec(bind(stripped))
     assert spec.url == f"{_API}/search?q={{p1}}&lang=en"
     assert _KEY not in spec.model_dump_json()
+
+
+@given(st.sampled_from([".js", ".json", ".xml"]))
+def test_a_path_segment_with_a_format_suffix_binds_its_stem_and_keeps_the_suffix(suffix: str) -> None:
+    samples = [
+        _sample(f"{_PAGE}/p/blue-mug", f"{_API}/p/blue-mug{suffix}"),
+        _sample(f"{_PAGE}/p/red-cup", f"{_API}/p/red-cup{suffix}"),
+    ]
+
+    spec = _spec(bind(samples))
+
+    assert spec.url == f"{_API}/{{p0}}/{{p1}}{suffix}"
+    assert spec.params_from_url == {"p0": "path:0", "p1": "path:1"}
+
+
+@given(_value, _value)
+def test_a_form_body_binds_its_values_as_a_query_s_and_keeps_its_constants(first: str, second: str) -> None:
+    form = (("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8"),)
+
+    def sample(handle: str) -> Sample:
+        body = render_body("action=get&handle={h}&n=2", {"h": handle}, "form")
+        return Sample(f"{_PAGE}/p/{quote(handle, safe='')}", CapturedRequest("POST", f"{_API}/ajax", body, form))
+
+    body = _spec(bind([sample(first), sample(first + second)])).body
+
+    assert body is not None
+    assert (body.template, body.encoding) == ("action=get&handle={p1}&n=2", "form")

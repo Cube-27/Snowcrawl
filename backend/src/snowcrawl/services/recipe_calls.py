@@ -100,14 +100,15 @@ class FieldMatch(BaseModel):
 
 
 class Endpoint(BaseModel):
-    """One endpoint group: its request method, URL shape (origin, whether there is a path, its segment count, the
-    query names in order) and request body shape, the samples it was called on, its calls, the fields it carries and
-    the row query of the rows it lists."""
+    """One endpoint group: its request method, URL shape (origin, whether there is a path, its segment count, its last
+    segment's format suffix such as `.json`, "" for none, and the query names in order) and request body shape, the
+    samples it was called on, its calls, the fields it carries and the row query of the rows it lists."""
 
     method: str | None
     origin: str
     has_path: bool
     segments: int
+    suffix: str
     query: list[str]
     body_shape: list[str] | None
     samples: list[CaptureId]
@@ -230,7 +231,7 @@ def listed(pages: Sequence[HeldOutPage], schema: SchemaDef) -> CallList:
     for number, page in enumerate(pages):
         rows = {data.call.index: data.rows for data in data_calls(page.page) if data.rows is not None}
         for index, entry, data in _calls(page):
-            key = endpoint_key(entry.method, entry.url, entry.request_body)
+            key = endpoint_key(entry.method, entry.url, entry.request_body, entry.request_headers)
             group = groups.setdefault(key, _Group())
             group.calls.append(_summary(page.capture_id, index, entry, data))
             group.samples[page.capture_id] = None
@@ -312,12 +313,13 @@ def _collapsed(text: str) -> str:
 
 
 def _endpoint(key: EndpointKey, group: _Group, schema: SchemaDef) -> Endpoint:
-    origin, has_path, segments, query = key.url
+    origin, has_path, segments, suffix, query = key.url
     return Endpoint(
         method=key.method,
         origin=origin,
         has_path=has_path,
         segments=segments,
+        suffix=suffix,
         query=list(query),
         body_shape=None if key.body is None else list(key.body),
         samples=list(group.samples),

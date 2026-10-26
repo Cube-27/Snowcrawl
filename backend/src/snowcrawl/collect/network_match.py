@@ -2,9 +2,10 @@
 capture's network bodies that the `xhr` collector and API discovery share (C8).
 
 A call is readable when its response was a success (RFC 9110 §15.3) and its body is JSON (`network_json`, RFC 8259).
-Calls group into endpoints by request method, URL shape (the origin, whether there is a path, its segment count and the
-query names in order: the parts that vary are what a recipe binds) and request body shape (the paths of a JSON body's
-values, array indices written `[*]`, or the body itself when it is not JSON: one GraphQL URL serves many queries).
+Calls group into endpoints by request method, URL shape (the origin, whether there is a path, its segment count, the
+suffix of its last segment and the query names in order: the parts that vary are what a recipe binds) and request body
+shape (the paths of a JSON body's values, array indices written `[*]`; a form body's media type and names in order, as
+a query's; any other body's media type alone, since its bytes hold the values that vary).
 
 A call carries data for the page when one of its strings is visible in the page text (`VisibleIndex`): the page shows
 what the call loaded. Its rows are the object items of the one array whose items show the most of their own: an item
@@ -16,6 +17,7 @@ number formatted (a currency sign, grouping), and a short number matches any cou
 show fewer than `MIN_ITEMS` is no listing's rows (`acquire.items`).
 """
 
+import re
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import cached_property
@@ -29,13 +31,21 @@ from snowcrawl.collect import json_doc
 from snowcrawl.content.page import ParsedPage
 from snowcrawl.core import json_text
 from snowcrawl.normalize.text import text_form
-from snowcrawl.storage.capture_bundle import NetworkBody, network_json
+from snowcrawl.storage.capture_bundle import HeaderList, NetworkBody, network_json
 
 # RFC 9110 §15.3: the 2xx class.
 SUCCESS: Final = range(200, 300)
-# What the URLs of one endpoint's requests share: the origin, whether there is a path, its segment count, and the
-# query names in order.
-UrlShape = tuple[str, bool, int, tuple[str, ...]]
+# What the URLs of one endpoint's requests share: the origin, whether there is a path, its segment count, the suffix of
+# its last segment (`path_suffix`, "" for none) and the query names in order.
+UrlShape = tuple[str, bool, int, str, tuple[str, ...]]
+# The suffix a path's last segment names its representation's format with (`.json`, `.js`, `.xml`): a dot and a short
+# name, as a media type registration lists its file extensions (RFC 6838 §5.6). `/items/a` and `/items/a.json` are two
+# resources (RFC 3986 §3.3), and a suffix tells their answers' shapes apart.
+_SUFFIX: Final = re.compile(r"\.[A-Za-z][A-Za-z0-9]{0,4}\Z")
+# HTML §4.10.21.7: the media type of a form body (a recipe's `form` body); RFC 9110 §8.3: a body of no stated type may
+# be taken as `application/octet-stream`.
+FORM_TYPE: Final = "application/x-www-form-urlencoded"
+_UNSTATED_TYPE: Final = "application/octet-stream"
 # RFC 9535 §2.5.1.2: the wildcard selector, which a row query ends with.
 _EVERY_ITEM: Final = "[*]"
 
@@ -50,24 +60,44 @@ class EndpointKey:
     body: tuple[str, ...] | None
 
 
-def endpoint_key(method: str | None, url: str, body: str | None) -> EndpointKey:
-    return EndpointKey(None if method is None else method.upper(), url_shape(url), body_shape(body))
+def endpoint_key(method: str | None, url: str, body: str | None, headers: HeaderList | None = None) -> EndpointKey:
+    """The endpoint of a request; `headers` are the request's, whose `Content-Type` names a body's media type."""
+    shape = body_shape(body, media_type(headers or ()))
+    return EndpointKey(None if method is None else method.upper(), url_shape(url), shape)
 
 
 def url_shape(url: str) -> UrlShape:
     parts = urlsplit(url)
     names = tuple(item.partition("=")[0] for item in parts.query.split("&")) if parts.query else ()
-    segments = len(parts.path[1:].split("/")) if parts.path else 0
-    return f"{parts.scheme}://{parts.netloc}", bool(parts.path), segments, names
+    segments = parts.path[1:].split("/") if parts.path else []
+    return f"{parts.scheme}://{parts.netloc}", bool(parts.path), len(segments), path_suffix(parts.path), names
 
 
-def body_shape(body: str | None) -> tuple[str, ...] | None:
+def path_suffix(segment: str) -> str:
+    """The format suffix (`_SUFFIX`) that ends `segment` (or a path), dot included; "" when there is none."""
+    found = _SUFFIX.search(segment)
+    return "" if found is None else found[0]
+
+
+def media_type(headers: HeaderList) -> str | None:
+    """The essence of the request's `Content-Type` (RFC 9110 §8.3.1: type and subtype, compared case-insensitively,
+    parameters dropped); None when it states none."""
+    value = next((value for name, value in headers if name.lower() == "content-type"), None)
+    return None if value is None else value.split(";", 1)[0].strip().lower() or None
+
+
+def body_shape(body: str | None, media: str | None = None) -> tuple[str, ...] | None:
+    """A JSON body's shape is the paths of its leaves; a form body's (`media` is `FORM_TYPE`) its media type and names
+    in order; any other body's its media type (module docstring)."""
     if body is None:
         return None
     try:
         document = json_text.parse(body)
     except ValueError:
-        return (body,)
+        if media == FORM_TYPE:
+            # WHATWG URL §5.1: the body is `&`-separated `name=value` items, as a query is.
+            return (FORM_TYPE, *(item.partition("=")[0] for item in body.split("&") if item))
+        return (media or _UNSTATED_TYPE,)
     leaves = {path for path, value in json_doc.nodes(document, wildcard=True) if not isinstance(value, (dict, list))}
     return tuple(sorted(leaves))
 
@@ -82,7 +112,8 @@ class Call:
 
     @cached_property
     def endpoint(self) -> EndpointKey:
-        return endpoint_key(self.entry.method, self.entry.url, self.entry.request_body)
+        entry = self.entry
+        return endpoint_key(entry.method, entry.url, entry.request_body, entry.request_headers)
 
 
 def read_calls(entries: Sequence[NetworkBody], bodies: Sequence[bytes]) -> Iterator[Call]:
