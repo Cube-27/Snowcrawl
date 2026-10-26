@@ -158,10 +158,7 @@ class SocksGuard:
         target = await self._check(host, port)
         if self._upstream is not None:
             return await _tunnel(self._upstream, target)
-        try:
-            return await asyncio.open_connection(str(target.ip), target.port)
-        except OSError as e:
-            raise _Refused(_HOST_UNREACHABLE) from e
+        return await _direct(target)
 
     async def _check(self, host: str, port: int) -> Target:
         key = (host.lower(), port)
@@ -198,6 +195,17 @@ def _forget_oldest[K, V](kept: dict[K, V], settled: Callable[[V], bool]) -> None
     oldest = next((key for key, value in kept.items() if settled(value)), None)
     if oldest is not None:
         del kept[oldest]
+
+
+async def _direct(target: Target) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+    """A connection to the first of `target`'s checked addresses that answers."""
+    unreachable: OSError | None = None
+    for ip in target.addresses:
+        try:
+            return await asyncio.open_connection(str(ip), target.port)
+        except OSError as e:
+            unreachable = e
+    raise _Refused(_HOST_UNREACHABLE) from unreachable
 
 
 async def _tunnel(proxy: ProxyEndpoint, target: Target) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:

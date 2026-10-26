@@ -42,6 +42,7 @@ _NON_PUBLIC = [
     "64:ff9b::7f00:1",  # NAT64 well-known prefix embedding 127.0.0.1, RFC 6052
     "2002:7f00:1::1",  # 6to4 embedding 127.0.0.1, RFC 3056
     "2001:db8::1",  # documentation, RFC 3849
+    "fec0::1",  # site-local, deprecated by RFC 3879
 ]
 
 
@@ -133,7 +134,9 @@ def test_malformed_or_non_canonical_hosts_are_rejected(url: str) -> None:
 def test_public_target_is_pinned_to_the_checked_address(url: str, port: int) -> None:
     resolver = StubResolver({"www.example.com": [_PUBLIC_V4, _PUBLIC_V6]})
     target = asyncio.run(SafeConnector(resolver).check(url))
-    assert target == Target(url=url, host="www.example.com", port=port, ip=IPv4Address(_PUBLIC_V4))
+    assert target == Target(
+        url=url, host="www.example.com", port=port, ip=IPv4Address(_PUBLIC_V4), others=(ip_address(_PUBLIC_V6),)
+    )
     assert resolver.calls == ["www.example.com"]
 
 

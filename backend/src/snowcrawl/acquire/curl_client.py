@@ -448,11 +448,12 @@ def reason(error: RequestException) -> str:
 
 
 def pinned(target: Target) -> dict[CurlOpt, object]:
-    ip = bracketed(str(target.ip))
+    addresses = ",".join(bracketed(str(ip)) for ip in target.addresses)
     return {
-        # Every connection of this request goes to the checked address, whatever host name curl derives from the
-        # URL (IDNA, case, percent-encoding): CURLOPT_RESOLVE's `*` host matches every name on the port.
-        CurlOpt.RESOLVE: [f"*:{target.port}:{ip}"],
+        # Every connection of this request goes to the checked addresses, whatever host name curl derives from the
+        # URL (IDNA, case, percent-encoding): CURLOPT_RESOLVE's `*` host matches every name on the port, and curl
+        # tries the next address when one can't be reached.
+        CurlOpt.RESOLVE: [f"*:{target.port}:{addresses}"],
         CurlOpt.PROXY: "",  # an empty proxy disables proxies, including the environment's (CURLOPT_PROXY)
     }
 
@@ -467,10 +468,10 @@ def _through(proxy: ProxyEndpoint, target: Target) -> dict[CurlOpt, object]:
         CurlOpt.PROXYTYPE: _CURLPROXY_HTTP,
         # A CONNECT tunnel for http pages too (RFC 9110 §9.3.6): the proxy relays bytes and never rewrites a request.
         CurlOpt.HTTPPROXYTUNNEL: 1,
-        # The CONNECT names the checked address, not the host: a proxy would resolve a name itself, to an address the
-        # guard never checked. CURLOPT_CONNECT_TO's empty host matches every name on the port, and the request's Host
-        # and TLS server name keep the URL's host. No CURLOPT_RESOLVE: it would also redirect the connection to the
-        # proxy.
+        # The CONNECT names the first checked address, not the host: a proxy would resolve a name itself, to an address
+        # the guard never checked. CURLOPT_CONNECT_TO's empty host matches every name on the port, and the request's
+        # Host and TLS server name keep the URL's host. No CURLOPT_RESOLVE: it would also redirect the connection to
+        # the proxy.
         CurlOpt.CONNECT_TO: _slist(f":{target.port}:{ip}:{target.port}"),
         # An empty list overrides the environment's `no_proxy`, which would otherwise send matching hosts direct,
         # resolved by curl rather than the guard (CURLOPT_NOPROXY).

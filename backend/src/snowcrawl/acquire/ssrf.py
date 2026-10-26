@@ -2,8 +2,8 @@
 public is rejected.
 
 Fetchers call `SafeConnector.check` before the first request and `SafeConnector.redirect` before each hop they
-follow, and connect only to `Target.ip`. The resolver is injected so tests run without DNS. `SafeConnector.check_form`
-is the part of the check that needs no DNS: what a URL says about itself.
+follow, and connect only to `Target.addresses`, `Target.ip` first. The resolver is injected so tests run without
+DNS. `SafeConnector.check_form` is the part of the check that needs no DNS: what a URL says about itself.
 """
 
 import asyncio
@@ -33,6 +33,9 @@ _ENDS_IN_NUMBER = re.compile(r"(?:^|\.)(?:\d+|0x[0-9a-f]*)\.?$", re.ASCII | re.I
 _AMBIGUOUS = frozenset("%\u3002\uff0e\uff61")
 # RFC 6052 §2.1: the NAT64 well-known prefix embeds an IPv4 address in its last 32 bits.
 _NAT64 = IPv6Network("64:ff9b::/96")
+# RFC 3879 deprecated site-local addresses, but a router may still route them inside a site, and `is_global` admits
+# them.
+_SITE_LOCAL = IPv6Network("fec0::/10")
 
 
 # How a rejection reads, and so how a fetcher records it as an attempt's `error`: `ssrf_rejected: …`.
@@ -49,12 +52,17 @@ class SsrfRejected(Exception):
 
 @dataclass(frozen=True)
 class Target:
-    """A checked URL and the address to connect to for it."""
+    """A checked URL and the addresses to connect to for it: `ip`, then `others` if it can't be reached, all checked."""
 
     url: str
     host: str
     port: int
     ip: IPAddress
+    others: tuple[IPAddress, ...] = ()
+
+    @property
+    def addresses(self) -> tuple[IPAddress, ...]:
+        return (self.ip, *self.others)
 
 
 def is_public(ip: IPAddress) -> bool:
@@ -64,12 +72,13 @@ def is_public(ip: IPAddress) -> bool:
     address that embeds an IPv4 address (RFC 4291 §2.5.5.2 mapped, RFC 6052 NAT64) is public only if that IPv4
     address is. Any other IPv6 address must also be outside the IANA IPv6 address space's reserved blocks:
     `is_global` accepts `::/96` (IPv4-compatible, deprecated by RFC 4291 §2.5.5.1, inside the IETF-reserved
-    `::/8`), which some stacks route to the embedded IPv4 address."""
+    `::/8`), which some stacks route to the embedded IPv4 address, and outside the deprecated site-local `fec0::/10`
+    (RFC 3879)."""
     if isinstance(ip, IPv6Address):
         embedded = ip.ipv4_mapped or (IPv4Address(int(ip) & 0xFFFFFFFF) if ip in _NAT64 else None)
         if embedded is not None:
             return is_public(embedded)
-        if ip.is_reserved:
+        if ip.is_reserved or ip in _SITE_LOCAL:
             return False
     return ip.is_global and not ip.is_multicast
 
@@ -80,8 +89,9 @@ async def system_resolver(host: str) -> list[IPAddress]:
     return [ip_address(str(info[4][0]).split("%", 1)[0]) for info in infos]
 
 
-async def resolve_public(host: str, resolver: Resolver = system_resolver) -> IPAddress:
-    """Resolve once and return the address to pin; reject if resolution fails or any address is not public."""
+async def resolve_public(host: str, resolver: Resolver = system_resolver) -> tuple[IPAddress, ...]:
+    """Resolve once and return the addresses to pin, each once, in the resolver's order; reject if resolution fails or
+    any address is not public."""
     try:
         addresses = await resolver(host)
     except OSError as e:
@@ -90,7 +100,7 @@ async def resolve_public(host: str, resolver: Resolver = system_resolver) -> IPA
         raise SsrfRejected("dns")
     if not all(is_public(a) for a in addresses):
         raise SsrfRejected("private_address")
-    return addresses[0]
+    return tuple(dict.fromkeys(addresses))
 
 
 class SafeConnector:
@@ -121,8 +131,8 @@ class SafeConnector:
 
     async def check(self, url: str) -> Target:
         host, port, literal = self.check_form(url)
-        ip = literal if literal is not None else await resolve_public(host, self._resolver)
-        return Target(url=url, host=host, port=port, ip=ip)
+        ip, *others = (literal,) if literal is not None else await resolve_public(host, self._resolver)
+        return Target(url=url, host=host, port=port, ip=ip, others=tuple(others))
 
     async def redirect(self, current: Target, location: str) -> Target:
         """The next hop of a redirect: `location` is resolved against the current URL (RFC 9110 §10.2.2) and

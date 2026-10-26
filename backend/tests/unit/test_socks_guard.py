@@ -8,6 +8,7 @@ import asyncio
 import struct
 from collections.abc import AsyncIterator, Coroutine
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from ipaddress import IPv4Address, ip_address
 from urllib.parse import urlsplit
 
@@ -204,5 +205,25 @@ def test_a_check_whose_resolver_never_answers_is_refused_as_dns(monkeypatch: pyt
 
         assert head == b"\x05\x02"
         assert rejections == {("public.example.com", 443): "dns"}
+
+    _run(scenario())
+
+
+def test_a_checked_address_that_refuses_is_passed_over_for_the_next() -> None:
+    class TwoAddresses(PinnedConnector):
+        async def check(self, url: str) -> Target:
+            # The echo server listens on 127.0.0.1 only: ::1 refuses the connection.
+            checked = await super().check(url)
+            return replace(checked, ip=ip_address("::1"), others=(IPv4Address("127.0.0.1"),))
+
+    async def scenario() -> None:
+        async with echo_server() as port, SocksGuard(TwoAddresses()) as guard:
+            head, reader, writer = await _socks(guard, _domain_request("shop.example.test", port))
+            await reader.readexactly(8)
+            writer.write(b"ping")
+            echoed = await reader.readexactly(9)
+            writer.close()
+
+        assert (head, echoed) == (b"\x05\x00", b"echo:ping")
 
     _run(scenario())
