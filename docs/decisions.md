@@ -28,7 +28,12 @@ Reasoning for a single change goes in its PR body.
   saves. Saving needs no approval or audit; the output is always the selected schema.
 - **The learned config stays active beside custom recipes.** A recipe serves the URLs its patterns match; the learned
   config serves the rest. Ladder: custom recipe, then adapter, then learned recipe, then page rungs; only
-  operator recipes with patterns move ahead of adapters.
+  operator recipes with patterns move ahead of adapters. A page the recipe did not fetch itself is the learned
+  config's, and its record says so. An engineer can retire a recipe (it is suspended); the learned config then
+  serves its URLs.
+- **A recipe that fills fewer fields is saved only on confirmation.** Serving never falls back for a missing field
+  (unpublished beats wrong); the save step names what normal extraction filled and the recipe does not. Why: owner
+  plan fr, 2026-10-26.
 - **Engineer capture is synchronous** in the API process, like `POST /v1/scrape`; no new job kind.
 - **Recipe internals are shown on the Recipes screen only,** the one exception to hiding internals from users.
 
