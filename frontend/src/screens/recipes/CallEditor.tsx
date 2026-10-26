@@ -293,7 +293,7 @@ function PaginationEditor({
   const at = [...part, "pagination"];
   const shown = JSON.stringify(call.pagination ?? null, null, 2);
   // The text as typed while the field has focus, JSON or not yet; leaving the field shows the draft's pagination (what
-  // the last JSON typed applied), which a new proposal replaces.
+  // the last JSON typed applied, text that is not JSON dropped), which a new proposal replaces.
   const [typed, setTyped] = useState<string | null>(null);
   const [isValid, setIsValid] = useState(true);
   return (
@@ -311,7 +311,8 @@ function PaginationEditor({
           }
         }}
         onBlur={() => {
-          if (isValid) setTyped(null);
+          setTyped(null);
+          setIsValid(true);
         }}
       />
       {isValid ? null : (

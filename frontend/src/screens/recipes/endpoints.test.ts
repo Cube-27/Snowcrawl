@@ -23,9 +23,11 @@ describe("endpointText", () => {
       endpoint(["$.operationName", "$.variables['id']"]),
       endpoint(["$.operationName", "$.variables['slug']"]),
       endpoint(null),
+      endpoint([`q=${"a".repeat(70)}&page=1`]),
+      endpoint([`q=${"a".repeat(70)}&page=2`]),
     ].map(endpointText);
 
-    expect(new Set(titles).size).toBe(3);
+    expect(new Set(titles).size).toBe(5);
     expect(titles[0]).toBe(
       "POST https://api.example.test/{1 segment} body {$.operationName, $.variables['id']}",
     );

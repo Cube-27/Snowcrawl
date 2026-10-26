@@ -32,15 +32,27 @@ export function endpointText(endpoint: Endpoint): string {
 // A body that is not JSON is its own shape: its text, cut to this many characters in a title.
 const BODY_TEXT_MAX = 60;
 
-/** A JSON body's shape is the paths of its leaves (RFC 9535); any other body's is its whole text. */
+/** A JSON body's shape is the paths of its leaves (RFC 9535); any other body's is its whole text, cut with a digest
+ * of the whole after it so that two bodies with one beginning still read apart. */
 function bodyText(shape: Endpoint["body_shape"]): string {
   if (shape == null) return "";
   const [first] = shape;
   if (shape.length === 1 && first !== undefined && !first.startsWith("$")) {
-    const cut = first.length > BODY_TEXT_MAX ? `${first.slice(0, BODY_TEXT_MAX)}…` : first;
+    const cut =
+      first.length > BODY_TEXT_MAX ? `${first.slice(0, BODY_TEXT_MAX)}… #${digest(first)}` : first;
     return ` body ${cut}`;
   }
   return ` body {${shape.join(", ")}}`;
+}
+
+/** FNV-1a, 32 bits (IETF draft-eastlake-fnv), as 8 hex digits: a short name for a long text, not a security hash. */
+function digest(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function segmentsText(segments: number): string {
