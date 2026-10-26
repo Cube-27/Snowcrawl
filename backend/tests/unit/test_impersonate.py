@@ -50,9 +50,11 @@ def test_unset_the_target_follows_the_browser_and_names_the_major_of_its_handsha
     monkeypatch.setattr(impersonate, "_read_headers", read)
 
     with caplog.at_level(logging.WARNING):
-        chosen = asyncio.run(rung_impersonation(AcquireSettings(), browser_rung=True))
+        chosen = asyncio.run(rung_impersonation(AcquireSettings(impersonate_lag=2), browser_rung=True))
 
     assert chosen.target == nearest_target(major)
+    # A profile more than the bound behind the browser warns to upgrade curl_cffi.
+    assert ("upgrade curl_cffi" in caplog.text) == (major - _PROFILES[-1] > 2)
     # Cookies the browser earned go with its own headers.
     assert chosen.replaying(True).headers == _of(major)
     if major == _PROFILES[-1]:  # a profile of the browser's major: its own headers

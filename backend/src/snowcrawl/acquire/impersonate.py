@@ -7,7 +7,8 @@ hints, `Accept` and `Accept-Language`). The rungs impersonate curl_cffi's Chrome
 and HTTP/2 handshake. When that profile is the browser's major, they send the browser's headers in place of the
 profile's own. When none is, with a warning, every header names the profile's major, as its handshake does: the
 profile's own client hints, `Accept` and order, with the browser's platform (its user agent with the profile's major in
-the product token, `Sec-CH-UA-Platform`) and its `Accept-Language`. A request that carries cookies the browser rung
+the product token, `Sec-CH-UA-Platform`) and its `Accept-Language`. A profile more majors behind than
+`SNOWCRAWL_IMPERSONATE_LAG` warns at startup to upgrade curl_cffi. A request that carries cookies the browser rung
 earned (`acquire.session`) sends the browser's own headers in either case: a clearance cookie may be bound to the user
 agent that earned it. A target the operator sets (`SNOWCRAWL_IMPERSONATE`) is kept with its own headers and starts no
 browser. A process that runs the browser rung does not start when that Chrome cannot be read (`BrowserUnread`): its HTTP
@@ -27,7 +28,7 @@ from snowcrawl.acquire.browser_session import browser_identity, open_driver
 from snowcrawl.core.settings import AcquireSettings
 from snowcrawl.storage.capture_bundle import HeaderList
 
-__all__ = ["BrowserUnread", "Impersonation", "nearest_target", "rung_impersonation"]
+__all__ = ["BrowserUnread", "Impersonation", "lags", "nearest_target", "rung_impersonation"]
 
 log = logging.getLogger(__name__)
 
@@ -75,11 +76,26 @@ async def rung_impersonation(settings: AcquireSettings, *, browser_rung: bool) -
     major = _CHROME_PRODUCT.search(agent)
     if major is None:
         return _unread("names no Chrome in its user agent", configured, browser_rung)
-    target = nearest_target(int(major.group(1)))
-    if (profile := _major(target)) == int(major.group(1)):
+    browser = int(major.group(1))
+    target = nearest_target(browser)
+    profile = cast(int, _major(target))
+    if lags(browser, profile, settings.impersonate_lag):
+        log.warning(
+            "curl_cffi's nearest Chrome profile %s is %d majors behind Chrome %d: upgrade curl_cffi",
+            target,
+            browser - profile,
+            browser,
+        )
+    if profile == browser:
         return Impersonation(target, headers)
-    log.warning("no curl_cffi Chrome profile for Chrome %s: impersonating %s", major.group(1), target)
-    return Impersonation(target, _naming(headers, cast(int, profile)), headers)
+    log.warning("no curl_cffi Chrome profile for Chrome %s: impersonating %s", browser, target)
+    return Impersonation(target, _naming(headers, profile), headers)
+
+
+def lags(browser: int, profile: int, bound: int) -> bool:
+    """Whether the profile of Chrome major `profile` trails the browser's major `browser` by more than `bound`: its
+    handshake then names a Chrome older than every header a request replaying earned cookies sends (`replaying`)."""
+    return browser - profile > bound
 
 
 def _naming(headers: HeaderList, major: int) -> HeaderList:

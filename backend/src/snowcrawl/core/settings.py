@@ -68,6 +68,10 @@ class AcquireSettings(_Base):
     # window as the Patchright README's best practice runs it; on Linux with no display, on a virtual one
     # (`acquire.display`, Xvfb).
     browser_headless: bool = True
+    # `SNOWCRAWL_IMPERSONATE_LAG`: how many Chrome majors curl_cffi's nearest Chrome profile may trail the browser
+    # rung's Chrome before startup warns to upgrade curl_cffi (`acquire.impersonate`). Chrome ships a major about every
+    # four weeks (Chromium release cycle), so 4 is about a quarter: an unmeasured starting point.
+    impersonate_lag: Annotated[int, Field(ge=0)] = 4
 
     @property
     def direct(self) -> ExitPlace:
