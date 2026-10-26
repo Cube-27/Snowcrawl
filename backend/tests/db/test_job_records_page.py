@@ -58,10 +58,16 @@ class Jobs:
         extraction_id = (
             await self.conn.execute(insert(Extraction).values(extraction).returning(Extraction.id))
         ).scalar_one()
-        for title in records:
+        for position, title in enumerate(records):
             if title not in self.stored:
                 self.stored[title] = await self._record(job_id, extraction_id, title, schema_id or self.schema_id)
-            link = {"url_task_id": task_id, "record_id": self.stored[title], "delta": "new"}
+            link = {
+                "url_task_id": task_id,
+                "record_id": self.stored[title],
+                "extraction_id": extraction_id,
+                "position": position,
+                "delta": "new",
+            }
             await self.conn.execute(insert(TaskRecord).values(link))
         return task_id
 

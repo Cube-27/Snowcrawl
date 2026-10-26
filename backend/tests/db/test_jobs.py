@@ -213,7 +213,7 @@ class World:
                 "mode": "adhoc",
             }
             made.append((await conn.execute(insert(Record).values(**values).returning(Record.id))).scalar_one())
-        await link_records(conn, task_id, [(record_id, "new") for record_id in made])
+        await link_records(conn, task_id, extraction_id, [(record_id, "new") for record_id in made])
         return made
 
     async def records(self, job_id: JobId, n: int) -> list[RecordId]:

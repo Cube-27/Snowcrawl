@@ -736,8 +736,9 @@ class Record(Base):
 
 class TaskRecord(Base):
     """A record a task's page stands for: one it stored, or the entity's latest version when the
-    page's record equalled it and stored nothing. A job's records are those of its tasks (the results).
-    Plumbing for `url_task.record_id`, as a table because a listing page stands for one record per row."""
+    page's record equalled it and stored nothing. A job's records are those of its tasks (the results), and an
+    extraction's are those it stood for, in the page's order. Plumbing for `url_task.record_id`, as a table because a
+    listing page stands for one record per row."""
 
     __tablename__ = "task_record"
     __table_args__ = (CheckConstraint(one_of("delta", RecordDelta), name="delta"),)
@@ -745,6 +746,10 @@ class TaskRecord(Base):
     url_task_id: Mapped[UrlTaskId] = mapped_column(ForeignKey(UrlTask.id, ondelete="CASCADE"), primary_key=True)
     # Indexed for the records a job lists, which join on it, and for a record's delete.
     record_id: Mapped[RecordId] = mapped_column(ForeignKey(Record.id, ondelete="CASCADE"), primary_key=True, index=True)
+    # The extraction whose page stood for the record, and the record's place among its records (a listing's row). An
+    # extraction that stored nothing because its record equalled the entity's latest version still has its values here.
+    extraction_id: Mapped[ExtractionId] = mapped_column(ForeignKey(Extraction.id), index=True)
+    position: Mapped[int] = mapped_column(Integer)
     # What the record is against the entity's previous record when the task stood for it: `new` (none before), `changed`
     # (a value differs: `record.changed_fields`) or `same` (equal values).
     delta: Mapped[RecordDelta] = mapped_column(Text)

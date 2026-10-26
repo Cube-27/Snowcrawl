@@ -11,7 +11,18 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from snowcrawl.core.egress import UNKNOWN, Egress
-from snowcrawl.db.models import Extraction, Job, JobId, Project, Record, Site, SiteId
+from snowcrawl.db.models import (
+    Extraction,
+    ExtractionId,
+    Job,
+    JobId,
+    Project,
+    Record,
+    RecordId,
+    Site,
+    SiteId,
+    TaskRecord,
+)
 from snowcrawl.db.queue import insert_claimed
 from snowcrawl.recurring.record_fp import record_fingerprint
 from snowcrawl.recurring.versions import store_records
@@ -51,6 +62,7 @@ class _Site:
     def __init__(self, conn: AsyncConnection) -> None:
         self.conn = conn
         self.jobs: list[JobId] = []
+        self.extractions: list[ExtractionId] = []
 
     async def prepare(self, document: SchemaDocument = DOCUMENT) -> None:
         project = select(Project.id).where(Project.name == "default").scalar_subquery()
@@ -80,6 +92,7 @@ class _Site:
         task = await insert_claimed(self.conn, job_id, PAGE_URL, PAGE_URL, self.schema.page_kind, "test-worker")
         extraction = insert(Extraction).values(url_task_id=task.id, engine_version="e", mode="adhoc")
         extraction_id = (await self.conn.execute(extraction.returning(Extraction.id))).scalar_one()
+        self.extractions.append(extraction_id)
         source = RecordSource(
             extraction_id=extraction_id,
             task_id=task.id,
@@ -89,6 +102,11 @@ class _Site:
             page_url=PAGE_URL,
         )
         return await store_records(self.conn, self.schema, drafts, source)
+
+    async def stood_for(self, extraction_id: ExtractionId) -> list[RecordId]:
+        """The records the extraction stood for, in the page's order."""
+        query = select(TaskRecord.record_id).where(TaskRecord.extraction_id == extraction_id)
+        return list((await self.conn.execute(query.order_by(TaskRecord.position))).scalars())
 
     async def rows(self) -> list[dict[str, Any]]:
         columns = (
@@ -137,6 +155,15 @@ async def test_an_equal_record_is_its_latest_version_and_a_changed_optional_valu
     assert again.id == first.id
     assert coloured.draft.data == {**KETTLE, "colour": "Blue"}
     assert [(row["version"], row["changed_fields"]) for row in await site.rows()] == [(1, []), (2, ["colour"])]
+
+
+async def test_an_extraction_stands_for_its_records_in_page_order_the_equal_ones_included(site: _Site) -> None:
+    other = "https://shop.example.test/p/2"
+    (kettle,) = await site.run(site.draft(KETTLE))
+
+    second = await site.run(site.draft(CHEAPER, other), site.draft(KETTLE))
+
+    assert await site.stood_for(site.extractions[1]) == [second[0].id, kettle.id]
 
 
 async def test_a_changed_price_adds_version_2_naming_price(site: _Site) -> None:

@@ -164,7 +164,9 @@ async def replay(
     async with engine.connect() as conn:
         capture = await _capture(conn, capture_id)
         if job_id is None:
-            stored = select(Record.schema_id).distinct().join(Extraction, Extraction.id == Record.extraction_id)
+            # The records the capture's extractions stood for, equal records stored from an earlier capture included.
+            stored = select(Record.schema_id).distinct().join(TaskRecord, TaskRecord.record_id == Record.id)
+            stored = stored.join(Extraction, Extraction.id == TaskRecord.extraction_id)
             stored = stored.where(Extraction.capture_id == capture_id)
         else:
             # The records the job's tasks stand for, equal records of an earlier job's included.

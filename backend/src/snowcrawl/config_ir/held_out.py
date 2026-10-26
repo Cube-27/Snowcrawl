@@ -6,9 +6,10 @@ version, each with its latest extraction. A locate run samples the surface's sto
 those, and the listing pages of a job of the schema that listed nothing (no record, though a further page of its task
 may have kept some), whose rows a render may show. A run may keep only the captures whose URL `keep` accepts (a URL
 pattern is not SQL): the latest are read in order until `limit` are kept. A capture whose bundle is no
-longer stored (captures expire) is skipped. What the engine published is the extraction's records (`record.data` holds
-published fields only): a detail page's one, or a listing's one per row in the order they were stored, which
-is the page's row order.
+longer stored (captures expire) is skipped. What the engine published is the records the extraction stood for
+(`task_record`; `record.data` holds published fields only): a detail page's one, or a listing's one per row in the
+page's row order. A record equal to the entity's latest version stores nothing, so an extraction stands for that
+version: a page captured again still has the values it published.
 
 The references corroboration compares with (§8.3 step 4) are the valid structured-data or adapter candidates owned by
 an entity that published a field of the page. Records do not say which row entity a listing record came from, so a
@@ -47,6 +48,7 @@ from snowcrawl.db.models import (
     Record,
     SiteId,
     SourceKind,
+    TaskRecord,
     UrlTask,
 )
 from snowcrawl.normalize.base import Context
@@ -264,13 +266,15 @@ async def _extractions(
 
 
 def _latest(schema: SchemaDef, *, listed_nothing: bool = False) -> Select[CaptureId, str, ExtractionId]:
-    """Each capture's latest extraction with a record of `schema` (ids are UUIDv7, so the greatest is the latest); with
+    """Each capture's latest extraction that stood for a record of `schema` (ids are UUIDv7, so the greatest is the
+    latest); with
     `listed_nothing`, or of a listing task of a job of `schema`, which listed nothing when it has none (`_extractions`
     keeps the tasks that ended `extracted` or `partial`)."""
     kept: ColumnElement[bool] = (
-        select(Record.id)
+        select(TaskRecord.record_id)
+        .join(Record, Record.id == TaskRecord.record_id)
         .where(
-            Record.extraction_id == Extraction.id,
+            TaskRecord.extraction_id == Extraction.id,
             Record.schema_id == schema.id,
         )
         .exists()
@@ -296,9 +300,10 @@ async def _records(
     conn: AsyncConnection, ids: Sequence[ExtractionId], schema: SchemaDef
 ) -> dict[ExtractionId, list[StoredRecord]]:
     query = (
-        select(Record.extraction_id, Record.data, Record.field_meta)
-        .where(Record.extraction_id.in_(ids), Record.schema_id == schema.id)
-        .order_by(Record.id)  # ids are UUIDv7, so this is the order the records were stored in
+        select(TaskRecord.extraction_id, Record.data, Record.field_meta)
+        .join(Record, Record.id == TaskRecord.record_id)
+        .where(TaskRecord.extraction_id.in_(ids), Record.schema_id == schema.id)
+        .order_by(TaskRecord.position)  # the page's order
     )
     found: dict[ExtractionId, list[StoredRecord]] = defaultdict(list)
     for row in await conn.execute(query):
