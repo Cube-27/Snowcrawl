@@ -18,7 +18,7 @@ from functools import partial
 from typing import Final, Literal, cast
 from urllib.parse import urlsplit
 
-from curl_cffi import Curl, CurlECode, CurlOpt
+from curl_cffi import Curl, CurlECode, CurlHttpVersion, CurlOpt
 from curl_cffi.curl import (
     CURL_WRITEFUNC_ERROR,
     CURLINFO_DATA_IN,
@@ -320,8 +320,12 @@ async def curl_transport(
     # (RFC 6265 §5.3 step 5): the session discards what curl parsed, and each request clears curl's list before
     # sending only the cookies passed in. `trust_env=False` stops curl_cffi reading the proxy environment variables;
     # libcurl reads them itself, so each request also sets CURLOPT_PROXY, and a pool request CURLOPT_NOPROXY:
-    # proxies come only from the pools.
-    async with _Session(impersonate=impersonate.target, trust_env=False, discard_cookies=True) as session:
+    # proxies come only from the pools. HTTP/2 only over TLS, negotiated by ALPN (RFC 9113 §3.2), as Chrome speaks it:
+    # curl's default HTTP/2 would also offer a cleartext request the `h2c` upgrade (RFC 7540 §3.2, which RFC 9113 §3.1
+    # deprecates), sending `Upgrade`, `HTTP2-Settings` and `Connection` headers no browser sends.
+    async with _Session(
+        impersonate=impersonate.target, http_version=CurlHttpVersion.V2TLS, trust_env=False, discard_cookies=True
+    ) as session:
         yield partial(_request, session, impersonate.headers, proxy, limits, traffic)
 
 
