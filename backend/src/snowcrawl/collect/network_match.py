@@ -8,7 +8,8 @@ shape (the paths of a JSON body's values, array indices written `[*]`; a form bo
 a query's; any other body's media type alone, since its bytes hold the values that vary).
 
 A call carries data for the page when one of its strings is visible in the page text (`VisibleIndex`): the page shows
-what the call loaded. Its rows are the object items of the one array whose items show the most of their own: an item
+what the call loaded. Its rows are the object items of the one array whose items show the most of their own (when the
+rows the engine published from the page are known, the one whose items hold the most of their strings first): an item
 counts when it holds a visible string no other item of the array holds (a value every item repeats, a currency or a
 category, says nothing of which item is shown). Strings are compared in the text form the page text is indexed in
 (`normalize.text.text_form`: references resolved, composed, white space collapsed and trimmed, as HTML rendering
@@ -152,17 +153,19 @@ class DataCall:
     row_hits: int
 
 
-def data_calls(page: ParsedPage) -> list[DataCall]:
+def data_calls(page: ParsedPage, published: Sequence[Mapping[str, JsonValue]] = ()) -> list[DataCall]:
     """The page's calls that carry data, best first: by row hits, then visible values; ties keep capture order. Empty
-    when the page does not hold its bodies' manifest entries."""
+    when the page does not hold its bodies' manifest entries. `published` are the rows the engine published from the
+    page, when known: a call's rows are then the array whose items hold the most of them (`_rows`)."""
     if len(page.network_entries) != len(page.network):
         return []
     found: list[DataCall] = []
     memo: dict[str, bool] = {}
+    stated = _published_strings(published)
     for call in read_calls(page.network_entries, page.network):
         visible = len(visible_paths(call.document, page, memo))
         if visible:
-            rows, hits = _rows(call.document, page, memo)
+            rows, hits = _rows(call.document, page, memo, stated)
             found.append(DataCall(call, visible, rows, hits))
     return sorted(found, key=lambda data: (-data.row_hits, -data.visible))
 
@@ -227,31 +230,54 @@ class LearnedCalls:
         )
 
 
-def state_calls(states: Sequence[ParsedPage]) -> list[DataCall]:
+def state_calls(states: Sequence[ParsedPage], published: Sequence[Mapping[str, JsonValue]] = ()) -> list[DataCall]:
     """The calls of the document states one listing's browser actions kept, in order (a kept state's calls are those
-    since the state before it), as `data_calls` gives them for each, best first; a call's index counts the network
-    bodies of the states before its own, so calls of different states never share one."""
+    since the state before it), as `data_calls` gives them for each (with the rows `published` from the listing),
+    best first; a call's index counts the network bodies of the states before its own, so calls of different states
+    never share one."""
     found: list[DataCall] = []
     offset = 0
     for state in states:
-        for data in data_calls(state):
+        for data in data_calls(state, published):
             found.append(replace(data, call=replace(data.call, index=offset + data.call.index)))
         offset += len(state.network)
     return sorted(found, key=lambda data: (-data.row_hits, -data.visible))
 
 
-def _rows(document: JsonValue, page: ParsedPage, memo: dict[str, bool]) -> tuple[str | None, int]:
+def _published_strings(rows: Sequence[Mapping[str, JsonValue]]) -> frozenset[str]:
+    """The strings of published row values, in the text form (module docstring)."""
+    return frozenset(
+        form
+        for row in rows
+        for value in row.values()
+        for _, leaf in json_doc.scalars(value)
+        if isinstance(leaf, str) and (form := text_form(leaf))
+    )
+
+
+def _rows(
+    document: JsonValue, page: ParsedPage, memo: dict[str, bool], published: frozenset[str] = frozenset()
+) -> tuple[str | None, int]:
+    """The row query of the array whose items show the most strings of their own, and how many items do. With
+    `published` row strings, the array whose items hold the most of those first: a page also shows arrays that are
+    not its rows (filter facets, menus), whose items' strings are no row's values."""
     best: tuple[str | None, int] = (None, 0)
+    rank = (0, 0)
     for path, value in json_doc.nodes(document):
         if isinstance(value, list) and json_doc.is_query(query := path + _EVERY_ITEM):
             hits = _own_hits(value, page, memo)
-            if hits >= MIN_ITEMS and hits > best[1]:
-                best = (query, hits)
+            if hits < MIN_ITEMS:
+                continue
+            here = (_own_hits(value, page, memo, published) if published else 0, hits)
+            if here > rank:
+                best, rank = (query, hits), here
     return best
 
 
-def _own_hits(items: list[JsonValue], page: ParsedPage, memo: dict[str, bool]) -> int:
-    """How many object items of `items` hold a visible string no other item holds."""
+def _own_hits(
+    items: list[JsonValue], page: ParsedPage, memo: dict[str, bool], among: frozenset[str] | None = None
+) -> int:
+    """How many object items of `items` hold a visible string no other item holds (one of `among`, when given)."""
     strings = [_strings(item) for item in items if isinstance(item, dict)]
     if len(strings) < MIN_ITEMS:
         return 0
@@ -259,7 +285,10 @@ def _own_hits(items: list[JsonValue], page: ParsedPage, memo: dict[str, bool]) -
     for own in strings:
         for text in own:
             holders[text] = holders.get(text, 0) + 1
-    return sum(any(holders[text] == 1 and _shown(text, page, memo) for text in own) for own in strings)
+    return sum(
+        any(holders[text] == 1 and (among is None or text in among) and _shown(text, page, memo) for text in own)
+        for own in strings
+    )
 
 
 def _strings(item: JsonValue) -> set[str]:

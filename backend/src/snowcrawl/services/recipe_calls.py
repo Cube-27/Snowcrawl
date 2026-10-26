@@ -229,7 +229,8 @@ def listed(pages: Sequence[HeldOutPage], schema: SchemaDef) -> CallList:
     """The call list of the sample `pages` (module docstring)."""
     groups: dict[EndpointKey, _Group] = {}
     for number, page in enumerate(pages):
-        rows = {data.call.index: data.rows for data in data_calls(page.page) if data.rows is not None}
+        published = [row.published for row in page.rows]
+        rows = {data.call.index: data.rows for data in data_calls(page.page, published) if data.rows is not None}
         for index, entry, data in _calls(page):
             key = endpoint_key(entry.method, entry.url, entry.request_body, entry.request_headers)
             group = groups.setdefault(key, _Group())

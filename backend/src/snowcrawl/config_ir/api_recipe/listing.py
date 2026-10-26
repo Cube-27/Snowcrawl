@@ -81,7 +81,7 @@ def page_series(page: ListingPage) -> dict[SeriesKey, tuple[DataCall, ...]]:
     """The page's series by key, in the order of their best call; a series whose request method the capture did not
     record (older bundles) is left out, since a recipe can only replay a request it knows the method of."""
     found: dict[SeriesKey, tuple[DataCall, ...]] = {}
-    for series in row_series(state_calls(page.states)):
+    for series in row_series(state_calls(page.states, page.rows)):
         key = series_key(series[0])
         if key is not None and key[0] is not None:
             found[key] = series
