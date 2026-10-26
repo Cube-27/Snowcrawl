@@ -16,13 +16,10 @@ import {
   type WrittenRecipe,
 } from "../../api/recipes";
 import type { SchemaDef } from "../../api/schemas";
-import { EmptyView } from "../../components/molecules/EmptyView";
+import { EmptyView, LoadingView, ProblemAlert } from "../../components/molecules/ViewStates";
 import { keyedTexts } from "../../components/lib/keys";
-import { LoadingView } from "../../components/molecules/LoadingView";
-import { PageHeader } from "../../components/templates/PageHeader";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { Screen, Section } from "../../components/templates/Screen";
 import { SchemaSelect } from "../../components/molecules/SchemaSelect";
-import { Section } from "../../components/templates/Section";
 import type { EditHandlers } from "./CallEditor";
 import { CallList, type SampleNumber } from "./CallList";
 import { applied, fieldSources, NO_EDITS, withEdit, withoutEdit, type Edits } from "./draft";
@@ -66,10 +63,10 @@ function MainCall({
   }
   return (
     <div className="flex flex-col gap-2">
-      <Typography.Paragraph className="font-mono text-sm break-all">
+      <Typography.Paragraph className="text-code break-all">
         {endpointText(chosen)}
       </Typography.Paragraph>
-      <ul aria-label="Main call fields" className="flex flex-col gap-1 font-mono text-sm">
+      <ul aria-label="Main call fields" className="flex flex-col gap-1 text-code">
         {keyedTexts(chosen.fields.flatMap((match) => matchLines(match, samples))).map(
           ({ key, text }) => (
             <li key={key}>{text}</li>
@@ -82,7 +79,7 @@ function MainCall({
         </Typography.Paragraph>
       ) : null}
       {proposal.isFetching ? <LoadingView label="Drafting the recipe" /> : null}
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
     </div>
   );
 }
@@ -116,7 +113,7 @@ function CallSteps({
           with the paths that read each field of the schema.
         </Typography.Paragraph>
         {calls.isPending ? <LoadingView label="Loading the calls" /> : null}
-        {problem === null ? null : <ProblemAlert problem={problem} />}
+        <ProblemAlert problem={problem} />
         {calls.isSuccess && endpoints.length === 0 ? (
           <EmptyView title="No calls">
             The pages made no call the capture keeps (JSON, Flight or HTML fragments).
@@ -334,11 +331,10 @@ export function RecipeBuilder() {
   const { host = "" } = useParams();
   const [schema, setSchema] = useState<SchemaDef | null>(null);
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader
-        title={`New recipe for ${host}`}
-        actions={<Link href={recipesPath(host)}>All recipes</Link>}
-      />
+    <Screen
+      title={`New recipe for ${host}`}
+      actions={<Link href={recipesPath(host)}>All recipes</Link>}
+    >
       <Section title="1. Schema">
         <SchemaSelect
           value={schema?.id ?? ""}
@@ -350,7 +346,7 @@ export function RecipeBuilder() {
       {schema === null ? null : (
         <Builder key={schema.id} host={host} schema={schema} stored={null} replaces={null} />
       )}
-    </section>
+    </Screen>
   );
 }
 
@@ -365,11 +361,10 @@ export function RecipeEditor() {
   if (!config.isSuccess || !schema.isSuccess) return <LoadingView label="Loading the recipe" />;
   const { recipe, site } = config.data;
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader
-        title={`Edit recipe of ${site}`}
-        actions={<Link href={recipePath(id)}>Back to the recipe</Link>}
-      />
+    <Screen
+      title={`Edit recipe of ${site}`}
+      actions={<Link href={recipePath(id)}>Back to the recipe</Link>}
+    >
       {recipe === null ? (
         <EmptyView title="Not a custom recipe">
           A learned config is corrected on its config screen.
@@ -377,6 +372,6 @@ export function RecipeEditor() {
       ) : (
         <Builder host={site} schema={schema.data} stored={recipe} replaces={id} />
       )}
-    </section>
+    </Screen>
   );
 }

@@ -4,11 +4,10 @@ import type { ExtractedRecord } from "../../api/records";
 import type { RecordField } from "../../api/scrape";
 import { ConfidenceCell, confidenceText } from "../molecules/ConfidenceCell";
 import { EvidenceText, SourceKindText } from "../molecules/FieldOrigin";
-import { FieldStatusBadge } from "../molecules/FieldStatusBadge";
+import { FieldStatusLabel, UncalibratedLabel } from "../molecules/StatusLabels";
 import { FieldValue } from "../molecules/FieldValue";
 import { LocatorText } from "../atoms/LocatorText";
 import { StatusLabel } from "../atoms/StatusLabel";
-import { UncalibratedBadge } from "../molecules/UncalibratedBadge";
 
 /** Whether a record is complete, with its mode and confidence, and its one uncalibrated badge. */
 export function RecordSummary({ record }: Readonly<{ record: ExtractedRecord }>) {
@@ -18,7 +17,7 @@ export function RecordSummary({ record }: Readonly<{ record: ExtractedRecord }>)
         text={record.complete ? "complete" : "incomplete"}
         tone={record.complete ? "success" : "warning"}
       />
-      <UncalibratedBadge records={[record]} />
+      <UncalibratedLabel records={[record]} />
       <Typography.Paragraph size="sm" color="muted">
         Mode {record.mode} · confidence {confidenceText(record.confidence)}
       </Typography.Paragraph>
@@ -71,7 +70,7 @@ export function FieldsTable({
                   />
                 </Table.Cell>
                 <Table.Cell>
-                  <FieldStatusBadge status={field.status} />
+                  <FieldStatusLabel status={field.status} />
                 </Table.Cell>
                 <Table.Cell>
                   <ConfidenceCell confidence={field.confidence} />

@@ -14,7 +14,7 @@ import { useMemo, useState, type Key } from "react";
 import type { Problem } from "../../api/problem";
 import { Choices } from "../molecules/Choices";
 import { FormActions } from "../molecules/FormActions";
-import { ProblemAlert } from "../molecules/ProblemAlert";
+import { ProblemAlert } from "../molecules/ViewStates";
 import { SchemaFieldEditor } from "./SchemaFieldEditor";
 import {
   inputErrors,
@@ -192,7 +192,7 @@ export function SchemaForm({
         submit();
       }}
     >
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
       <Tabs selectedKey={view} onSelectionChange={switchView}>
         <Tabs.ListContainer>
           <Tabs.List aria-label="Schema editor">

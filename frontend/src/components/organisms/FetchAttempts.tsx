@@ -15,7 +15,7 @@ export function FetchAttemptsTable({ attempts }: Readonly<{ attempts: readonly F
             <Table.Column>HTTP status</Table.Column>
             <Table.Column>Block class</Table.Column>
             <Table.Column>Challenge</Table.Column>
-            <Table.Column>Duration (ms)</Table.Column>
+            <Table.Column className="numeric">Duration (ms)</Table.Column>
             <Table.Column>Error</Table.Column>
           </Table.Header>
           <Table.Body items={rows}>
@@ -25,7 +25,7 @@ export function FetchAttemptsTable({ attempts }: Readonly<{ attempts: readonly F
                 <Table.Cell>{attempt.status === null ? "—" : String(attempt.status)}</Table.Cell>
                 <Table.Cell>{attempt.block_class}</Table.Cell>
                 <Table.Cell>{attempt.challenge ?? "—"}</Table.Cell>
-                <Table.Cell>{String(attempt.duration_ms)}</Table.Cell>
+                <Table.Cell className="numeric">{String(attempt.duration_ms)}</Table.Cell>
                 <Table.Cell>{attempt.error ?? "—"}</Table.Cell>
               </Table.Row>
             )}

@@ -5,7 +5,7 @@ import { useNavigate } from "react-router";
 import type { ScheduleKind } from "../../api/schedules";
 import { problemOf } from "../../api/hooks/query";
 import { useCreateSchedule } from "../../api/hooks/schedules";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { ProblemAlert } from "../../components/molecules/ViewStates";
 import { draftErrors, scheduleBody, type ScheduleDraft } from "./cadence";
 import { DraftFields, viewerZone } from "./DraftFields";
 import { schedulePath } from "./paths";
@@ -54,7 +54,7 @@ export function ScheduleDialog({
                 would bubble to it and start the run. */}
             <Modal.Body className="flex flex-col gap-4">
               <DraftFields draft={draft} errors={errors} onChange={setDraft} />
-              {problem === null ? null : <ProblemAlert problem={problem} />}
+              <ProblemAlert problem={problem} />
             </Modal.Body>
             <Modal.Footer>
               <Button isPending={create.isPending} onPress={save}>

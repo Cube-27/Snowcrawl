@@ -1,12 +1,13 @@
-import { Button, Drawer, Typography } from "@heroui/react";
+import { Button, Typography } from "@heroui/react";
 import type { FieldTypes } from "../../api/field";
 import { problemOf } from "../../api/hooks/query";
 import { useReplay } from "../../api/hooks/records";
 import type { StoredRecord } from "../../api/records";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { ProblemAlert } from "../../components/molecules/ViewStates";
 import { RecordFieldsTable, RecordSummary } from "../../components/organisms/RecordFields";
 import { changedFieldsText } from "../../components/organisms/RecordTable";
 import { ReplayView } from "./ReplayView";
+import { SideDrawer } from "../../components/molecules/SideDrawer";
 
 /** The capture the record came from, and a replay of it with the current engine and config. */
 function ReplaySection({
@@ -32,7 +33,7 @@ function ReplaySection({
           Replay
         </Button>
       </div>
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
       {replay.isSuccess ? (
         <ReplayView stored={record} result={replay.data} fieldTypes={fieldTypes} />
       ) : null}
@@ -58,41 +59,26 @@ export function RecordInspector({
   onClose,
 }: Readonly<{ record: StoredRecord; fieldTypes: FieldTypes; onClose: () => void }>) {
   return (
-    <Drawer
-      isOpen
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
-      }}
+    <SideDrawer
+      title={<>Record version {record.version}</>}
+      header={
+        <div className="flex flex-wrap items-center gap-3">
+          <RecordSummary record={record} />
+        </div>
+      }
+      placement="bottom"
+      onClose={onClose}
     >
-      <Drawer.Backdrop>
-        <Drawer.Content placement="bottom">
-          <Drawer.Dialog>
-            <Drawer.CloseTrigger />
-            <Drawer.Header>
-              <Drawer.Heading>Record version {record.version}</Drawer.Heading>
-              <div className="flex flex-wrap items-center gap-3">
-                <RecordSummary record={record} />
-              </div>
-            </Drawer.Header>
-            <Drawer.Body className="flex flex-col gap-6">
-              <Typography.Paragraph size="sm">{changeText(record)}</Typography.Paragraph>
-              <RecordFieldsTable label="Record fields" record={record} fieldTypes={fieldTypes} />
-              {/* Captures expire; the record stays, without one to replay. */}
-              {record.capture_id === null ? (
-                <Typography.Paragraph size="sm" color="muted">
-                  The capture this record came from has expired, so it cannot be replayed.
-                </Typography.Paragraph>
-              ) : (
-                <ReplaySection
-                  record={record}
-                  captureId={record.capture_id}
-                  fieldTypes={fieldTypes}
-                />
-              )}
-            </Drawer.Body>
-          </Drawer.Dialog>
-        </Drawer.Content>
-      </Drawer.Backdrop>
-    </Drawer>
+      <Typography.Paragraph size="sm">{changeText(record)}</Typography.Paragraph>
+      <RecordFieldsTable label="Record fields" record={record} fieldTypes={fieldTypes} />
+      {/* Captures expire; the record stays, without one to replay. */}
+      {record.capture_id === null ? (
+        <Typography.Paragraph size="sm" color="muted">
+          The capture this record came from has expired, so it cannot be replayed.
+        </Typography.Paragraph>
+      ) : (
+        <ReplaySection record={record} captureId={record.capture_id} fieldTypes={fieldTypes} />
+      )}
+    </SideDrawer>
   );
 }

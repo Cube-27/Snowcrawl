@@ -3,8 +3,8 @@ import { TrashBin } from "@gravity-ui/icons";
 import type { CustomRecipe, PageField } from "../../api/recipes";
 import type { Problem } from "../../api/problem";
 import { Choices } from "../../components/molecules/Choices";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
-import { Section } from "../../components/templates/Section";
+import { ProblemAlert } from "../../components/molecules/ViewStates";
+import { Section } from "../../components/templates/Screen";
 import { CallEditor, type EditHandlers } from "./CallEditor";
 import { fieldSources } from "./draft";
 import { Line } from "./Fields";
@@ -169,7 +169,7 @@ export function ExtrasStep({
         &quot;Add as extra call&quot; on a group of the call list adds it here, reading the fields
         the main call leaves unfilled.
       </Typography.Paragraph>
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
       {calls.map(([name, call]) => (
         <Card key={name}>
           <Card.Header className="flex flex-row items-center justify-between gap-2">

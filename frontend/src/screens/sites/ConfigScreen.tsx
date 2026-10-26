@@ -9,10 +9,9 @@ import {
 } from "../../api/hooks/configs";
 import { problemOf } from "../../api/hooks/query";
 import { useSchema } from "../../api/hooks/schemas";
-import { ConfigStatusLabel } from "../../components/molecules/ConfigStatusLabel";
-import { LoadingView } from "../../components/molecules/LoadingView";
-import { PageHeader } from "../../components/templates/PageHeader";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { ConfigStatusLabel } from "../../components/molecules/StatusLabels";
+import { LoadingView, ProblemAlert, QueryView } from "../../components/molecules/ViewStates";
+import { Screen } from "../../components/templates/Screen";
 import { ConfigFieldsTable, ConfigVersionsTable, useSchemaLabel } from "./ConfigTables";
 import { CorrectionForm } from "./CorrectionForm";
 import { ExportPanel } from "./ExportPanel";
@@ -24,22 +23,29 @@ import { ValidationReportView } from "./ValidationReportView";
 function SiblingVersions({ config }: Readonly<{ config: ConfigDetail }>) {
   const configs = useSiteConfigs(config.site);
   const schemaLabel = useSchemaLabel();
-  const problem = problemOf(configs.error);
-  if (problem !== null) return <ProblemAlert problem={problem} />;
-  if (!configs.isSuccess) return <LoadingView label="Loading the versions" />;
-  const versions = configs.data.filter(
-    (other) => other.schema_id === config.schema_id && other.page_kind === config.page_kind,
+  return (
+    <QueryView query={configs} loading="Loading the versions">
+      {(data) => (
+        <ConfigVersionsTable
+          label="Versions"
+          configs={data.filter(
+            (other) => other.schema_id === config.schema_id && other.page_kind === config.page_kind,
+          )}
+          schemaLabel={schemaLabel}
+        />
+      )}
+    </QueryView>
   );
-  return <ConfigVersionsTable label="Versions" configs={versions} schemaLabel={schemaLabel} />;
 }
 
 /** The correction form needs the schema's fields: a correction may give steps to a field the config lacks. */
 function Correction({ config }: Readonly<{ config: ConfigDetail }>) {
   const schema = useSchema(config.schema_id);
-  const problem = problemOf(schema.error);
-  if (problem !== null) return <ProblemAlert problem={problem} />;
-  if (!schema.isSuccess) return <LoadingView label="Loading the schema" />;
-  return <CorrectionForm config={config} schemaFields={Object.keys(schema.data.fields)} />;
+  return (
+    <QueryView query={schema} loading="Loading the schema">
+      {(data) => <CorrectionForm config={config} schemaFields={Object.keys(data.fields)} />}
+    </QueryView>
+  );
 }
 
 const TABS = ["Fields", "Validation", "Correct", "Export", "Versions"] as const;
@@ -126,15 +132,20 @@ function ConfigView({ config }: Readonly<{ config: ConfigDetail }>) {
     </>
   );
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader title={config.site} actions={actions}>
-        <Chip>v{config.version}</Chip>
-        <Chip>{config.origin}</Chip>
-        <ConfigStatusLabel status={config.status} />
-        {/* In the header's badge row, beside the button that started it: nothing below moves. */}
-        {learning.jobId === null ? null : <LearnRun jobId={learning.jobId} />}
-      </PageHeader>
-      {learnProblem === null ? null : <ProblemAlert problem={learnProblem} />}
+    <Screen
+      title={config.site}
+      actions={actions}
+      badges={
+        <>
+          <Chip>v{config.version}</Chip>
+          <Chip>{config.origin}</Chip>
+          <ConfigStatusLabel status={config.status} />
+          {/* In the header's badge row, beside the button that started it: nothing below moves. */}
+          {learning.jobId === null ? null : <LearnRun jobId={learning.jobId} />}
+        </>
+      }
+    >
+      <ProblemAlert problem={learnProblem} />
       <div className="flex flex-wrap gap-4">
         <Link href={sitePath(config.site)}>Every config of {config.site}</Link>
         <span>
@@ -142,7 +153,7 @@ function ConfigView({ config }: Readonly<{ config: ConfigDetail }>) {
         </span>
       </div>
       <ConfigTabs config={config} />
-    </section>
+    </Screen>
   );
 }
 

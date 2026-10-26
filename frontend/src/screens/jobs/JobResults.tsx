@@ -1,5 +1,5 @@
 import { Table } from "@heroui/react";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { parseFieldTypes } from "../../api/field";
 import { useJobResults } from "../../api/hooks/jobs";
 import { problemOf } from "../../api/hooks/query";
@@ -7,15 +7,13 @@ import { useSchema } from "../../api/hooks/schemas";
 import type { PageOutput } from "../../api/jobs";
 import type { StoredRecord } from "../../api/records";
 import { useCursorPages } from "../../components/lib/cursors";
-import { EmptyView } from "../../components/molecules/EmptyView";
-import { TaskStatusLabel } from "../../components/molecules/JobStatusLabel";
-import { LoadingView } from "../../components/molecules/LoadingView";
-import { OutcomeLabel } from "../../components/molecules/OutcomeLabel";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
-import { RecordTable } from "../../components/organisms/RecordTable";
+import { EmptyView, LoadingView, ProblemAlert } from "../../components/molecules/ViewStates";
+import { OutcomeLabel, TaskStatusLabel } from "../../components/molecules/StatusLabels";
+import { RecordTable, type TableRecord } from "../../components/organisms/RecordTable";
 import { Timestamp } from "../../components/atoms/Timestamp";
 import { PagedTable } from "../../components/organisms/PagedTable";
 import { TruncatedText } from "../../components/atoms/TruncatedText";
+import { cleanFields } from "../playground/output/cleanJson";
 import { RecordInspector } from "../records/RecordInspector";
 
 /** The job's records in the columns of their schema, each opening the record inspector. */
@@ -27,13 +25,23 @@ function JobRecords({ records }: Readonly<{ records: readonly StoredRecord[] }>)
     () => parseFieldTypes(schema.data?.fields, schema.data?.field_order),
     [schema.data],
   );
+  const json = useCallback(
+    (record: TableRecord) => cleanFields(record.fields, fieldTypes),
+    [fieldTypes],
+  );
   const problem = problemOf(schema.error);
   if (records.length === 0) return <EmptyView title="No records yet" />;
   if (problem !== null) return <ProblemAlert problem={problem} />;
   if (!schema.isSuccess) return <LoadingView label="Loading the schema" />;
   return (
     <>
-      <RecordTable label="Records" records={records} fieldTypes={fieldTypes} onOpen={setOpen} />
+      <RecordTable
+        label="Records"
+        records={records}
+        fieldTypes={fieldTypes}
+        onOpen={setOpen}
+        json={json}
+      />
       {open === null ? null : (
         <RecordInspector
           key={open.id}

@@ -1,8 +1,8 @@
 import { Alert, Table, Typography } from "@heroui/react";
 import type { FieldReport, ValidationReport } from "../../api/configs";
 import { confidenceText } from "../../components/molecules/ConfidenceCell";
-import { EmptyView } from "../../components/molecules/EmptyView";
-import { FieldConfigStatusLabel } from "../../components/molecules/ConfigStatusLabel";
+import { EmptyView } from "../../components/molecules/ViewStates";
+import { FieldConfigStatusLabel } from "../../components/molecules/StatusLabels";
 import { StatusLabel } from "../../components/atoms/StatusLabel";
 import { ofPages, withNextPage } from "./report";
 

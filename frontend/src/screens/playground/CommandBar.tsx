@@ -30,7 +30,7 @@ export function CommandBar({
               {tools}
             </fieldset>
           </div>
-          <div className="order-first flex items-center justify-end gap-2 sm:order-none sm:ms-auto">
+          <div className="order-first flex flex-wrap items-center justify-end gap-2 sm:order-none sm:ms-auto">
             {action}
           </div>
         </div>

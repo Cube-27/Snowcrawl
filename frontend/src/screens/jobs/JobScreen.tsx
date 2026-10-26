@@ -5,12 +5,10 @@ import { problemOf } from "../../api/hooks/query";
 import { cancelState, type JobSummary } from "../../api/jobs";
 import { CancelJobAction } from "../../components/molecules/CancelJobAction";
 import { EventLog } from "../../components/organisms/EventLog";
-import { JobStatusLabel } from "../../components/molecules/JobStatusLabel";
-import { LoadingView } from "../../components/molecules/LoadingView";
-import { PageHeader } from "../../components/templates/PageHeader";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { JobStatusLabel } from "../../components/molecules/StatusLabels";
+import { LoadingView, ProblemAlert } from "../../components/molecules/ViewStates";
+import { Screen, Section } from "../../components/templates/Screen";
 import { RunProgress } from "../../components/molecules/RunProgress";
-import { Section } from "../../components/templates/Section";
 import { StatusLabel } from "../../components/atoms/StatusLabel";
 import { Timestamp } from "../../components/atoms/Timestamp";
 import { WebhookDeliveries } from "../../components/organisms/WebhookDeliveries";
@@ -35,14 +33,16 @@ function JobView({ job }: Readonly<{ job: JobSummary }>) {
   // A cancel asked for ends the job once its claimed tasks end, which a dead worker's lease delays.
   const cancel = cancelState(job);
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader
-        title={`${KIND_LABELS[job.kind]} job`}
-        actions={cancel === "cancellable" ? <CancelJobAction id={job.id} /> : undefined}
-      >
-        <JobStatusLabel status={job.status} />
-        {cancel === "requested" ? <StatusLabel text="cancel requested" tone="warning" /> : null}
-      </PageHeader>
+    <Screen
+      title={`${KIND_LABELS[job.kind]} job`}
+      actions={cancel === "cancellable" ? <CancelJobAction id={job.id} /> : undefined}
+      badges={
+        <>
+          <JobStatusLabel status={job.status} />
+          {cancel === "requested" ? <StatusLabel text="cancel requested" tone="warning" /> : null}
+        </>
+      }
+    >
       <JobTimes job={job} />
       <Section title="Progress">
         <RunProgress job={job} />
@@ -62,7 +62,7 @@ function JobView({ job }: Readonly<{ job: JobSummary }>) {
         <ExportActions jobId={job.id} />
         <JobResults jobId={job.id} />
       </Section>
-    </section>
+    </Screen>
   );
 }
 

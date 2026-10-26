@@ -1,7 +1,7 @@
 import { Chip, Tooltip } from "@heroui/react";
 import type { FieldResult, FieldTypeSpec, ScalarFieldType } from "../../api/field";
 import { isJsonObject, type JsonObject } from "../../api/json";
-import { FieldStatusBadge } from "./FieldStatusBadge";
+import { FieldStatusLabel } from "./StatusLabels";
 import { keyedTexts } from "../lib/keys";
 
 // The UI shows server values as they are: it joins the parts of a normalized value and never
@@ -94,7 +94,7 @@ export function FieldValue({
     return (
       <span className="inline-flex items-center gap-2">
         <NoValue reason={field.reason} />
-        {withStatus ? <FieldStatusBadge status={field.status} /> : null}
+        {withStatus ? <FieldStatusLabel status={field.status} /> : null}
       </span>
     );
   }

@@ -6,7 +6,7 @@ import { problemOf } from "../../api/hooks/query";
 import { saveJson } from "../../app/download";
 import { Choices } from "../../components/molecules/Choices";
 import { FormActions } from "../../components/molecules/FormActions";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { ProblemAlert } from "../../components/molecules/ViewStates";
 import { StatusLabel } from "../../components/atoms/StatusLabel";
 import { ofPages, withNextPage } from "./report";
 
@@ -82,7 +82,7 @@ export function ExportPanel({ config }: Readonly<{ config: ConfigDetail }>) {
           });
         }}
       >
-        {problem === null ? null : <ProblemAlert problem={problem} />}
+        <ProblemAlert problem={problem} />
         <Choices label="Format" options={FORMATS} value={format} onChange={setFormat} />
         <FormActions>
           <Button type="submit" isPending={exported.isPending}>

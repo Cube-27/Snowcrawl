@@ -47,13 +47,14 @@ describe("Records table", () => {
     const records = Array.from({ length: 120 }, (_, index) => product(index + 1));
     render(<ExtractedRecords records={records} fieldTypes={fieldTypes} />);
 
-    expect(screen.getByText("Rows 1–50 of 120")).toBeInTheDocument();
+    expect(screen.getByText("Rows 1–25 of 120")).toBeInTheDocument();
     expect(within(screen.getByRole("grid", { name: "Records" })).getAllByRole("row")).toHaveLength(
-      51,
+      26,
     );
 
-    await userEvent.click(screen.getByRole("button", { name: "Next" }));
-    await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    for (let page = 1; page < 5; page += 1) {
+      await userEvent.click(screen.getByRole("button", { name: "Next" }));
+    }
 
     expect(screen.getByText("Rows 101–120 of 120")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();

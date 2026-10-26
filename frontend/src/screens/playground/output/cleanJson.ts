@@ -47,8 +47,9 @@ function cleanObject(fields: FieldTypes, data: JsonObject): CleanRecord {
   return clean;
 }
 
-/** Fields in clean form: each one's published value (`value` is null unless published). */
-function cleanFields(fields: ScrapeRecord["fields"], fieldTypes: FieldTypes): CleanRecord {
+/** Fields in clean form: each one's published value (`value` is null unless published). A record's JSON as the
+ * server writes it for `json_values`. */
+export function cleanFields(fields: ScrapeRecord["fields"], fieldTypes: FieldTypes): CleanRecord {
   const data = Object.fromEntries(
     Object.entries(fields).map(([name, field]) => [name, field.value ?? null]),
   );

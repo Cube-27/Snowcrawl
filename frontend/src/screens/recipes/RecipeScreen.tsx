@@ -3,11 +3,9 @@ import { useParams } from "react-router";
 import { configVersionLabel, type ConfigDetail } from "../../api/configs";
 import { useApproveConfig, useConfig, useRejectConfig } from "../../api/hooks/configs";
 import { problemOf } from "../../api/hooks/query";
-import { ConfigStatusLabel } from "../../components/molecules/ConfigStatusLabel";
-import { LoadingView } from "../../components/molecules/LoadingView";
-import { PageHeader } from "../../components/templates/PageHeader";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
-import { Section } from "../../components/templates/Section";
+import { ConfigStatusLabel } from "../../components/molecules/StatusLabels";
+import { LoadingView, ProblemAlert, QueryView } from "../../components/molecules/ViewStates";
+import { Screen, Section } from "../../components/templates/Screen";
 import { ConfigFieldsTable, useSchemaLabel } from "../sites/ConfigTables";
 import { configPath } from "../sites/paths";
 import { editRecipePath, recipesPath } from "./paths";
@@ -33,13 +31,9 @@ function ChangesTable({ changes }: Readonly<{ changes: readonly RecipeChange[] }
           <Table.Body items={rows}>
             {(row) => (
               <Table.Row id={row.id}>
-                <Table.Cell className="font-mono text-sm">{row.part}</Table.Cell>
-                <Table.Cell className="font-mono text-sm break-all">
-                  {partText(row.before)}
-                </Table.Cell>
-                <Table.Cell className="font-mono text-sm break-all">
-                  {partText(row.after)}
-                </Table.Cell>
+                <Table.Cell className="text-code">{row.part}</Table.Cell>
+                <Table.Cell className="text-code break-all">{partText(row.before)}</Table.Cell>
+                <Table.Cell className="text-code break-all">{partText(row.after)}</Table.Cell>
               </Table.Row>
             )}
           </Table.Body>
@@ -85,7 +79,7 @@ function PendingRepair({ id }: Readonly<{ id: string }>) {
       }
     >
       {repair.isPending ? <LoadingView label="Loading the repair" /> : null}
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
       {repair.data === undefined ? null : (
         <>
           <Link href={configPath(id)}>Open the repair as a config</Link>
@@ -105,13 +99,13 @@ function RecipeFacts({ recipe }: Readonly<{ recipe: ConfigDetail }>) {
       <Typography.Paragraph>
         {schemaLabel(recipe)}, {recipe.page_kind} pages, sent by {recipe.sent_by}
       </Typography.Paragraph>
-      <ul aria-label="Patterns" className="flex flex-col gap-1 font-mono text-sm">
+      <ul aria-label="Patterns" className="flex flex-col gap-1 text-code">
         {recipe.patterns.map((pattern) => (
           <li key={pattern}>{pattern}</li>
         ))}
       </ul>
       {main == null ? null : (
-        <Typography.Paragraph className="font-mono text-sm break-all">
+        <Typography.Paragraph className="text-code break-all">
           Main call: {main.method} {main.url}
         </Typography.Paragraph>
       )}
@@ -132,36 +126,29 @@ function recipeTitle(recipe: ConfigDetail): string {
 export function RecipeScreen() {
   const { id = "" } = useParams();
   const recipe = useConfig(id);
-  const problem = problemOf(recipe.error);
   return (
-    <section className="flex flex-col gap-stack">
-      {recipe.isPending ? <LoadingView label="Loading the recipe" /> : null}
-      {problem === null ? null : <ProblemAlert problem={problem} />}
-      {recipe.isSuccess ? (
-        <>
-          <PageHeader
-            title={recipeTitle(recipe.data)}
-            actions={
-              <>
-                <Link href={recipesPath(recipe.data.site)}>All recipes</Link>
-                <Link href={configPath(recipe.data.id)}>Open as a config</Link>
-                {recipe.data.status === "active" && recipe.data.recipe !== null ? (
-                  <Link href={editRecipePath(recipe.data.id)}>Edit</Link>
-                ) : null}
-              </>
-            }
-          >
-            <ConfigStatusLabel status={recipe.data.status} />
-          </PageHeader>
-          <RecipeFacts recipe={recipe.data} />
-          {recipe.data.pending_repair === null ? null : (
-            <PendingRepair id={recipe.data.pending_repair} />
-          )}
+    <QueryView query={recipe} loading="Loading the recipe">
+      {(data) => (
+        <Screen
+          title={recipeTitle(data)}
+          badges={<ConfigStatusLabel status={data.status} />}
+          actions={
+            <>
+              <Link href={recipesPath(data.site)}>All recipes</Link>
+              <Link href={configPath(data.id)}>Open as a config</Link>
+              {data.status === "active" && data.recipe !== null ? (
+                <Link href={editRecipePath(data.id)}>Edit</Link>
+              ) : null}
+            </>
+          }
+        >
+          <RecipeFacts recipe={data} />
+          {data.pending_repair === null ? null : <PendingRepair id={data.pending_repair} />}
           <Section title="Fields">
-            <ConfigFieldsTable config={recipe.data} />
+            <ConfigFieldsTable config={data} />
           </Section>
-        </>
-      ) : null}
-    </section>
+        </Screen>
+      )}
+    </QueryView>
   );
 }

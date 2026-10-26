@@ -14,9 +14,9 @@ import { configVersionLabel, type ConfigDetail } from "../../api/configs";
 import { useCorrectConfig } from "../../api/hooks/configs";
 import { problemOf } from "../../api/hooks/query";
 import type { FieldProblem } from "../../api/problem";
-import { FieldConfigStatusLabel } from "../../components/molecules/ConfigStatusLabel";
+import { FieldConfigStatusLabel } from "../../components/molecules/StatusLabels";
 import { FormActions } from "../../components/molecules/FormActions";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { ProblemAlert } from "../../components/molecules/ViewStates";
 import { StepsEditor } from "../../components/organisms/StepsEditor";
 import { correctionOf, fieldDrafts, type FieldDraft } from "./correction";
 import { configPath } from "./paths";
@@ -119,7 +119,7 @@ export function CorrectionForm({
           });
         }}
       >
-        {problem === null ? null : <ProblemAlert problem={problem} />}
+        <ProblemAlert problem={problem} />
         {drafts.map((draft, index) => (
           <FieldCorrection
             key={draft.name}

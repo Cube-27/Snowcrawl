@@ -1,7 +1,7 @@
 import { Typography } from "@heroui/react";
 import { NavLink } from "react-router";
 import type { SearchResult } from "../../../api/jobs";
-import { EmptyView } from "../../../components/molecules/EmptyView";
+import { EmptyView } from "../../../components/molecules/ViewStates";
 import { runPath } from "../modes";
 
 /** What a search found: its results in the provider's order, each a link with its snippet. Titles and snippets are the

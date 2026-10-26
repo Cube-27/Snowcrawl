@@ -64,7 +64,7 @@ function ParamRow({
   const { kind, arg } = binderParts(text);
   return (
     <li className="flex flex-wrap items-end gap-2">
-      <span className="w-32 font-mono text-sm">{`{${name}}`}</span>
+      <span className="w-32 text-code">{`{${name}}`}</span>
       <OptionSelect
         label={`Binder of ${name}`}
         options={options as Record<BinderKind, string>}

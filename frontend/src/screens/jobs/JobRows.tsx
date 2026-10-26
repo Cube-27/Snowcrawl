@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import type { JobSummary } from "../../api/jobs";
 import { plural } from "../../components/lib/activityText";
 import { DurationText } from "../../components/atoms/Duration";
-import { JobStatusLabel } from "../../components/molecules/JobStatusLabel";
+import { JobStatusLabel } from "../../components/molecules/StatusLabels";
 import { TaskCountsText } from "../../components/molecules/OutcomeCounts";
 import { Timestamp } from "../../components/atoms/Timestamp";
 import { runPath } from "../playground/modes";

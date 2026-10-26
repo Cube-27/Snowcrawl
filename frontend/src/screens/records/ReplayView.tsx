@@ -2,7 +2,7 @@ import { Table, Typography } from "@heroui/react";
 import type { FieldTypes, FieldTypeSpec } from "../../api/field";
 import type { ExtractedRecord, ReplayResult } from "../../api/records";
 import type { RecordField } from "../../api/scrape";
-import { EmptyView } from "../../components/molecules/EmptyView";
+import { EmptyView } from "../../components/molecules/ViewStates";
 import { FieldValue } from "../../components/molecules/FieldValue";
 import { ExtractedRecords } from "../../components/organisms/ExtractedRecords";
 import { StatusLabel } from "../../components/atoms/StatusLabel";

@@ -3,8 +3,8 @@ import { useMemo } from "react";
 import type { JobEvents } from "../../api/hooks/events";
 import { activityEntry } from "../lib/activityText";
 import { Collapsible } from "../molecules/Collapsible";
-import { ProblemAlert } from "../molecules/ProblemAlert";
-import { StreamStateLabel } from "../molecules/StreamStateLabel";
+import { ProblemAlert } from "../molecules/ViewStates";
+import { StreamStateLabel } from "../molecules/StatusLabels";
 
 /** One line, keyed by its event's place in the stream: events only ever arrive after it. */
 interface Line {
@@ -72,7 +72,7 @@ function ActivityLines({ events }: Readonly<{ events: JobEvents["events"] }>) {
 export function ActivityFeed({ activity }: Readonly<{ activity: JobEvents }>) {
   return (
     <Collapsible title="Activity" aside={<StreamStateLabel state={activity.state} />}>
-      {activity.problem === null ? null : <ProblemAlert problem={activity.problem} />}
+      <ProblemAlert problem={activity.problem} />
       <ActivityLines events={activity.events} />
     </Collapsible>
   );

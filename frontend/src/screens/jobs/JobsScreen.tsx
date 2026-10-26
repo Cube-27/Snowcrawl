@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router";
 import { LookupForm } from "../../components/molecules/LookupForm";
-import { PageHeader } from "../../components/templates/PageHeader";
+import { Screen } from "../../components/templates/Screen";
 import { JobTable } from "./JobTable";
 import { jobPath } from "./paths";
 
@@ -9,11 +9,10 @@ import { jobPath } from "./paths";
 export function JobsScreen() {
   const navigate = useNavigate();
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader
-        title="Jobs"
-        description="Every run, newest first. Open a row to see its results in the playground."
-      />
+    <Screen
+      title="Jobs"
+      description="Every run, newest first. Open a row to see its results in the playground."
+    >
       <JobTable
         tools={
           <LookupForm
@@ -24,6 +23,6 @@ export function JobsScreen() {
           />
         }
       />
-    </section>
+    </Screen>
   );
 }

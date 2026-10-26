@@ -2,7 +2,7 @@ import { problemOf } from "../../api/hooks/query";
 import { useSchemas } from "../../api/hooks/schemas";
 import type { SchemaDef } from "../../api/schemas";
 import { isOptionOf, OptionSelect } from "./OptionSelect";
-import { ProblemAlert } from "./ProblemAlert";
+import { ProblemAlert } from "./ViewStates";
 
 /** The option key for "no schema": schema ids are UUIDs, so it names none of them. */
 const NONE = "none";
@@ -34,7 +34,7 @@ export function SchemaSelect({
   const empty = noneLabel === undefined ? null : NONE;
   return (
     <>
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
       <OptionSelect
         label={label}
         options={options}

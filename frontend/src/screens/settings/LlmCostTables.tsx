@@ -9,10 +9,10 @@ import { formatCost, formatCount, roleLabel } from "./costs";
 function UsageColumns() {
   return (
     <>
-      <Table.Column>Calls</Table.Column>
-      <Table.Column>Input tokens</Table.Column>
-      <Table.Column>Output tokens</Table.Column>
-      <Table.Column>Estimated cost</Table.Column>
+      <Table.Column className="numeric">Calls</Table.Column>
+      <Table.Column className="numeric">Input tokens</Table.Column>
+      <Table.Column className="numeric">Output tokens</Table.Column>
+      <Table.Column className="numeric">Estimated cost</Table.Column>
     </>
   );
 }
@@ -20,10 +20,10 @@ function UsageColumns() {
 function UsageCells({ usage }: Readonly<{ usage: LlmUsage }>) {
   return (
     <>
-      <Table.Cell>{formatCount(usage.calls)}</Table.Cell>
-      <Table.Cell>{formatCount(usage.tokens_in)}</Table.Cell>
-      <Table.Cell>{formatCount(usage.tokens_out)}</Table.Cell>
-      <Table.Cell>{formatCost(usage)}</Table.Cell>
+      <Table.Cell className="numeric">{formatCount(usage.calls)}</Table.Cell>
+      <Table.Cell className="numeric">{formatCount(usage.tokens_in)}</Table.Cell>
+      <Table.Cell className="numeric">{formatCount(usage.tokens_out)}</Table.Cell>
+      <Table.Cell className="numeric">{formatCost(usage)}</Table.Cell>
     </>
   );
 }

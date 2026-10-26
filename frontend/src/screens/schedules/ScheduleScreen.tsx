@@ -1,18 +1,16 @@
-import { Typography } from "@heroui/react";
 import type { ReactNode } from "react";
 import { useNavigate, useParams } from "react-router";
-import { problemOf } from "../../api/hooks/query";
 import { useSchedule } from "../../api/hooks/schedules";
 import type { Schedule } from "../../api/schedules";
 import { JsonView } from "../../components/molecules/JsonView";
-import { LoadingView } from "../../components/molecules/LoadingView";
-import { PageHeader } from "../../components/templates/PageHeader";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { QueryView } from "../../components/molecules/ViewStates";
+import { Screen, Section } from "../../components/templates/Screen";
+import { ScheduleStateLabel } from "../../components/molecules/StatusLabels";
 import { Timestamp } from "../../components/atoms/Timestamp";
 import { JobPages } from "../jobs/JobTable";
 import { KIND_LABELS } from "../jobs/kinds";
 import { cadenceText } from "./cadence";
-import { LastRun, ScheduleState } from "./SchedulesScreen";
+import { LastRun } from "./SchedulesScreen";
 import { ScheduleActions } from "./ScheduleActions";
 
 function Facts({ schedule }: Readonly<{ schedule: Schedule }>) {
@@ -44,35 +42,36 @@ export function ScheduleScreen() {
   const { id = "" } = useParams();
   const navigate = useNavigate();
   const query = useSchedule(id);
-  const problem = problemOf(query.error);
   const schedule = query.data;
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader
-        title={schedule?.name ?? "Schedule"}
-        actions={
-          schedule === undefined ? undefined : (
-            <ScheduleActions schedule={schedule} onDeleted={() => void navigate("/schedules")} />
-          )
-        }
-      >
-        {schedule === undefined ? null : <ScheduleState paused={schedule.paused} />}
-      </PageHeader>
-      {query.isPending ? <LoadingView label="Loading the schedule" /> : null}
-      {problem === null ? null : <ProblemAlert problem={problem} />}
-      {schedule === undefined ? null : (
-        <>
-          <Facts schedule={schedule} />
-          <Typography.Heading level={2}>Request</Typography.Heading>
-          <JsonView
-            label="Request JSON"
-            value={schedule.request}
-            filename={`schedule-${schedule.id}.json`}
-          />
-          <Typography.Heading level={2}>Runs</Typography.Heading>
-          <JobPages filters={{ kind: null, status: null, scheduleId: schedule.id }} />
-        </>
-      )}
-    </section>
+    <Screen
+      title={schedule?.name ?? "Schedule"}
+      actions={
+        schedule === undefined ? undefined : (
+          <ScheduleActions schedule={schedule} onDeleted={() => void navigate("/schedules")} />
+        )
+      }
+      badges={
+        <>{schedule === undefined ? null : <ScheduleStateLabel paused={schedule.paused} />}</>
+      }
+    >
+      <QueryView query={query} loading="Loading the schedule">
+        {(data) => (
+          <>
+            <Facts schedule={data} />
+            <Section title="Request">
+              <JsonView
+                label="Request JSON"
+                value={data.request}
+                filename={`schedule-${data.id}.json`}
+              />
+            </Section>
+            <Section title="Runs">
+              <JobPages filters={{ kind: null, status: null, scheduleId: data.id }} />
+            </Section>
+          </>
+        )}
+      </QueryView>
+    </Screen>
   );
 }

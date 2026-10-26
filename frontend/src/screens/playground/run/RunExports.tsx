@@ -30,7 +30,7 @@ export function RunExports({
   const csv = useExportJob(jobId);
   const busy = json.isPending || csv.isPending;
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <Button
         variant="secondary"
         isPending={json.isPending}

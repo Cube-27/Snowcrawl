@@ -5,9 +5,8 @@ import { problemOf } from "../../api/hooks/query";
 import { useCreateSchema, useSchema, useUpdateSchema } from "../../api/hooks/schemas";
 import type { Problem } from "../../api/problem";
 import type { SchemaDef } from "../../api/schemas";
-import { LoadingView } from "../../components/molecules/LoadingView";
-import { PageHeader } from "../../components/templates/PageHeader";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { LoadingView, ProblemAlert } from "../../components/molecules/ViewStates";
+import { Screen } from "../../components/templates/Screen";
 import { SchemaForm } from "../../components/organisms/SchemaForm";
 import {
   contentOf,
@@ -52,8 +51,7 @@ function SchemaEditor({
   const navigate = useNavigate();
   const [form, setForm] = useState(() => (initial === null ? EMPTY_FORM : formOf(initial)));
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader title={title} description={description} />
+    <Screen title={title} description={description}>
       <SchemaForm
         form={form}
         mode={mode}
@@ -63,7 +61,7 @@ function SchemaEditor({
         onSubmit={onSave}
         onCancel={() => void navigate(cancelTo)}
       />
-    </section>
+    </Screen>
   );
 }
 

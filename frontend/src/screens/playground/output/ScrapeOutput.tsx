@@ -2,13 +2,16 @@ import { Tabs, Typography } from "@heroui/react";
 import { memo, useMemo, type ReactNode } from "react";
 import type { FieldTypes } from "../../../api/field";
 import type { ScrapeResponse } from "../../../api/scrape";
-import { EmptyView } from "../../../components/molecules/EmptyView";
+import { EmptyView } from "../../../components/molecules/ViewStates";
 import { JsonView } from "../../../components/molecules/JsonView";
-import { OutcomeLabel } from "../../../components/molecules/OutcomeLabel";
+import {
+  hasUncalibrated,
+  OutcomeLabel,
+  UncalibratedLabel,
+} from "../../../components/molecules/StatusLabels";
 import { FieldsTable } from "../../../components/organisms/RecordFields";
 import { ExtractedRecords } from "../../../components/organisms/ExtractedRecords";
 import { Timestamp } from "../../../components/atoms/Timestamp";
-import { hasUncalibrated, UncalibratedBadge } from "../../../components/molecules/UncalibratedBadge";
 import { scrapeJson } from "./cleanJson";
 import { reasonSentence } from "./reasonText";
 import {
@@ -42,7 +45,7 @@ function JsonTab({
     <div className="flex flex-col gap-3">
       {hasUncalibrated(response.records ?? []) ? (
         <div>
-          <UncalibratedBadge records={response.records ?? []} />
+          <UncalibratedLabel records={response.records ?? []} />
         </div>
       ) : null}
       <JsonView label="Page JSON" value={item} filename={`job-${response.job_id}.json`} />

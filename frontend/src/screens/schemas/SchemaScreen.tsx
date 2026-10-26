@@ -2,12 +2,12 @@ import { Button, Chip, Tabs, toast } from "@heroui/react";
 import { useNavigate, useParams } from "react-router";
 import { problemOf } from "../../api/hooks/query";
 import { useRetireSchema, useSchema } from "../../api/hooks/schemas";
+import type { Problem } from "../../api/problem";
 import type { SchemaDef } from "../../api/schemas";
 import { ConfirmDialog } from "../../components/molecules/ConfirmDialog";
-import { LoadingView } from "../../components/molecules/LoadingView";
-import { PageHeader } from "../../components/templates/PageHeader";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
-import { SchemaStatusLabel } from "../../components/molecules/SchemaStatusLabel";
+import { LoadingView, ProblemAlert } from "../../components/molecules/ViewStates";
+import { Screen } from "../../components/templates/Screen";
+import { SchemaStatusLabel } from "../../components/molecules/StatusLabels";
 import { adoptSchemaPath, editSchemaPath } from "./paths";
 import { FieldsTable, SchemaJson } from "./SchemaViews";
 
@@ -58,17 +58,21 @@ const TABS = ["Fields", "JSON"] as const;
 
 function SchemaDetailView({
   schema,
+  problem,
   onRetire,
-}: Readonly<{ schema: SchemaDef; onRetire: () => void }>) {
+}: Readonly<{ schema: SchemaDef; problem: Problem | null; onRetire: () => void }>) {
   return (
-    <>
-      <PageHeader
-        title={schema.name}
-        actions={<DetailActions schema={schema} onRetire={onRetire} />}
-      >
-        <Chip>{schema.origin}</Chip>
-        <SchemaStatusLabel status={schema.status} />
-      </PageHeader>
+    <Screen
+      title={schema.name}
+      badges={
+        <>
+          <Chip>{schema.origin}</Chip>
+          <SchemaStatusLabel status={schema.status} />
+        </>
+      }
+      actions={<DetailActions schema={schema} onRetire={onRetire} />}
+    >
+      <ProblemAlert problem={problem} />
       <Tabs>
         <Tabs.ListContainer>
           <Tabs.List aria-label="Schema">
@@ -87,7 +91,7 @@ function SchemaDetailView({
           <SchemaJson schema={schema} />
         </Tabs.Panel>
       </Tabs>
-    </>
+    </Screen>
   );
 }
 
@@ -97,7 +101,6 @@ export function SchemaScreen() {
   const schema = useSchema(id);
   const retire = useRetireSchema();
   const loadProblem = problemOf(schema.error);
-  const retireProblem = problemOf(retire.error);
 
   if (loadProblem !== null) return <ProblemAlert problem={loadProblem} />;
   if (schema.data === undefined) return <LoadingView label="Loading the schema" />;
@@ -110,9 +113,6 @@ export function SchemaScreen() {
     });
   };
   return (
-    <section className="flex flex-col gap-stack">
-      {retireProblem === null ? null : <ProblemAlert problem={retireProblem} />}
-      <SchemaDetailView schema={schema.data} onRetire={onRetire} />
-    </section>
+    <SchemaDetailView schema={schema.data} problem={problemOf(retire.error)} onRetire={onRetire} />
   );
 }

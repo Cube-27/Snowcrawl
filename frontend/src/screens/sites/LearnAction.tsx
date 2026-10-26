@@ -6,8 +6,8 @@ import { useJob } from "../../api/hooks/jobs";
 import { useLearnSite } from "../../api/hooks/configs";
 import { problemOf } from "../../api/hooks/query";
 import { FormActions } from "../../components/molecules/FormActions";
-import { JobStatusLabel } from "../../components/molecules/JobStatusLabel";
-import { ProblemAlert } from "../../components/molecules/ProblemAlert";
+import { JobStatusLabel } from "../../components/molecules/StatusLabels";
+import { ProblemAlert } from "../../components/molecules/ViewStates";
 import { SchemaSelect } from "../../components/molecules/SchemaSelect";
 import { jobPath } from "../jobs/paths";
 
@@ -108,7 +108,7 @@ export function SiteLearnForm({ site }: Readonly<{ site: string }>) {
         <LearnButtons {...learning} submits />
       </FormActions>
       {/* Under the buttons: a refusal or a run moves nothing above them. */}
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
       {learning.jobId === null ? null : <LearnRun jobId={learning.jobId} />}
     </Form>
   );

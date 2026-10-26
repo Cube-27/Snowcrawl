@@ -8,6 +8,12 @@
  * to this file only. HeroUI's own variables are overridden under `:root` and `[data-theme="dark"]`. Layout sizes
  * outside Tailwind's default scale are Tailwind theme variables, used through the utilities they generate
  * (`max-w-content`, `h-table-page`).
+ *
+ * The tokens, by role: type (`--font-*` and the `.typography--*` scale), layout sizes and spacing (`@theme`), color
+ * roles and radii (`:root` and `[data-theme="dark"]`, HeroUI's variables), then the component rules that use them.
+ * Components are composed in layers under `src/components/`: atoms (one element: a status label, a timestamp),
+ * molecules (a few atoms with one job: a view state, a drawer), organisms (a section of a screen: a paged table, a
+ * schema form) and templates (a screen's layout); the screens in `src/screens/` fill the templates.
  */
 @theme {
   /* Inter for the interface and JetBrains Mono for code, both SIL OFL 1.1 and bundled with the app (Fontsource), so
@@ -20,9 +26,10 @@
   --container-content: 80rem;
   /* The sidebar's width at tablet width and up. */
   --width-sidebar: 15rem;
-  /* A paged table's box: a full page of rows, so a short page, a loading page or an empty one moves nothing below it
-   * (no layout shift on paging). */
-  --height-table-page: 72rem;
+  /* A paged table's box: a full page of rows (`DEFAULT_PAGE_SIZE`, 25), so a short page, a loading page or an empty one
+   * moves nothing below it (no layout shift on paging); never taller than the viewport less the header and pager, so
+   * a table's sticky header stays in view, and never shorter than a few rows. */
+  --height-table-page: clamp(24rem, 100dvh - 9rem, 90rem);
   /* The playground's command bar column: narrower than the content, centred under the mode switch. */
   --container-playground: 48rem;
   /* The command bar's input box: a URL and its error line, so switching between the single-URL modes moves neither the
@@ -110,7 +117,8 @@
   --border: oklch(0.27 0.006 286);
   --separator: oklch(0.24 0.006 286);
   --accent: oklch(0.66 0.17 277);
-  --accent-foreground: oklch(0.99 0 0);
+  /* Dark text on the light dark-theme accent: white on it measures 3.2:1, under WCAG 2.2 SC 1.4.3's 4.5:1. */
+  --accent-foreground: oklch(0.17 0.02 277);
   --link: var(--accent);
 
   --json-background: #1e1e1e;
@@ -128,6 +136,13 @@
     font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+  }
+  /* A keyboard focus ring on what HeroUI does not style itself (a plain link, a disclosure's summary), in the focus
+   * color HeroUI's own controls use (WCAG 2.2 SC 2.4.7, Focus Visible). HeroUI's components layer wins over this. */
+  :where(a, summary, [tabindex]):focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+    border-radius: calc(var(--radius) * 0.5);
   }
 }
 
@@ -152,6 +167,11 @@
   }
   .typography--body-sm {
     @apply text-[0.8125rem] leading-5;
+  }
+  /* Code-like text in running content (a URL pattern, a request line, a JSON path): monospaced, a step smaller so it
+   * sits with the 14px body text. */
+  .text-code {
+    @apply font-mono text-[0.8125rem] leading-5;
   }
 
   /* Field groups: HeroUI stacks a checkbox group's options in a column, and lets a horizontal radio
@@ -205,6 +225,55 @@
   }
   .table__cell {
     @apply px-3 py-cell-y sm:px-cell-x;
+  }
+
+  /* A column of numbers (counts, amounts, durations), on its header and its cells: end-aligned with tabular figures
+   * (OpenType `tnum`), so the digits of each place line up down the column. */
+  .numeric {
+    @apply text-end tabular-nums;
+  }
+
+  /* A wide table that scrolls in its own box, both ways, with its header row, its first column (the row header, from
+   * `sm`) and,
+   * with `table-sticky-end`, its last column (a row's actions) kept in view (CSS Positioned Layout 3, sticky
+   * positioning). Sticky cells are opaque, so what scrolls under them is hidden, and the corners, sticky both ways, sit
+   * above the rest. The root's bottom padding is kept out of the box's height. */
+  .table-sticky {
+    & .table__scroll-container {
+      @apply overflow-auto;
+      max-height: calc(var(--height-table-page) - 0.25rem);
+    }
+    & .table__column {
+      @apply sticky top-0 z-20 bg-surface-secondary;
+    }
+    & .table__cell {
+      @apply bg-surface;
+    }
+    & .table__row:hover .table__cell,
+    & .table__row[data-hovered="true"] .table__cell {
+      background-color: color-mix(in oklab, var(--surface) 60%, var(--surface-secondary));
+    }
+    /* At phone width a sticky first column would leave no room to scroll the others past it. */
+    @variant sm {
+      & .table__column:first-child,
+      & .table__cell:first-child {
+        @apply sticky start-0 z-10;
+        box-shadow: inset -1px 0 0 var(--separator);
+      }
+      & .table__column:first-child {
+        @apply z-30;
+      }
+    }
+  }
+  .table-sticky-end {
+    & .table__column:last-child,
+    & .table__cell:last-child {
+      @apply sticky end-0 z-10;
+      box-shadow: inset 1px 0 0 var(--separator);
+    }
+    & .table__column:last-child {
+      @apply z-30;
+    }
   }
 
   /* A table of fixed column widths keeps a minimum width, so at phone width it scrolls inside
@@ -322,10 +391,5 @@
     @apply me-4 inline-block w-6 text-end text-muted select-none;
     counter-increment: code-line;
     content: counter(code-line);
-  }
-
-  /* A headline number: large, tabular, so tiles line up. */
-  .stat-value {
-    @apply text-2xl leading-8 font-semibold tracking-tight tabular-nums;
   }
 }

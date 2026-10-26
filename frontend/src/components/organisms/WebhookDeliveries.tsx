@@ -3,9 +3,9 @@ import { useWebhookDeliveries } from "../../api/hooks/jobs";
 import { problemOf } from "../../api/hooks/query";
 import type { WebhookDelivery } from "../../api/jobs";
 import { Collapsible } from "../molecules/Collapsible";
-import { useCursorPages } from "../lib/cursors";
-import { EmptyView } from "../molecules/EmptyView";
-import { PAGE_SIZE, PagedTable } from "./PagedTable";
+import { DEFAULT_PAGE_SIZE, useCursorPages } from "../lib/cursors";
+import { EmptyView } from "../molecules/ViewStates";
+import { PagedTable } from "./PagedTable";
 import { StatusLabel, type StatusTone } from "../atoms/StatusLabel";
 import { Timestamp } from "../atoms/Timestamp";
 import { TruncatedText } from "../atoms/TruncatedText";
@@ -27,9 +27,9 @@ function DeliveryRows({ deliveries }: Readonly<{ deliveries: readonly WebhookDel
             <Table.Column isRowHeader className="w-1/6">
               Status
             </Table.Column>
-            <Table.Column className="w-1/12">Attempts</Table.Column>
+            <Table.Column className="w-1/12 numeric">Attempts</Table.Column>
             <Table.Column className="w-1/8">Response</Table.Column>
-            <Table.Column className="w-1/12">Events</Table.Column>
+            <Table.Column className="w-1/12 numeric">Events</Table.Column>
             <Table.Column className="w-1/4">Last error</Table.Column>
             <Table.Column className="w-1/6">Created</Table.Column>
             <Table.Column className="w-1/6">Next attempt</Table.Column>
@@ -40,9 +40,9 @@ function DeliveryRows({ deliveries }: Readonly<{ deliveries: readonly WebhookDel
                 <Table.Cell>
                   <StatusLabel text={delivery.status} tone={DELIVERY_TONES[delivery.status]} />
                 </Table.Cell>
-                <Table.Cell>{delivery.attempts}</Table.Cell>
+                <Table.Cell className="numeric">{delivery.attempts}</Table.Cell>
                 <Table.Cell>{delivery.response_code ?? "—"}</Table.Cell>
-                <Table.Cell>{delivery.event_count}</Table.Cell>
+                <Table.Cell className="numeric">{delivery.event_count}</Table.Cell>
                 <Table.Cell>
                   {delivery.last_error === null ? (
                     "—"
@@ -67,7 +67,7 @@ function DeliveryRows({ deliveries }: Readonly<{ deliveries: readonly WebhookDel
 
 function DeliveryPages({ jobId }: Readonly<{ jobId: string }>) {
   const { cursor, page, previous, nextTo } = useCursorPages();
-  const deliveries = useWebhookDeliveries(jobId, { cursor, limit: PAGE_SIZE });
+  const deliveries = useWebhookDeliveries(jobId, { cursor, limit: DEFAULT_PAGE_SIZE });
   return (
     <PagedTable
       problem={problemOf(deliveries.error)}

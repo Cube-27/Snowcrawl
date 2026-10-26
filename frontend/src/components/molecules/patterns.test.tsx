@@ -3,7 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vite-plus/test";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { ProblemAlert } from "./ProblemAlert";
+import { ProblemAlert } from "./ViewStates";
 
 describe("ConfirmDialog", () => {
   function renderDialog(onConfirm: () => void) {

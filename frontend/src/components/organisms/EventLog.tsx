@@ -1,8 +1,8 @@
 import { Table, Typography } from "@heroui/react";
 import { useId } from "react";
 import { useJobEvents } from "../../api/hooks/events";
-import { ProblemAlert } from "../molecules/ProblemAlert";
-import { StreamStateLabel } from "../molecules/StreamStateLabel";
+import { ProblemAlert } from "../molecules/ViewStates";
+import { StreamStateLabel } from "../molecules/StatusLabels";
 import { TruncatedText } from "../atoms/TruncatedText";
 
 /** A job's run events as they are stored (`GET /v1/jobs/{id}/events`), live until the job ends. Each event's data is
@@ -21,7 +21,7 @@ export function EventLog({ jobId }: Readonly<{ jobId: string }>) {
         </Typography.Heading>
         <StreamStateLabel state={state} />
       </div>
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
       <Table>
         <Table.ScrollContainer>
           {/* Fixed column widths: a long event truncates rather than moving the columns. */}

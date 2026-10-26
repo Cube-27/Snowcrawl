@@ -26,7 +26,7 @@ function CallsTable({
             <Table.Column isRowHeader>Sample</Table.Column>
             <Table.Column>Status</Table.Column>
             <Table.Column>Content type</Table.Column>
-            <Table.Column>Size</Table.Column>
+            <Table.Column className="numeric">Size</Table.Column>
             <Table.Column>After</Table.Column>
             <Table.Column>Call</Table.Column>
           </Table.Header>
@@ -36,7 +36,7 @@ function CallsTable({
                 <Table.Cell>{sampleOf(call.capture_id)}</Table.Cell>
                 <Table.Cell>{call.status}</Table.Cell>
                 <Table.Cell>{call.content_type ?? "—"}</Table.Cell>
-                <Table.Cell>{sizeText(call.size)}</Table.Cell>
+                <Table.Cell className="numeric">{sizeText(call.size)}</Table.Cell>
                 <Table.Cell>
                   {call.step === null || call.step === 0 ? "Load" : `Step ${String(call.step)}`}
                 </Table.Cell>
@@ -86,7 +86,7 @@ function EndpointCard({
     <Card>
       <Card.Header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Card.Title className="min-w-0 font-mono text-sm break-all">{title}</Card.Title>
+          <Card.Title className="min-w-0 text-code break-all">{title}</Card.Title>
           {isMain ? (
             <Chip color="success">Main call</Chip>
           ) : (
@@ -122,7 +122,7 @@ function EndpointCard({
         {lines.length === 0 ? (
           <Typography.Paragraph size="sm">Carries no field of the schema.</Typography.Paragraph>
         ) : (
-          <ul aria-label="Field matches" className="flex flex-col gap-1 font-mono text-sm">
+          <ul aria-label="Field matches" className="flex flex-col gap-1 text-code">
             {keyedTexts(lines).map(({ key, text }) => (
               <li key={key}>{text}</li>
             ))}

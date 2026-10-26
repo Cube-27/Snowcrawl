@@ -5,7 +5,8 @@ import type { JobSummary, JsonValuesItem } from "../../../api/jobs";
 import { stubApi, type Call } from "../../../test/api";
 import { catchDownloads } from "../../../test/downloads";
 import { jobSummary, storedBatch } from "../../../test/jobs";
-import { quietEvents, runApi, SCHEMA_ID, valuesPage } from "../../../test/runs";
+import { recordField, storedRecord } from "../../../test/records";
+import { quietEvents, recordsPage, runApi, SCHEMA_ID, valuesPage } from "../../../test/runs";
 import {
   closeOptions,
   fill,
@@ -41,16 +42,25 @@ const SECOND: JsonValuesItem = {
 };
 const THIRD: JsonValuesItem = { url: "https://shop.test/items/3", outcome: null, records: [] };
 
-/** The batch API: a POST answers the job's id, and the job's run answers `replies` over these defaults. */
-function batchApi(replies: Parameters<typeof stubApi>[0] = {}): Call[] {
+/** The first page's record, as the job stores it. */
+const RECORD = storedRecord("0192a000-0000-7000-8000-0000000000r1", SCHEMA_ID, {
+  title: recordField({ value: "Blue mug" }),
+});
+
+/** The batch API: a POST answers the job's id, and the job's run answers `replies` over these defaults. A batch with
+ * a schema, or without one (`pages`), which keeps page outputs. */
+function batchApi(replies: Parameters<typeof stubApi>[0] = {}, pages = false): Call[] {
   return runApi(
     {
       submit: "POST /v1/batch/scrape",
       jobId: JOB_ID,
       kind: "batch_scrape",
       job: job(),
-      request: storedBatch({ urls: [FIRST.url], formats: ["records"], schema: { id: SCHEMA_ID } }),
+      request: pages
+        ? storedBatch({ urls: [FIRST.url], formats: ["markdown"], schema: null })
+        : storedBatch({ urls: [FIRST.url], formats: ["records"], schema: { id: SCHEMA_ID } }),
       items: [FIRST, SECOND, THIRD],
+      records: [RECORD],
     },
     replies,
   );
@@ -64,7 +74,14 @@ async function start() {
   await userEvent.click(screen.getByRole("button", { name: "Start batch" }));
 }
 
-/** The results table, once it has rows. */
+/** The records table of a batch with a schema, once it has its row. */
+async function recordsGrid() {
+  const grid = await screen.findByRole("grid", { name: "Records" });
+  await within(grid).findByText("Blue mug");
+  return grid;
+}
+
+/** The pages table of a batch without a schema, once it has rows. */
 async function pagesGrid() {
   const grid = await screen.findByRole("grid", { name: "Pages" });
   await within(grid).findByText(FIRST.url);
@@ -115,7 +132,7 @@ describe("batch playground: the command bar", () => {
 
     await start();
 
-    await pagesGrid();
+    await recordsGrid();
     expect(posted(calls)).toEqual({
       urls: ["https://shop.test/a", "https://shop.test/b"],
       formats: ["records"],
@@ -143,7 +160,7 @@ describe("batch playground: the command bar", () => {
 
 describe("batch playground: the run", () => {
   it("shows the run on the page: status, progress, outcomes and a row per page in task order", async () => {
-    batchApi();
+    batchApi({}, true);
     await openPlayground("/batch");
     await typeUrls("https://shop.test/a");
 
@@ -173,25 +190,27 @@ describe("batch playground: the run", () => {
     ).toEqual(["extracted1", "blocked1"]);
   });
 
-  it("shows a row's item in the drawer", async () => {
+  it("shows a batch with a schema as one records table, each row's JSON in its last column", async () => {
     batchApi();
     await openPlayground(`/batch?job=${JOB_ID}`);
-    await pagesGrid();
+    const grid = await recordsGrid();
+    expect(screen.queryByRole("grid", { name: "Pages" })).not.toBeInTheDocument();
+    expect(within(grid).getAllByRole("columnheader").at(-1)).toHaveTextContent("JSON");
 
-    await userEvent.click(screen.getByRole("button", { name: "JSON of page 1" }));
+    await userEvent.click(within(grid).getByRole("button", { name: "JSON of row 1" }));
 
     const drawer = await screen.findByRole("dialog");
-    expect(within(drawer).getByText(FIRST.url)).toBeInTheDocument();
     expect(
-      JSON.parse(within(drawer).getByRole("region", { name: "Page JSON" }).textContent),
-    ).toEqual({ price: "19.90", currency: "EUR", title: "Blue mug" });
+      JSON.parse(within(drawer).getByRole("region", { name: "Row 1 JSON" }).textContent),
+    ).toEqual({ title: "Blue mug" });
   });
 
-  it("downloads every page's item in task order, equal to the drawers' items", async () => {
+  it("downloads every page's item in task order", async () => {
     const saved = catchDownloads();
     const calls = batchApi({
       [`GET ${JOB}/results`]: ({ query }) => {
         const params = new URLSearchParams(query);
+        if (!params.has("format")) return recordsPage([RECORD]);
         if (params.get("limit") !== "200") return valuesPage([FIRST, SECOND, THIRD]);
         return params.get("cursor") === null
           ? valuesPage([FIRST, SECOND], CURSOR)
@@ -199,7 +218,7 @@ describe("batch playground: the run", () => {
       },
     });
     await openPlayground(`/batch?job=${JOB_ID}`);
-    await pagesGrid();
+    await recordsGrid();
 
     await userEvent.click(screen.getByRole("button", { name: "Export JSON" }));
 

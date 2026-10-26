@@ -1,26 +1,18 @@
-import { Chip, Link, Table } from "@heroui/react";
+import { Link, Table } from "@heroui/react";
 import { problemOf } from "../../api/hooks/query";
 import { useSchedules } from "../../api/hooks/schedules";
 import type { Schedule } from "../../api/schedules";
-import { useCursorPages } from "../../components/lib/cursors";
-import { EmptyView } from "../../components/molecules/EmptyView";
-import { PAGE_SIZE, PagedTable } from "../../components/organisms/PagedTable";
-import { PageHeader } from "../../components/templates/PageHeader";
+import { DEFAULT_PAGE_SIZE, useCursorPages } from "../../components/lib/cursors";
+import { EmptyView } from "../../components/molecules/ViewStates";
+import { PagedTable } from "../../components/organisms/PagedTable";
+import { Screen } from "../../components/templates/Screen";
+import { ScheduleStateLabel } from "../../components/molecules/StatusLabels";
 import { Timestamp } from "../../components/atoms/Timestamp";
 import { KIND_LABELS } from "../jobs/kinds";
 import { runPath } from "../playground/modes";
 import { cadenceText } from "./cadence";
 import { schedulePath } from "./paths";
 import { ScheduleActions } from "./ScheduleActions";
-
-/** Whether a schedule runs: paused, or active. */
-export function ScheduleState({ paused }: Readonly<{ paused: boolean }>) {
-  return (
-    <Chip size="sm" color={paused ? "warning" : "success"} variant="soft">
-      {paused ? "Paused" : "Active"}
-    </Chip>
-  );
-}
 
 /** The last run: the job it started (a link to its run), or why it started none, or a dash before the first. */
 export function LastRun({ schedule }: Readonly<{ schedule: Schedule }>) {
@@ -60,7 +52,7 @@ function ScheduleRows({ schedules }: Readonly<{ schedules: readonly Schedule[] }
                 <Table.Cell>{KIND_LABELS[schedule.kind]}</Table.Cell>
                 <Table.Cell>{cadenceText(schedule)}</Table.Cell>
                 <Table.Cell>
-                  <ScheduleState paused={schedule.paused} />
+                  <ScheduleStateLabel paused={schedule.paused} />
                 </Table.Cell>
                 <Table.Cell>
                   {schedule.paused ? "—" : <Timestamp value={schedule.next_run_at} />}
@@ -84,14 +76,13 @@ function ScheduleRows({ schedules }: Readonly<{ schedules: readonly Schedule[] }
  * and its actions. A schedule is made from a playground request with Schedule this. */
 export function SchedulesScreen() {
   const { cursor, page, previous, nextTo } = useCursorPages();
-  const schedules = useSchedules({ cursor, limit: PAGE_SIZE });
+  const schedules = useSchedules({ cursor, limit: DEFAULT_PAGE_SIZE });
   const items = schedules.data?.items ?? [];
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader
-        title="Schedules"
-        description="Requests that run again on a cadence. Make one with Schedule this in the playground."
-      />
+    <Screen
+      title="Schedules"
+      description="Requests that run again on a cadence. Make one with Schedule this in the playground."
+    >
       <PagedTable
         problem={problemOf(schedules.error)}
         loading={schedules.isSuccess ? null : "Loading schedules"}
@@ -107,6 +98,6 @@ export function SchedulesScreen() {
           <ScheduleRows schedules={items} />
         )}
       </PagedTable>
-    </section>
+    </Screen>
   );
 }

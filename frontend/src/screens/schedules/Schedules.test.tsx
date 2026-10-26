@@ -99,10 +99,10 @@ describe("schedules", () => {
 
     const table = within(await screen.findByRole("grid", { name: "Schedules" }));
     expect(await table.findByText("Every 1 h")).toBeInTheDocument();
-    expect(table.getByText("Active")).toBeInTheDocument();
+    expect(table.getByText("active")).toBeInTheDocument();
     await userEvent.click(table.getByRole("button", { name: "Pause" }));
 
-    expect(await table.findByText("Paused")).toBeInTheDocument();
+    expect(await table.findByText("paused")).toBeInTheDocument();
     expect(calls.map(({ method, path }) => `${method} ${path}`)).toContain(
       `POST /v1/schedules/${SCHEDULE_ID}/pause`,
     );

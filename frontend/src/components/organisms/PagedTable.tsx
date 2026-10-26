@@ -1,12 +1,8 @@
 import { useEffect, useRef, type ReactNode } from "react";
 import type { Problem } from "../../api/problem";
-import { LoadingView } from "../molecules/LoadingView";
-import { ProblemAlert } from "../molecules/ProblemAlert";
+import { LoadingView, ProblemAlert } from "../molecules/ViewStates";
 import { PAGE_SIZES } from "../lib/cursors";
 import { TablePagination, type PageSizing } from "../molecules/TablePagination";
-
-/** Rows per page of a table that is not a results table (`useCursorPages` sizes the others): the box (`h-table-page` in theme.css) holds this many rows and the header. */
-export const PAGE_SIZE = 20;
 
 /** The rows a page shows of the total, "rows 51–100 of 1,000" (every results page carries `total`). */
 export interface PageRows extends PageSizing {
@@ -46,10 +42,15 @@ export function PagedTable({
   rows?: PageRows | undefined;
   children: ReactNode;
 }>) {
-  // A new page starts at its first row, not where the last one was scrolled to.
+  // A new page starts at its first row, not where the last one was scrolled to: in the box, or in a table that
+  // scrolls inside it (`table-sticky`).
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (box.current !== null) box.current.scrollTop = 0;
+    if (box.current === null) return;
+    box.current.scrollTop = 0;
+    for (const scroller of box.current.querySelectorAll(".table__scroll-container")) {
+      scroller.scrollTop = 0;
+    }
   }, [page]);
   // A list that fits one page needs no fixed box (it would be a screen of empty space under a few rows), and a short
   // one needs no pager either: the smallest page size is already more than it has.

@@ -3,8 +3,8 @@ import { useState } from "react";
 /** The page sizes a results table offers (the API caps a page at 100 rows, so a page is never large). */
 export const PAGE_SIZES = [10, 25, 50, 100] as const;
 
-/** Rows per page of a results table until the reader chooses another. */
-export const DEFAULT_PAGE_SIZE = 50;
+/** Rows per page of every paged table: a table without a size choice keeps it, and one with a choice starts at it. */
+export const DEFAULT_PAGE_SIZE = 25;
 
 interface Position {
   cursors: (string | null)[];

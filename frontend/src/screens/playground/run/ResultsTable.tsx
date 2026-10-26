@@ -5,7 +5,7 @@ import { problemOf } from "../../../api/hooks/query";
 import type { JsonValuesItem, PageOutput } from "../../../api/jobs";
 import { useCursorPages } from "../../../components/lib/cursors";
 import { pageJson } from "../output/cleanJson";
-import { OutcomeLabel } from "../../../components/molecules/OutcomeLabel";
+import { OutcomeLabel } from "../../../components/molecules/StatusLabels";
 import { PagedTable } from "../../../components/organisms/PagedTable";
 import { ItemDrawer } from "./ItemDrawer";
 import { ScrapeAsBatchBar, SelectionCheckbox, selectOnPage, type Selection } from "./scrapeAsBatch";
@@ -71,7 +71,7 @@ function PagesTable({
             )}
             <Table.Column isRowHeader>URL</Table.Column>
             <Table.Column className="w-1/6">Outcome</Table.Column>
-            <Table.Column className="w-1/6">Records</Table.Column>
+            <Table.Column className="w-1/6 numeric">Records</Table.Column>
             <Table.Column className="w-1/6">JSON</Table.Column>
           </Table.Header>
           <Table.Body
@@ -96,7 +96,7 @@ function PagesTable({
                 <Table.Cell>
                   {row.item.outcome === null ? "—" : <OutcomeLabel outcome={row.item.outcome} />}
                 </Table.Cell>
-                <Table.Cell>{row.item.records.length}</Table.Cell>
+                <Table.Cell className="numeric">{row.item.records.length}</Table.Cell>
                 <Table.Cell>
                   <Button
                     size="sm"

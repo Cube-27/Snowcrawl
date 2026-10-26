@@ -1,7 +1,12 @@
 import { Typography } from "@heroui/react";
-import type { OutcomeCounts as Outcomes, TaskCounts, TaskOutcome, TaskStatus } from "../../api/jobs";
+import type {
+  OutcomeCounts as Outcomes,
+  TaskCounts,
+  TaskOutcome,
+  TaskStatus,
+} from "../../api/jobs";
 import { plural } from "../lib/activityText";
-import { OutcomeLabel } from "./OutcomeLabel";
+import { OutcomeLabel } from "./StatusLabels";
 
 // In the order a task goes through them, and the outcomes as the API lists them.
 const STATUSES: readonly TaskStatus[] = ["queued", "claimed", "done", "failed", "cancelled"];

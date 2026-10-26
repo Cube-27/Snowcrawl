@@ -1,12 +1,13 @@
-import { Drawer, Typography } from "@heroui/react";
+import { Typography } from "@heroui/react";
 import { useState } from "react";
 import type { FieldTypes } from "../../api/field";
 import type { ExtractedRecord } from "../../api/records";
 import { DEFAULT_PAGE_SIZE, PAGE_SIZES } from "../lib/cursors";
-import { EmptyView } from "../molecules/EmptyView";
+import { EmptyView } from "../molecules/ViewStates";
 import { PagedTable } from "./PagedTable";
 import { RecordFieldsTable, RecordSummary } from "./RecordFields";
 import { RecordTable } from "./RecordTable";
+import { SideDrawer } from "../molecules/SideDrawer";
 
 /** One record's every field attribute in a drawer over the table. */
 function RecordDrawer({
@@ -15,27 +16,9 @@ function RecordDrawer({
   onClose,
 }: Readonly<{ record: ExtractedRecord; fieldTypes: FieldTypes; onClose: () => void }>) {
   return (
-    <Drawer
-      isOpen
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
-      }}
-    >
-      <Drawer.Backdrop>
-        <Drawer.Content placement="right">
-          <Drawer.Dialog>
-            <Drawer.CloseTrigger />
-            <Drawer.Header>
-              <Drawer.Heading>Record</Drawer.Heading>
-              <RecordSummary record={record} />
-            </Drawer.Header>
-            <Drawer.Body>
-              <RecordFieldsTable label="Record fields" record={record} fieldTypes={fieldTypes} />
-            </Drawer.Body>
-          </Drawer.Dialog>
-        </Drawer.Content>
-      </Drawer.Backdrop>
-    </Drawer>
+    <SideDrawer title="Record" header={<RecordSummary record={record} />} onClose={onClose}>
+      <RecordFieldsTable label="Record fields" record={record} fieldTypes={fieldTypes} />
+    </SideDrawer>
   );
 }
 

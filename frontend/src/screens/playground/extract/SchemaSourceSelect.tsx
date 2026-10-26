@@ -2,7 +2,7 @@ import { problemOf } from "../../../api/hooks/query";
 import { useSchemas } from "../../../api/hooks/schemas";
 import type { SchemaDef } from "../../../api/schemas";
 import { isOptionOf, OptionSelect } from "../../../components/molecules/OptionSelect";
-import { ProblemAlert } from "../../../components/molecules/ProblemAlert";
+import { ProblemAlert } from "../../../components/molecules/ViewStates";
 import type { SchemaSource } from "./form";
 
 /** The sources other than a stored schema, by option key. Stored schema ids are UUIDs, so no key names one of them. */
@@ -39,7 +39,7 @@ export function SchemaSourceSelect({
   if (source === "id") value = schemaId === "" ? null : schemaId;
   return (
     <>
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
       <OptionSelect
         label="Schema"
         name="schema"

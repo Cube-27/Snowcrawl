@@ -6,8 +6,8 @@ import { useRecords } from "../../api/hooks/records";
 import { useSchema } from "../../api/hooks/schemas";
 import { activeFilters, type RecordFilters, type StoredRecord } from "../../api/records";
 import { useCursorPages } from "../../components/lib/cursors";
-import { EmptyView } from "../../components/molecules/EmptyView";
-import { PageHeader } from "../../components/templates/PageHeader";
+import { EmptyView } from "../../components/molecules/ViewStates";
+import { Screen } from "../../components/templates/Screen";
 import { PagedTable } from "../../components/organisms/PagedTable";
 import { RecordTable } from "../../components/organisms/RecordTable";
 import { RecordFiltersForm } from "./RecordFilters";
@@ -79,8 +79,7 @@ export function RecordsScreen() {
   const filters = filtersOf(params);
   const key = new URLSearchParams(activeFilters(filters)).toString();
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader title="Records" />
+    <Screen title="Records">
       <RecordFiltersForm
         key={key}
         filters={filters}
@@ -95,6 +94,6 @@ export function RecordsScreen() {
       ) : (
         <RecordResults key={key} filters={filters} />
       )}
-    </section>
+    </Screen>
   );
 }

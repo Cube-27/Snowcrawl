@@ -5,6 +5,7 @@ import type {
   JsonValuesPage,
   StoredJobRequest,
 } from "../api/jobs";
+import type { RecordPage, StoredRecord } from "../api/records";
 import { stubApi, type Call } from "./api";
 import { jobSummary } from "./jobs";
 
@@ -30,6 +31,21 @@ export function schemaList(): Response {
   });
 }
 
+/** `GET /v1/schemas/{id}`: the stored schema the toolbar offers, whole. */
+export function storedSchema(): Response {
+  return Response.json({
+    id: SCHEMA_ID,
+    name: "item_detail",
+    origin: "user",
+    status: "active",
+    page_kind: "detail",
+    required_groups: [],
+    field_order: ["title"],
+    labels: null,
+    fields: { title: { type: "text", required: false, scope: "row" } },
+  });
+}
+
 /** An event stream that stays open and sends nothing. */
 export function quietEvents(): Response {
   return new Response(new ReadableStream(), { headers: { "content-type": "text/event-stream" } });
@@ -45,6 +61,11 @@ export function valuesPage(items: JsonValuesItem[], next_cursor: string | null =
   } satisfies JsonValuesPage);
 }
 
+/** A page of a job's stored records (`results` without a format). */
+export function recordsPage(items: StoredRecord[]): Response {
+  return Response.json({ items, next_cursor: null, total: items.length } satisfies RecordPage);
+}
+
 export interface RunStub {
   /** The submit route, such as `POST /v1/crawl`; it answers `202` with the job's id. */
   submit: string;
@@ -56,6 +77,8 @@ export interface RunStub {
   request: StoredJobRequest;
   /** The job's results, one page. */
   items?: JsonValuesItem[];
+  /** The job's stored records, one page (a job with a schema). */
+  records?: StoredRecord[];
 }
 
 /** Stubs a mode's run as `run` describes, with `replies` over these defaults; returns the calls recorded. */
@@ -68,7 +91,11 @@ export function runApi(run: RunStub, replies: Parameters<typeof stubApi>[0] = {}
     [`GET ${job}`]: () => Response.json(summary),
     [`GET ${job}/request`]: () => Response.json(run.request),
     [`GET ${job}/events`]: quietEvents,
-    [`GET ${job}/results`]: () => valuesPage(run.items ?? []),
+    [`GET /v1/schemas/${SCHEMA_ID}`]: storedSchema,
+    [`GET ${job}/results`]: ({ query }) =>
+      query.includes("format=json_values")
+        ? valuesPage(run.items ?? [])
+        : recordsPage(run.records ?? []),
     ...replies,
   });
 }
