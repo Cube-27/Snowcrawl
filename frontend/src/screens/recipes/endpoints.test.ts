@@ -2,12 +2,13 @@ import { describe, expect, it } from "vite-plus/test";
 import type { Endpoint, FieldMatch } from "../../api/captures";
 import { endpointText, matchLines } from "./endpoints";
 
-function endpoint(bodyShape: string[] | null): Endpoint {
+function endpoint(bodyShape: string[] | null, suffix = ""): Endpoint {
   return {
     method: "POST",
     origin: "https://api.example.test",
     has_path: true,
     segments: 1,
+    suffix,
     query: [],
     body_shape: bodyShape,
     samples: [],
@@ -18,16 +19,20 @@ function endpoint(bodyShape: string[] | null): Endpoint {
 }
 
 describe("endpointText", () => {
-  it("tells apart groups of one URL by their body's shape", () => {
+  it("tells apart groups of one URL by their body's shape and path suffix", () => {
     const titles = [
       endpoint(["$.operationName", "$.variables['id']"]),
       endpoint(["$.operationName", "$.variables['slug']"]),
       endpoint(null),
-      endpoint([`q=${"a".repeat(70)}&page=1`]),
-      endpoint([`q=${"a".repeat(70)}&page=2`]),
+      endpoint(null, ".json"),
+      endpoint(["application/x-www-form-urlencoded", "q", "page"]),
+      endpoint(["text/plain"]),
     ].map(endpointText);
 
-    expect(new Set(titles).size).toBe(5);
+    expect(new Set(titles).size).toBe(6);
+    expect(titles[4]).toBe(
+      "POST https://api.example.test/{1 segment} body application/x-www-form-urlencoded {q, page}",
+    );
     expect(titles[0]).toBe(
       "POST https://api.example.test/{1 segment} body {$.operationName, $.variables['id']}",
     );

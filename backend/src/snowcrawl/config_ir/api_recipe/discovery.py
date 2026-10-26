@@ -14,7 +14,7 @@ the map holds a required field. Candidates come best first; the first is the one
 endpoint per config).
 """
 
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Hashable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
 from pydantic import JsonValue
@@ -25,7 +25,7 @@ from snowcrawl.collect.network_match import Call, EndpointKey, endpoint_key, rea
 from snowcrawl.config_ir.api_recipe.binding import CapturedRequest
 from snowcrawl.content.page import ParsedPage
 from snowcrawl.normalize.base import Context, Ok
-from snowcrawl.normalize.dispatch import equal, normalize
+from snowcrawl.normalize.dispatch import equal, equality_key, normalize
 from snowcrawl.resolve.evidence import required_fields
 from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
 from snowcrawl.storage.capture_bundle import CaptureBundle
@@ -72,7 +72,7 @@ def endpoint_request(bundle: CaptureBundle, endpoint: EndpointCandidate) -> Capt
     """The request to `endpoint` a capture holds a readable answer to, the first in capture order; `None` when it holds
     none. Held-out validation reads the captures that hold one."""
     first = endpoint.requests[0]
-    key = endpoint_key(first.method, first.url, first.body)
+    key = endpoint_key(first.method, first.url, first.body, first.headers)
     return next((_request(call) for call in _replayable(bundle) if call.endpoint == key), None)
 
 
@@ -142,7 +142,8 @@ def _scored(
     required: frozenset[str],
 ) -> _Body:
     # Each leaf is normalized once per field: for equality with the published value and for the visible-type count.
-    typed, hits = body_readings(document, sample.values, sample.ctx, schema)
+    readings = body_readings(document, sample.ctx, schema)
+    typed, hits = readings.typed, readings.hits(sample.values)
     matched = required & hits.keys()
     others = [name for name in schema.fields if name not in matched]
     used = {leaf for name in matched for path in hits[name] for leaf in map_paths(path)}
@@ -151,46 +152,76 @@ def _scored(
     return _Body(request, hits, len(matched) + len(shown))
 
 
-def body_readings(
-    document: JsonValue, values: Mapping[str, JsonValue], ctx: Context, schema: SchemaDef
-) -> tuple[dict[str, Normalized], dict[str, dict[str, None]]]:
-    """A body's readings of each field that normalize as its type (one scalar leaf each), and each published field's
-    map paths in it (`field_hits`)."""
+@dataclass(frozen=True)
+class _FieldReadings:
+    """One field's readings of a body that normalize as its type, in document order, indexed by their value's
+    equality key (`normalize.dispatch.equality_key`); `unkeyed` holds the positions of those whose type's equality is
+    no equivalence (a location), which are compared one by one."""
+
+    readings: Normalized
+    keyed: dict[Hashable, list[int]]
+    unkeyed: list[int]
+
+    @classmethod
+    def of(cls, readings: Normalized, spec: FieldSpec) -> "_FieldReadings":
+        keyed: dict[Hashable, list[int]] = {}
+        unkeyed: list[int] = []
+        for position, (_, value) in enumerate(readings):
+            if (key := equality_key(value, spec)) is None:
+                unkeyed.append(position)
+            else:
+                keyed.setdefault(key, []).append(position)
+        return cls(readings, keyed, unkeyed)
+
+    def paths(self, value: JsonValue, spec: FieldSpec) -> dict[str, None]:
+        """The map paths, in document order, whose reading is `equal` to `value`: looked up by its key (`equal`
+        exactly when the keys are), else compared with every reading."""
+        key = equality_key(value, spec)
+        if key is None:
+            positions: Iterable[int] = range(len(self.readings))
+        else:
+            positions = sorted([*self.keyed.get(key, ()), *self.unkeyed])
+        return dict.fromkeys(self.readings[i][0].path for i in positions if equal(self.readings[i][1], value, spec))
+
+
+@dataclass(frozen=True)
+class BodyReadings:
+    """A body's readings of each field: `typed`, those of one scalar leaf that normalize as the field's type; and for
+    matching a published value, those with money's joined member pairs, normalized once per body and indexed by value,
+    so that each published row of a listing is looked up rather than compared with every reading."""
+
+    typed: dict[str, Normalized]
+    schema: SchemaDef
+    matching: dict[str, _FieldReadings]
+
+    def hits(self, values: Mapping[str, JsonValue]) -> dict[str, dict[str, None]]:
+        """Each field published in `values`: its map paths in the body, in document order."""
+        hits: dict[str, dict[str, None]] = {}
+        for name, spec in self.schema.fields.items():
+            if name in values and (paths := self.matching[name].paths(values[name], spec)):
+                hits[name] = paths
+        return hits
+
+
+def body_readings(document: JsonValue, ctx: Context, schema: SchemaDef) -> BodyReadings:
+    """A body's readings of each field (`BodyReadings`); money also reads joined member pairs."""
     leaves = [Reading(path, raw) for path, raw in json_doc.scalars(document)]
     typed = {name: normalized(leaves, spec, ctx) for name, spec in schema.fields.items()}
-    return typed, field_hits(typed, document, values, ctx, schema)
-
-
-def field_hits(
-    typed: Mapping[str, Normalized],
-    document: JsonValue,
-    values: Mapping[str, JsonValue],
-    ctx: Context,
-    schema: SchemaDef,
-) -> dict[str, dict[str, None]]:
-    """Each field published in `values`: its map paths in the body (`typed`, its readings); money also reads joined
-    member pairs."""
     money = any(spec.type is FieldType.MONEY for spec in schema.fields.values())
     pairs = list(member_pairs(document)) if money else []
-    hits: dict[str, dict[str, None]] = {}
-    for name, spec in schema.fields.items():
-        if name not in values:
-            continue
-        joined = normalized(pairs, spec, ctx) if spec.type is FieldType.MONEY else []
-        if paths := _hits(typed[name] + joined, values[name], spec):
-            hits[name] = paths
-    return hits
+    matching = {
+        name: _FieldReadings.of(
+            typed[name] + (normalized(pairs, spec, ctx) if spec.type is FieldType.MONEY else []), spec
+        )
+        for name, spec in schema.fields.items()
+    }
+    return BodyReadings(typed, schema, matching)
 
 
 def normalized(readings: list[Reading], spec: FieldSpec, ctx: Context) -> Normalized:
     return [
         (reading, result.value) for reading in readings if isinstance(result := normalize(reading.raw, spec, ctx), Ok)
     ]
-
-
-def _hits(readings: Normalized, value: JsonValue, spec: FieldSpec) -> dict[str, None]:
-    """The map paths, in document order, whose reading is `equal` to `value`."""
-    return dict.fromkeys(reading.path for reading, normalized in readings if equal(normalized, value, spec))
 
 
 def member_pairs(document: JsonValue) -> Iterator[Reading]:

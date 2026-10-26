@@ -65,7 +65,10 @@ class CustomRecipe(_Model):
         if len({parse(pattern).host for pattern in self.patterns}) != 1:
             raise ValueError("a recipe's URL patterns are of one host")
         if self.page_kind == "listing" and self.main.pagination is None:
-            raise ValueError("a listing recipe's main call has a pagination: its rows path selects the rows")
+            raise ValueError(
+                "a listing recipe's main call has a pagination (`none` when its one response holds every row): its"
+                " rows path selects the rows"
+            )
         return self
 
     @property

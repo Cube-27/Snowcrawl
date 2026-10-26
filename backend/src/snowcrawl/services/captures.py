@@ -223,8 +223,8 @@ async def artifact(engine: AsyncEngine, store: ObjectStore, capture_id: CaptureI
 class CallDetail(BaseModel):
     """One call a capture kept (`GET /v1/captures/{id}/calls/{n}`): the request as sent (headers as recorded: no
     cookies, the caller's own values masked), the answer's status, headers and text (its UTF-8 decoding, at most
-    `ANSWER_MAX_BYTES`), the page step it followed and whether it went to the page's own site, and the guard prefix
-    its JSON opens with."""
+    `ANSWER_MAX_BYTES`), the page step it followed and whether it went to the page's own site, the guard prefix its JSON
+    opens with, and why its body was not kept (past a cap), when it was not."""
 
     index: int
     method: str | None
@@ -240,6 +240,7 @@ class CallDetail(BaseModel):
     response_headers: HeaderList | None
     size: int
     answer: str
+    omitted: str | None
 
 
 # A capture keeps no body past 2 MB (`acquire.browser_capture`); the answer an API reply holds is bounded the same.
@@ -268,6 +269,7 @@ async def call(engine: AsyncEngine, store: ObjectStore, capture_id: CaptureId, i
         response_headers=entry.response_headers,
         size=len(data),
         answer=data[:ANSWER_MAX_BYTES].decode("utf-8", errors="replace"),
+        omitted=entry.omitted,
     )
 
 

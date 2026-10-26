@@ -157,6 +157,7 @@ async def test_a_proposal_from_the_samples_reproduces_each_sample_s_call(
         "origin": own_origin,
         "has_path": True,
         "segments": 2,
+        "suffix": "",
         "query": [],
         "body_shape": None,
     }

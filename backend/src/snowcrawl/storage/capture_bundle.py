@@ -107,6 +107,9 @@ class NetworkBody(_Frozen):
     # manifest when None, as `data_call` is.
     same_site: bool | None = Field(default=None, exclude_if=lambda value: value is None)
     guard_prefix: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    # Why an engineer capture kept the call without its body (its file is empty): past a cap. Left out of the manifest
+    # when None, as `data_call` is.
+    omitted: str | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class CaptureManifest(_Frozen):

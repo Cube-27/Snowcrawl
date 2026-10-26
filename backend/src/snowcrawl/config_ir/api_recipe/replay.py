@@ -21,8 +21,9 @@ from snowcrawl.acquire.identity import identifies
 from snowcrawl.acquire.types import FetchResult, RequestContext
 from snowcrawl.collect import json_doc
 from snowcrawl.collect.api import read_map
+from snowcrawl.collect.network_match import FORM_TYPE
 from snowcrawl.config_ir.api_recipe.binding import PageData, Sample, Served, render_body, render_url, resolve_params
-from snowcrawl.config_ir.api_recipe.model import FORM_TYPE, PAGE_URL, ContextHeader, Pagination, RequestSpec
+from snowcrawl.config_ir.api_recipe.model import PAGE_URL, ContextHeader, Pagination, RequestSpec
 from snowcrawl.config_ir.api_recipe.pagination import first_request, next_request
 from snowcrawl.core import json_text
 from snowcrawl.db.models import JobId, PageKind

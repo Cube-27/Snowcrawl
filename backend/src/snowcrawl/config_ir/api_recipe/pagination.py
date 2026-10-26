@@ -36,6 +36,7 @@ from snowcrawl.config_ir.api_recipe.model import (
     CursorPagination,
     LinkPagination,
     NextUrlPagination,
+    OnePagePagination,
     PageWhere,
     Pagination,
     ParamPagination,
@@ -225,6 +226,8 @@ def next_request(
         case LinkPagination():
             target = next_link(headers, request.url)
             return None if target is None else _same_origin(request, target)
+        case OnePagePagination():
+            return None
 
 
 def next_link(headers: HeaderList, base: str) -> str | None:

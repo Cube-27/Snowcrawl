@@ -37,7 +37,7 @@ function CallsTable({
                 <Table.Cell>{sampleOf(call.capture_id)}</Table.Cell>
                 <Table.Cell>{call.status}</Table.Cell>
                 <Table.Cell>{call.content_type ?? "—"}</Table.Cell>
-                <Table.Cell className="numeric">{sizeText(call.size)}</Table.Cell>
+                <Table.Cell className="numeric">{call.omitted ?? sizeText(call.size)}</Table.Cell>
                 <Table.Cell>
                   {call.step === null || call.step === 0 ? "Load" : `Step ${String(call.step)}`}
                 </Table.Cell>

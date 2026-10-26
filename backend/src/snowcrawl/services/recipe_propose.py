@@ -21,7 +21,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, NonNegativeInt, ValidationError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from snowcrawl.collect.network_match import SUCCESS, DataCall, EndpointKey, endpoint_key
+from snowcrawl.collect.api import map_paths
+from snowcrawl.collect.network_match import SUCCESS, DataCall, EndpointKey, endpoint_key, holds_rows
 from snowcrawl.config_ir.api_recipe.binding import (
     Ambiguous,
     CapturedRequest,
@@ -32,7 +33,7 @@ from snowcrawl.config_ir.api_recipe.binding import (
 )
 from snowcrawl.config_ir.api_recipe.headers import proposed
 from snowcrawl.config_ir.api_recipe.listing import ListingPage, first_page_request, page_series, series_pagination
-from snowcrawl.config_ir.api_recipe.model import ApiRecipe, Pagination, with_pagination
+from snowcrawl.config_ir.api_recipe.model import ApiRecipe, OnePagePagination, Pagination, with_pagination
 from snowcrawl.config_ir.custom_recipe import CustomRecipe, InvalidRecipe
 from snowcrawl.config_ir.url_pattern import generalize
 from snowcrawl.config_ir.validation import HeldOutPage
@@ -61,6 +62,7 @@ class EndpointRef(Input):
     origin: str
     has_path: bool
     segments: NonNegativeInt
+    suffix: str
     query: list[str]
     body_shape: list[str] | None = None
 
@@ -97,7 +99,7 @@ async def propose_recipe(engine: AsyncEngine, store: ObjectStore, request: Propo
 def drafted(samples: Samples, main: CallRef | EndpointRef) -> Proposal:
     """The draft of `samples` for the `main` call; raises `InvalidRecipe` as `propose_recipe` does."""
     key, chosen = _main_key(samples, main)
-    endpoint = next((found for found in listed(samples.pages, samples.schema).endpoints if _key(found) == key), None)
+    endpoint = next(iter(listed(samples.pages, samples.schema, key).endpoints), None)
     if endpoint is None:
         raise InvalidRecipe([("main", "no sample made a call of the main endpoint")])
     calls = _sample_calls(endpoint, chosen)
@@ -129,12 +131,12 @@ def _main_key(samples: Samples, main: CallRef | EndpointRef) -> tuple[EndpointKe
     if main.index >= len(page.page.network_entries):
         raise InvalidRecipe([("main.index", f"capture {main.capture_id} has no call {main.index}")])
     entry = page.page.network_entries[main.index]
-    return endpoint_key(entry.method, entry.url, entry.request_body), main
+    return endpoint_key(entry.method, entry.url, entry.request_body, entry.request_headers), main
 
 
-def _key(endpoint: Endpoint | EndpointRef) -> EndpointKey:
+def _key(endpoint: EndpointRef) -> EndpointKey:
     body = None if endpoint.body_shape is None else tuple(endpoint.body_shape)
-    shape = (endpoint.origin, endpoint.has_path, endpoint.segments, tuple(endpoint.query))
+    shape = (endpoint.origin, endpoint.has_path, endpoint.segments, endpoint.suffix, tuple(endpoint.query))
     return EndpointKey(endpoint.method, shape, body)
 
 
@@ -169,7 +171,7 @@ def _listing_requests(samples: Samples, calls: Mapping[CaptureId, int], rows: st
         found = _series(_listing_page(page, url), calls.get(page.capture_id))
         if found:
             series.append((page, url, found))
-    pagination = series_pagination([calls for _, _, calls in series], rows)
+    pagination = series_pagination([calls for _, _, calls in series], rows) or _one_page(series, len(samples.pages))
     if pagination is None:
         raise InvalidRecipe([("main", "no sample's calls of the main endpoint show how the next page is asked")])
     requests = []
@@ -177,6 +179,19 @@ def _listing_requests(samples: Samples, calls: Mapping[CaptureId, int], rows: st
         if (request := first_page_request(calls_of[0], pagination)) is not None:
             requests.append(Sample(url, request, page_data(page.page)))
     return requests, pagination
+
+
+def _one_page(series: Sequence[tuple[HeldOutPage, str, tuple[DataCall, ...]]], samples: int) -> Pagination | None:
+    """No pagination (`none`) when the `samples` show the call returns every row: each made one call of the series,
+    and its rows hold every row the sample published (`network_match.holds_rows`; a sample that published none, or
+    made no call of the series, shows nothing)."""
+    if len(series) != samples:
+        return None
+    for page, _, calls in series:
+        if len(calls) != 1 or not holds_rows(calls[0], [row.published for row in page.rows]):
+            return None
+    rows = series[0][2][0].rows if series else None
+    return None if rows is None else OnePagePagination(kind="none", rows=rows)
 
 
 def _listing_page(page: HeldOutPage, url: str) -> ListingPage:
@@ -222,13 +237,15 @@ def _map(endpoint: Endpoint) -> dict[str, str]:
 
 
 def _row_map(endpoint: Endpoint, rows: str) -> dict[str, str]:
-    """`_map` with each path relative to a row (RFC 9535 §2.2: `$` is the row), for the paths inside the rows."""
+    """`_map` with each path relative to a row (RFC 9535 §2.2: `$` is the row), for the paths inside the rows; each
+    path of a joined money pair (`+`) is."""
     # The call list writes an array's items as one (`[*]`), its row query too.
-    prefix = _INDEX.sub("[*]", rows).removesuffix("[*]")
+    row = _INDEX.sub("[*]", rows)
     relative: dict[str, str] = {}
     for name, path in _map(endpoint).items():
-        if path.startswith(prefix + "[*]"):
-            relative[name] = "$" + path.removeprefix(prefix + "[*]")
+        parts = map_paths(path)
+        if all(part.startswith(row) for part in parts):
+            relative[name] = "+".join("$" + part.removeprefix(row) for part in parts)
     return relative
 
 

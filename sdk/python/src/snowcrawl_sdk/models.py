@@ -165,6 +165,7 @@ class CallDetail(BaseModel):
     guard_prefix: Annotated[str | None, Field(title="Guard Prefix")] = None
     index: Annotated[int, Field(title="Index")]
     method: Annotated[str | None, Field(title="Method")] = None
+    omitted: Annotated[str | None, Field(title="Omitted")] = None
     request_body: Annotated[str | None, Field(title="Request Body")] = None
     request_headers: Annotated[
         list[RequestHeader] | None, Field(title="Request Headers")
@@ -192,6 +193,7 @@ class CallSummary(BaseModel):
     capture_id: Annotated[UUID, Field(title="Capture Id")]
     content_type: Annotated[str | None, Field(title="Content Type")] = None
     index: Annotated[int, Field(title="Index")]
+    omitted: Annotated[str | None, Field(title="Omitted")] = None
     resource_type: Annotated[str | None, Field(title="Resource Type")] = None
     same_site: Annotated[bool | None, Field(title="Same Site")] = None
     size: Annotated[int, Field(title="Size")]
@@ -456,6 +458,7 @@ class EndpointRef(BaseModel):
     origin: Annotated[str, Field(title="Origin")]
     query: Annotated[list[str], Field(title="Query")]
     segments: Annotated[int, Field(ge=0, title="Segments")]
+    suffix: Annotated[str, Field(title="Suffix")]
 
 
 class Format5(Enum):
@@ -902,6 +905,14 @@ class NormalizeOpInput(BaseModel):
 
 class NormalizeOpOutput(RootModel[dict[str, dict[str, Any]]]):
     root: dict[str, dict[str, Any]]
+
+
+class OnePagePagination(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Annotated[Literal["none"], Field(title="Kind")]
+    rows: Annotated[str, Field(title="Rows")]
 
 
 class OutcomeCounts(BaseModel):
@@ -1614,7 +1625,12 @@ class ApiRecipeInput(BaseModel):
     map: Annotated[dict[str, str], Field(title="Map")]
     method: Annotated[Method, Field(title="Method")]
     pagination: Annotated[
-        ParamPagination | CursorPagination | NextUrlPagination | LinkPagination | None,
+        ParamPagination
+        | CursorPagination
+        | NextUrlPagination
+        | LinkPagination
+        | OnePagePagination
+        | None,
         Field(title="Pagination"),
     ] = None
     params_from_url: Annotated[
@@ -1637,7 +1653,12 @@ class ApiRecipeOutput(BaseModel):
     map: Annotated[dict[str, str], Field(title="Map")]
     method: Annotated[Method, Field(title="Method")]
     pagination: Annotated[
-        ParamPagination | CursorPagination | NextUrlPagination | LinkPagination | None,
+        ParamPagination
+        | CursorPagination
+        | NextUrlPagination
+        | LinkPagination
+        | OnePagePagination
+        | None,
         Field(title="Pagination"),
     ] = None
     params_from_url: Annotated[dict[str, str], Field(title="Params From Url")]
@@ -2412,6 +2433,7 @@ class Endpoint(BaseModel):
     rows: Annotated[str | None, Field(title="Rows")] = None
     samples: Annotated[list[UUID], Field(title="Samples")]
     segments: Annotated[int, Field(title="Segments")]
+    suffix: Annotated[str, Field(title="Suffix")]
 
 
 class ExtractRequestInput(BaseModel):

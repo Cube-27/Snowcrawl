@@ -19,18 +19,19 @@ from dataclasses import dataclass, field, replace
 from functools import cached_property
 from itertools import count
 from typing import Final, NamedTuple
-from urllib.parse import quote, quote_plus, unquote, urlsplit
+from urllib.parse import parse_qsl, quote, quote_plus, unquote, unquote_plus, urlsplit
 
 from pydantic import JsonValue, ValidationError
 
 from snowcrawl.collect import json_doc
 from snowcrawl.collect.api import read_xpath
-from snowcrawl.collect.network_match import url_shape
+from snowcrawl.collect.network_match import FORM_TYPE, media_type, path_suffix, url_shape
 from snowcrawl.config_ir.api_recipe.model import (
     CUSTOM_KINDS,
     PAGE_DATA_KINDS,
     PLACEHOLDER,
     Binder,
+    BodyEncoding,
     PageDataKind,
     RequestSpec,
     parse_binder,
@@ -167,7 +168,9 @@ def _params_or_missing(
     return params
 
 
-def request_spec(method: str, url: str, params: Mapping[str, str], body: str | None) -> RequestSpec:
+def request_spec(
+    method: str, url: str, params: Mapping[str, str], body: str | None, encoding: BodyEncoding = "json"
+) -> RequestSpec:
     """The spec with these templates and binders and no headers; it fetches the page first exactly when a binder
     reads the page's JSON documents. Raises `ValidationError` when they are not a valid request."""
     reads_page = any(parse_binder(text).kind in _DATA_KINDS for text in params.values())
@@ -176,7 +179,7 @@ def request_spec(method: str, url: str, params: Mapping[str, str], body: str | N
             "method": method,
             "url": url,
             "params_from_url": params,
-            "body": None if body is None else {"template": body},
+            "body": None if body is None else {"template": body, "encoding": encoding},
             "requires_page_fetch": reads_page,
         }
     )
@@ -371,10 +374,11 @@ class _Binding:
 
     def spec(self) -> RequestSpec:
         url = self._url_template()
-        body = self._body_template()
+        form = self._form_body()
+        body = self._form_template() if form else self._body_template()
         params = {name: text for text, name in self.params.items()}
         try:
-            spec = request_spec(self.method, url, params, body)
+            spec = request_spec(self.method, url, params, body, "form" if form else "json")
         except ValidationError as error:
             raise _Unbound(f"the bound templates are not a valid request: {error.errors()[0]['msg']}") from None
         # A literal left in place reproduces the first sample's request only.
@@ -386,16 +390,27 @@ class _Binding:
     def _url_template(self) -> str:
         urls = [_Url.split(sample.request.url) for sample in self.samples]
         first = urls[0]
-        # The endpoint URL shape (`network_match.url_shape`) is what binding templates: only its parts may vary.
-        if len({url_shape(sample.request.url) for sample in self.samples}) > 1:
+        # The endpoint URL shape (`network_match.url_shape`) is what binding templates: only its parts may vary. A
+        # value may end in what reads as a format suffix (`a.b`), so the suffix may vary with it.
+        if len({_template_shape(sample.request.url) for sample in self.samples}) > 1:
             raise _Unbound("the endpoint URL's host, path length or query names differ between sample pages")
-        segments = [
-            _placeholder_or(self._param([unquote(url.segments[i]) for url in urls], f"path segment {i}"), literal)
-            for i, literal in enumerate(first.segments)
-        ]
+        segments = [self._segment(urls, i, literal) for i, literal in enumerate(first.segments)]
         query = [self._query_item(urls, i, name, value) for i, (name, value) in enumerate(first.query)]
         path = "/" + "/".join(segments) if first.path else ""
         return first.origin + path + ("?" + "&".join(query) if query else "")
+
+    def _segment(self, urls: list[_Url], index: int, literal: str) -> str:
+        """Path segment `index` as a template: its values bound whole; else, in the last segment, the stem before the
+        format suffix every sample's ends with (`network_match.path_suffix`, which the URL shape holds), the suffix
+        kept as a literal: `/items/{p1}.json` for a page `/items/<handle>`."""
+        values = [unquote(url.segments[index]) for url in urls]
+        where = f"path segment {index}"
+        suffix = path_suffix(literal) if index == len(urls[0].segments) - 1 else ""
+        stems = [value.removesuffix(suffix) for value in values]
+        ends = all(value.endswith(suffix) and value != suffix for value in values)
+        if suffix and ends and not self.binds(values) and self.binds(stems):
+            return _placeholder_or(self._param(stems, where), literal.removesuffix(suffix)) + suffix
+        return _placeholder_or(self._param(values, where), literal)
 
     def _query_item(self, urls: list[_Url], index: int, name: str, value: str | None) -> str:
         if value is None:
@@ -416,6 +431,33 @@ class _Binding:
             if name is not None:
                 markers[path] = _marker(name, number=not isinstance(leaf, str))
         return _body_with_placeholders(documents[0], markers)
+
+    def _form_body(self) -> bool:
+        """Whether every sample sends a form body (HTML §4.10.21.7: its request's media type says so) that is not
+        JSON text, which `_body_template` binds."""
+        for sample in self.samples:
+            body = sample.request.body
+            if body is None or media_type(sample.request.headers) != FORM_TYPE:
+                return False
+            try:
+                json_text.parse(body)
+            except ValueError:
+                continue
+            return False
+        return True
+
+    def _form_template(self) -> str:
+        """The form body as a template: each item's name as sent, its value bound as a query value is (a form body is
+        a query's `name=value` items, WHATWG URL §5.1, values decoded with `+` as a space)."""
+        forms = [[item.partition("=") for item in str(s.request.body).split("&") if item] for s in self.samples]
+        if len({tuple(name for name, _, _ in form) for form in forms}) > 1:
+            raise _Unbound("the form body's names differ between sample pages")
+        items = []
+        for index, (name, equals, value) in enumerate(forms[0]):
+            values = [unquote_plus(form[index][2]) for form in forms]
+            bound = self._param(values, f"body value {unquote_plus(name)!r}")
+            items.append(name + equals + _placeholder_or(bound, value))
+        return "&".join(items)
 
     def _param(self, values: list[str], where: str) -> str | None:
         """The parameter that binds `values` (one per sample page), or `None` when they are one literal; raises when
@@ -466,12 +508,18 @@ class _Binding:
         )
 
 
+def _template_shape(url: str) -> tuple[object, ...]:
+    """The URL shape without its last segment's format suffix."""
+    origin, has_path, segments, _, query = url_shape(url)
+    return origin, has_path, segments, query
+
+
 def _placeholder_or(name: str | None, literal: str) -> str:
     return literal if name is None else "{" + name + "}"
 
 
 def mismatch(spec: RequestSpec, sample: Sample) -> str | None:
-    """Why `spec` does not reproduce the endpoint request of `sample` (its method, URL and JSON body), or `None` when
+    """Why `spec` does not reproduce the endpoint request of `sample` (its method, URL and body), or `None` when
     it does: `method_mismatch(got, want)`, `no_value(<param>)`, `url_mismatch(got, want)` or `body_mismatch(...)`."""
     if spec.method != sample.request.method.upper():
         return f"method_mismatch({spec.method}, {sample.request.method})"
@@ -486,7 +534,11 @@ def mismatch(spec: RequestSpec, sample: Sample) -> str | None:
 def _body_mismatch(spec: RequestSpec, params: Mapping[str, str], captured: str | None) -> str | None:
     if spec.body is None or captured is None:
         return None if spec.body is None and captured is None else "body_mismatch(a body on one side only)"
-    rendered = render_body(spec.body.template, params)
+    rendered = render_body(spec.body.template, params, spec.body.encoding)
+    if spec.body.encoding == "form":
+        # WHATWG URL §5.1: two form bodies say the same when their decoded items are the same, in order.
+        same = parse_qsl(rendered, keep_blank_values=True) == parse_qsl(captured, keep_blank_values=True)
+        return None if same else f"body_mismatch({rendered}, {captured})"
     try:
         same = _canonical(json_text.parse(rendered)) == _canonical(json_text.parse(captured))
     except ValueError:  # a value that is not a JSON number filled a number's place

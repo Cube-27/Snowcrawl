@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from snowcrawl.collect import json_doc
 from snowcrawl.collect.network_match import SUCCESS, EndpointKey, data_calls, endpoint_key
-from snowcrawl.config_ir.api_recipe.discovery import Normalized, body_readings, field_hits
+from snowcrawl.config_ir.api_recipe.discovery import Normalized, body_readings
 from snowcrawl.config_ir.held_out import load_captures, read_bundle
 from snowcrawl.config_ir.validation import Facts, HeldOutPage
 from snowcrawl.content.page import answer_text
@@ -69,7 +69,7 @@ class NoSamples(Refusal, LookupError):
 class CallSummary(BaseModel):
     """One call of a sample: its index among the capture's network bodies (`GET /v1/captures/{id}/calls/{n}`), its
     answer's status, content type and size, the request's Fetch destination, the page step it followed (0: the page's
-    load), and whether it went to the page's own site."""
+    load), whether it went to the page's own site, and why its body was not kept (past a cap), when it was not."""
 
     capture_id: CaptureId
     index: int
@@ -79,6 +79,7 @@ class CallSummary(BaseModel):
     step: int | None
     same_site: bool | None
     size: int
+    omitted: str | None
 
 
 class PathCount(BaseModel):
@@ -100,14 +101,15 @@ class FieldMatch(BaseModel):
 
 
 class Endpoint(BaseModel):
-    """One endpoint group: its request method, URL shape (origin, whether there is a path, its segment count, the
-    query names in order) and request body shape, the samples it was called on, its calls, the fields it carries and
-    the row query of the rows it lists."""
+    """One endpoint group: its request method, URL shape (origin, whether there is a path, its segment count, its last
+    segment's format suffix such as `.json`, "" for none, and the query names in order) and request body shape, the
+    samples it was called on, its calls, the fields it carries and the row query of the rows it lists."""
 
     method: str | None
     origin: str
     has_path: bool
     segments: int
+    suffix: str
     query: list[str]
     body_shape: list[str] | None
     samples: list[CaptureId]
@@ -224,13 +226,16 @@ def _one_schema(captures: Sequence[CaptureId], schemas: Mapping[CaptureId, Schem
     return schemas[captures[0]]
 
 
-def listed(pages: Sequence[HeldOutPage], schema: SchemaDef) -> CallList:
-    """The call list of the sample `pages` (module docstring)."""
+def listed(pages: Sequence[HeldOutPage], schema: SchemaDef, only: EndpointKey | None = None) -> CallList:
+    """The call list of the sample `pages` (module docstring); of the endpoint `only` alone, when given."""
     groups: dict[EndpointKey, _Group] = {}
     for number, page in enumerate(pages):
-        rows = {data.call.index: data.rows for data in data_calls(page.page) if data.rows is not None}
+        published = [row.published for row in page.rows]
+        rows = {data.call.index: data.rows for data in data_calls(page.page, published) if data.rows is not None}
         for index, entry, data in _calls(page):
-            key = endpoint_key(entry.method, entry.url, entry.request_body)
+            key = endpoint_key(entry.method, entry.url, entry.request_body, entry.request_headers)
+            if only is not None and key != only:
+                continue
             group = groups.setdefault(key, _Group())
             group.calls.append(_summary(page.capture_id, index, entry, data))
             group.samples[page.capture_id] = None
@@ -255,6 +260,7 @@ def _summary(capture_id: CaptureId, index: int, entry: NetworkBody, data: bytes)
         step=entry.action,
         same_site=entry.same_site,
         size=len(data),
+        omitted=entry.omitted,
     )
 
 
@@ -271,9 +277,10 @@ def _match(group: _Group, number: int, entry: NetworkBody, data: bytes, page: He
     except ValueError:
         return
     published = page.facts.published
-    typed, hits = body_readings(document, published, page.ctx, schema)
+    readings = body_readings(document, page.ctx, schema)
+    typed, hits = readings.typed, readings.hits(published)
     for row in page.rows:
-        for name, paths in field_hits(typed, document, row.published, page.ctx, schema).items():
+        for name, paths in readings.hits(row.published).items():
             hits.setdefault(name, {}).update(dict.fromkeys(INDEX.sub("[*]", path) for path in paths))
     _add(group.published, hits, number)
     stated = hits.keys() | published.keys() | {name for row in page.rows for name in row.published}
@@ -312,12 +319,13 @@ def _collapsed(text: str) -> str:
 
 
 def _endpoint(key: EndpointKey, group: _Group, schema: SchemaDef) -> Endpoint:
-    origin, has_path, segments, query = key.url
+    origin, has_path, segments, suffix, query = key.url
     return Endpoint(
         method=key.method,
         origin=origin,
         has_path=has_path,
         segments=segments,
+        suffix=suffix,
         query=list(query),
         body_shape=None if key.body is None else list(key.body),
         samples=list(group.samples),

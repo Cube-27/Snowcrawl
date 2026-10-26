@@ -1088,7 +1088,7 @@ export interface components {
              */
             method: "GET" | "POST";
             /** Pagination */
-            pagination?: (components["schemas"]["ParamPagination"] | components["schemas"]["CursorPagination"] | components["schemas"]["NextUrlPagination"] | components["schemas"]["LinkPagination"]) | null;
+            pagination?: (components["schemas"]["ParamPagination"] | components["schemas"]["CursorPagination"] | components["schemas"]["NextUrlPagination"] | components["schemas"]["LinkPagination"] | components["schemas"]["OnePagePagination"]) | null;
             /**
              * Params From Url
              * @default {}
@@ -1133,7 +1133,7 @@ export interface components {
              */
             method: "GET" | "POST";
             /** Pagination */
-            pagination: (components["schemas"]["ParamPagination"] | components["schemas"]["CursorPagination"] | components["schemas"]["NextUrlPagination"] | components["schemas"]["LinkPagination"]) | null;
+            pagination: (components["schemas"]["ParamPagination"] | components["schemas"]["CursorPagination"] | components["schemas"]["NextUrlPagination"] | components["schemas"]["LinkPagination"] | components["schemas"]["OnePagePagination"]) | null;
             /**
              * Params From Url
              * @default {}
@@ -1379,8 +1379,8 @@ export interface components {
          * CallDetail
          * @description One call a capture kept (`GET /v1/captures/{id}/calls/{n}`): the request as sent (headers as recorded: no
          *     cookies, the caller's own values masked), the answer's status, headers and text (its UTF-8 decoding, at most
-         *     `ANSWER_MAX_BYTES`), the page step it followed and whether it went to the page's own site, and the guard prefix
-         *     its JSON opens with.
+         *     `ANSWER_MAX_BYTES`), the page step it followed and whether it went to the page's own site, the guard prefix its JSON
+         *     opens with, and why its body was not kept (past a cap), when it was not.
          */
         CallDetail: {
             /** Answer */
@@ -1393,6 +1393,8 @@ export interface components {
             index: number;
             /** Method */
             method: string | null;
+            /** Omitted */
+            omitted: string | null;
             /** Request Body */
             request_body: string | null;
             /** Request Headers */
@@ -1451,7 +1453,7 @@ export interface components {
          * CallSummary
          * @description One call of a sample: its index among the capture's network bodies (`GET /v1/captures/{id}/calls/{n}`), its
          *     answer's status, content type and size, the request's Fetch destination, the page step it followed (0: the page's
-         *     load), and whether it went to the page's own site.
+         *     load), whether it went to the page's own site, and why its body was not kept (past a cap), when it was not.
          */
         CallSummary: {
             /**
@@ -1463,6 +1465,8 @@ export interface components {
             content_type: string | null;
             /** Index */
             index: number;
+            /** Omitted */
+            omitted: string | null;
             /** Resource Type */
             resource_type: string | null;
             /** Same Site */
@@ -2304,9 +2308,9 @@ export interface components {
         };
         /**
          * Endpoint
-         * @description One endpoint group: its request method, URL shape (origin, whether there is a path, its segment count, the
-         *     query names in order) and request body shape, the samples it was called on, its calls, the fields it carries and
-         *     the row query of the rows it lists.
+         * @description One endpoint group: its request method, URL shape (origin, whether there is a path, its segment count, its last
+         *     segment's format suffix such as `.json`, "" for none, and the query names in order) and request body shape, the
+         *     samples it was called on, its calls, the fields it carries and the row query of the rows it lists.
          */
         Endpoint: {
             /** Body Shape */
@@ -2329,6 +2333,8 @@ export interface components {
             samples: string[];
             /** Segments */
             segments: number;
+            /** Suffix */
+            suffix: string;
         };
         /**
          * EndpointRef
@@ -2347,6 +2353,8 @@ export interface components {
             query: string[];
             /** Segments */
             segments: number;
+            /** Suffix */
+            suffix: string;
         };
         /**
          * ExportPage
@@ -3531,6 +3539,19 @@ export interface components {
             [key: string]: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * OnePagePagination
+         * @description The listing's one response holds every row `rows` selects: there is no next request.
+         */
+        OnePagePagination: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "none";
+            /** Rows */
+            rows: string;
         };
         /**
          * OutcomeCounts

@@ -26,6 +26,8 @@
 // Pagination: set {{ pagination.where|php_comment }} value {{ pagination["name"]|php_comment }} to the value the previous response holds at {{ pagination.cursor|php_comment }}, until it holds none or {{ pagination.rows|php_comment }} selects nothing.
 {% elif pagination.kind == "next_url" %}
 // Pagination: request the URL the previous response holds at {{ pagination["next"]|php_comment }} (RFC 3986 resolution, same origin), until it holds none or {{ pagination.rows|php_comment }} selects nothing.
+{% elif pagination.kind == "none" %}
+// Pagination: none; the one response holds every row {{ pagination.rows|php_comment }} selects.
 {% else %}
 // Pagination: request the target of the previous response's Link header with rel="next" (RFC 8288, same origin), until there is none or {{ pagination.rows|php_comment }} selects nothing.
 {% endif %}
