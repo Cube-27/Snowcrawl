@@ -92,7 +92,7 @@ their patterns match (`url_pattern.py`: host and path template, `{name}`, `*`, t
 (`extraction_config.pattern_shape`, `''` for the learned one); saving a recipe changes no other row, and the
 progressive state names the learned config only. Selection (`active.py`): the recipe whose pattern matches the URL
 most specifically, else the learned config, which also extracts a page the recipe did not fetch itself
-(`ActiveConfig.rest`); a job pins every active config of a host and picks per URL.
+(an `ActiveConfig`'s `rest`); a job pins every active config of a host and picks per URL.
 
 Learning leaves recipes alone: a learning run samples only the pages no active recipe's pattern matches
 (`held_out.load_pages(keep=)`) and only ever replaces the learned config. A recipe's drift (`drift.py`) suspends the

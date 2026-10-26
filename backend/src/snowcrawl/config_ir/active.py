@@ -5,9 +5,9 @@ A (site, schema, page kind) with an active config extracts its pages in `config`
 row is the authority: `extraction_config` holds at most one active learned config per site, schema and page kind, and
 any number of active custom recipes, one per pattern shape. A page is extracted with the most specific recipe whose
 URL pattern it matches (`url_pattern.most_specific`), else with the learned config, which also extracts a recipe's
-page its recipe did not fetch (`ActiveConfig.rest`); a schema edit suspends the schema's active configs, so its pages
-start cold again. Each
-page the config ran on, served and resolved, is added to its drift window (`drift.record_run`).
+page its recipe did not fetch (an `ActiveConfig`'s `rest`); a schema edit suspends the schema's active configs, so
+its pages start cold again. Each page the config ran on, served and resolved, is added to its drift window
+(`drift.record_run`).
 """
 
 from collections.abc import Collection, Sequence

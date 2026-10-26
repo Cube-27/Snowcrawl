@@ -6,7 +6,7 @@ platform documents for a detail page (`adapters.platforms.product_json`), or an 
 (`config_ir.api_recipe.execute`). Before its answer is used it must state the requested product (the identity check):
 a string or number equal to a key the request was made with (a handle, a slug, a product id), or a URL whose path is the
 page's path; an HTML answer also by its canonical link, its `og:url` or a link of it, relative ones resolved against its
-document base URL (`acquire.page_refs`). An answer that does not is dropped and recorded on its attempt as
+document base URL (`page_refs`). An answer that does not is dropped and recorded on its attempt as
 `NOT_THE_PRODUCT`: an endpoint that ignores its key answers one product for every page.
 
 A documented platform answer that passes joins the page's HTTP capture as one more network body, marked with its

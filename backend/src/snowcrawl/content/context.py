@@ -29,7 +29,7 @@ def page_context(
     headers: Sequence[tuple[str, str]] = (),
 ) -> Context:
     """The page's context; `final_url` is the URL its document came from, `request_url` the URL it was requested at,
-    `page_url` the page it stands for when that is another (`CaptureManifest.page_url`), `headers` the response's, as
+    `page_url` the page it stands for when that is another (the manifest's `page_url`), `headers` the response's, as
     received."""
     return Context(
         html_lang=strip(html_lang(page)),
