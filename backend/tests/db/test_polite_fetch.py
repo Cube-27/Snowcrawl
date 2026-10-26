@@ -116,14 +116,17 @@ async def test_by_default_a_disallowed_page_is_fetched_without_reading_robots(en
     assert result.bundle.manifest.url == f"{ORIGIN}/private/a"
 
 
-async def test_an_unreachable_robots_file_fails_the_attempt_and_stores_nothing(
+async def test_an_unreachable_robots_file_fails_the_attempts_and_is_asked_once_while_kept(
     engine: AsyncEngine, site_id: SiteId, web: Web
 ) -> None:
     web.serve(f"{ORIGIN}/robots.txt", b"", 503, "blocked")
-    [task] = await _tasks(engine, "/item/1")
+    first, second = await _tasks(engine, "/item/1", "/item/2")
+    limiter = HostLimiter()
 
-    result = await _polite(engine, task, OBEYS, web, HostLimiter())
+    results = [await _polite(engine, task, OBEYS, web, limiter) for task in (first, second)]
 
-    assert result == Failed("robots_unreachable", transient=True, exhausted="blocked")
+    assert results == [Failed("robots_unreachable", transient=True, exhausted="blocked")] * 2
     assert web.urls() == [f"{ORIGIN}/robots.txt"]
-    assert await _snapshot(engine, site_id) is None
+    snapshot = await _snapshot(engine, site_id)
+    assert snapshot is not None
+    assert (snapshot.status_code, snapshot.body) == (503, None)

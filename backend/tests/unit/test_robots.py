@@ -2,7 +2,7 @@
 
 import pytest
 
-from snowcrawl.acquire.robots import Robots, snapshot_of
+from snowcrawl.acquire.robots import CRAWL_DELAY_MAX, Robots, snapshot_of
 from snowcrawl.acquire.types import FetchResult
 from tests.support.captures import fetched
 
@@ -48,3 +48,22 @@ def test_an_unavailable_robots_file_allows_everything(status: int, error: str | 
 
     assert snapshot is not None
     assert (snapshot.status_code, snapshot.body) == (status, "")
+
+
+@pytest.mark.parametrize(("status", "error"), [(503, None), (429, None), (0, "network_error")])
+def test_an_unreachable_robots_file_is_kept_with_no_body(status: int, error: str | None) -> None:
+    snapshot = snapshot_of(_fetched(status, b"", error))
+
+    assert (snapshot.status_code, snapshot.body) == (status, None)
+
+
+def test_a_byte_order_mark_does_not_hide_the_first_group() -> None:
+    snapshot = snapshot_of(_fetched(200, "\ufeffUser-agent: *\nDisallow: /private\n".encode()))
+
+    assert snapshot.body is not None
+    assert not Robots(snapshot.body).allows("https://shop.example.test/private")
+
+
+@pytest.mark.parametrize("delay", ["86400", "1e20"])
+def test_a_crawl_delay_past_the_cap_is_read_as_the_cap(delay: str) -> None:
+    assert Robots(f"User-agent: *\nCrawl-delay: {delay}\n").crawl_delay == CRAWL_DELAY_MAX
