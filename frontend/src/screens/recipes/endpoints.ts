@@ -17,7 +17,15 @@ export function endpointKey(endpoint: Endpoint): string {
 
 /** The endpoint as a draft names it: by the members of its key. */
 export function endpointRef(endpoint: Endpoint): EndpointRef {
-  const { method, origin, has_path: hasPath, segments, suffix, query, body_shape: bodyShape } = endpoint;
+  const {
+    method,
+    origin,
+    has_path: hasPath,
+    segments,
+    suffix,
+    query,
+    body_shape: bodyShape,
+  } = endpoint;
   return { method, origin, has_path: hasPath, segments, suffix, query, body_shape: bodyShape };
 }
 
