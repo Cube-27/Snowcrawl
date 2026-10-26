@@ -18,6 +18,17 @@ def error_path(location: Sequence[int | str]) -> str:
 
 def field_error(error: ErrorDetails) -> tuple[str, str]:
     """The (path, reason) of a pydantic error. Our validators raise ValueError, whose message pydantic prefixes with
-    "Value error, ": the reason is the message alone."""
-    reason = str(error["ctx"]["error"]) if error["type"] == "value_error" else error["msg"]
+    "Value error, ": the reason is the message alone. A list or object with too few members says how many it needs
+    and has, in place of pydantic's type name ("Dictionary should have at least 1 item")."""
+    match error["type"]:
+        case "value_error":
+            reason = str(error["ctx"]["error"])
+        case "too_short":
+            reason = f"needs at least {_members(error['ctx']['min_length'])}, has {error['ctx']['actual_length']}"
+        case _:
+            reason = error["msg"]
     return error_path(error["loc"]), reason
+
+
+def _members(count: int) -> str:
+    return "1 member" if count == 1 else f"{count} members"
