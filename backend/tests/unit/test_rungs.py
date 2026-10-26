@@ -159,8 +159,13 @@ def test_no_browser_retry_starts_too_close_to_the_deadline() -> None:
 
 
 def test_a_remembered_browser_start_that_fails_asks_http_once_and_keeps_only_its_ok() -> None:
-    for browser in ("blocked", "error"):
-        for http, kept in (("ok", ("http", "ok")), ("shell", ("browser", browser))):
+    failed: tuple[BlockClass, ...] = ("blocked", "error")
+    for browser in failed:
+        outcomes: tuple[tuple[BlockClass, tuple[str, BlockClass]], ...] = (
+            ("ok", ("http", "ok")),
+            ("shell", ("browser", browser)),
+        )
+        for http, kept in outcomes:
             stubs = web(http, browser)
             result = stubs.acquire(remembered="browser")
             assert (result.method, result.block_class) == kept
