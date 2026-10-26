@@ -373,6 +373,8 @@ async def test_a_saved_recipe_is_active_beside_the_learned_config_and_listed_wit
     assert (body["version"], body["status"], body["origin"], body["custom"]) == (2, "active", "operator", True)
     assert (body["patterns"], body["renders"], body["sent_by"]) == ([f"{world.host}/item/{{slug}}"], ["about"], "http")
     assert body["ir"]["api_recipe"]["proof"] is None
+    # The main call's fields are the operator's as the page's are.
+    assert body["field_status"] == {"title": "operator", "about": "operator"}
     # Read back as it is edited: the builder loads it.
     assert body["recipe"] == CustomRecipe.model_validate(_recipe(world, "item")).model_dump(mode="json")
     assert [(c["id"], c["status"], c["custom"]) for c in listed.json()["items"]] == [

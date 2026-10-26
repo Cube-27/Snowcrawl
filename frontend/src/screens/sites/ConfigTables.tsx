@@ -77,12 +77,39 @@ export function ConfigVersionsTable({
   );
 }
 
-/** A config's fields: each one's steps in order, its status, and its held-out yield and validity. */
-export function ConfigFieldsTable({ config }: Readonly<{ config: ConfigDetail }>) {
-  const rows = Object.entries(configuredFields(config)).map(([name, steps]) => ({
+interface FieldRow {
+  id: string;
+  status: FieldConfigStatus;
+  steps: readonly string[];
+  yield: number | null | undefined;
+  validity: number | null | undefined;
+}
+
+/** The fields a custom recipe's main call reads: its `map`, a path into the call's answer each, not steps. */
+function mainCallRows(config: ConfigDetail): FieldRow[] {
+  const map = config.recipe?.main.map ?? {};
+  return Object.entries(map).map(([name, path]) => ({
     id: name,
-    steps,
+    status: config.field_status[name] ?? "operator",
+    steps: [`main call: ${path}`],
+    yield: null,
+    validity: null,
   }));
+}
+
+/** A config's fields: each one's steps in order (a custom recipe's main call's fields first), its status, and its
+ * held-out yield and validity. */
+export function ConfigFieldsTable({ config }: Readonly<{ config: ConfigDetail }>) {
+  const rows: FieldRow[] = [
+    ...mainCallRows(config),
+    ...Object.entries(configuredFields(config)).map(([name, steps]) => ({
+      id: name,
+      status: steps.status,
+      steps: steps.steps.map((step) => stepText(step)),
+      yield: steps.yield,
+      validity: steps.validity,
+    })),
+  ];
   const { listing } = config.ir;
   const { absent } = config.ir;
   return (
@@ -109,26 +136,24 @@ export function ConfigFieldsTable({ config }: Readonly<{ config: ConfigDetail }>
               <Table.Column className="numeric">Validity</Table.Column>
             </Table.Header>
             <Table.Body items={rows}>
-              {({ id, steps }) => (
-                <Table.Row id={id}>
-                  <Table.Cell>{id}</Table.Cell>
+              {(row) => (
+                <Table.Row id={row.id}>
+                  <Table.Cell>{row.id}</Table.Cell>
                   <Table.Cell>
-                    <FieldConfigStatusLabel status={steps.status} />
+                    <FieldConfigStatusLabel status={row.status} />
                   </Table.Cell>
                   <Table.Cell>
                     <ol className="flex flex-col gap-1">
                       {/* In order: the first valid value wins. */}
-                      {keyedTexts(steps.steps.map((step) => stepText(step))).map(
-                        ({ key, text }) => (
-                          <li key={key}>
-                            <LocatorText locator={text} />
-                          </li>
-                        ),
-                      )}
+                      {keyedTexts(row.steps).map(({ key, text }) => (
+                        <li key={key}>
+                          <LocatorText locator={text} />
+                        </li>
+                      ))}
                     </ol>
                   </Table.Cell>
-                  <Table.Cell className="numeric">{confidenceText(steps.yield)}</Table.Cell>
-                  <Table.Cell className="numeric">{confidenceText(steps.validity)}</Table.Cell>
+                  <Table.Cell className="numeric">{confidenceText(row.yield)}</Table.Cell>
+                  <Table.Cell className="numeric">{confidenceText(row.validity)}</Table.Cell>
                 </Table.Row>
               )}
             </Table.Body>

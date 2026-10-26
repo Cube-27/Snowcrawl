@@ -398,3 +398,13 @@ class ExtractionConfigIR(_Model):
     def needs(self, *, running: bool = True) -> dict[str, Needs]:
         """Each page-level field's `needs`, the suspended ones left out when `running`."""
         return {name: steps.needs for name, steps in self.fields.items() if not running or steps.status != "suspended"}
+
+    def field_status(self) -> dict[str, FieldStatus]:
+        """Each field's status: its steps', a custom recipe's main call's fields `operator` (they are the main call's
+        `map`, not steps: `config_ir.custom_recipe`), and `absent` for the fields no page states."""
+        listed = self.listing.fields if self.listing is not None else {}
+        statuses: dict[str, FieldStatus] = {}
+        if self.patterns and self.api_recipe is not None:
+            statuses |= dict.fromkeys(self.api_recipe.map, "operator")
+        statuses |= {name: steps.status for name, steps in (*self.fields.items(), *listed.items())}
+        return statuses | dict.fromkeys(self.absent, "absent")

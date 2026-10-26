@@ -239,16 +239,13 @@ async def _store(
 ) -> ExtractionConfigId:
     configs = ExtractionConfig
     version = select(func.coalesce(func.max(configs.version), 0) + 1).where(*key.config_scope()).scalar_subquery()
-    listed = ir.listing.fields if ir.listing is not None else {}
-    statuses = {name: steps.status for name, steps in (*ir.fields.items(), *listed.items())}
-    statuses |= dict.fromkeys(ir.absent, "absent")
     stored = insert(configs).values(
         **key.columns(),
         version=version,
         status=status,
         ir=ir.model_dump(mode="json", by_alias=True),
         origin=ir.provenance.origin,
-        field_status=statuses,
+        field_status=ir.field_status(),
         validation_report=None if report is None else report.model_dump(mode="json", by_alias=True),
         patterns=ir.patterns,
         pattern_shape=patterns_shape(ir.patterns),
