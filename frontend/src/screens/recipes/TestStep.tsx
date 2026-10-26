@@ -4,11 +4,11 @@ import type { FieldTypes } from "../../api/field";
 import { problemOf } from "../../api/hooks/query";
 import type { useTestRecipe } from "../../api/hooks/recipes";
 import { MAX_TEST_URLS, type CustomRecipe, type TestRun, type UrlTest } from "../../api/recipes";
-import { Collapsible } from "../../components/Collapsible";
-import { ExtractedRecords } from "../../components/ExtractedRecords";
-import { FetchTrail } from "../../components/FetchAttempts";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { Section } from "../../components/Section";
+import { Collapsible } from "../../components/molecules/Collapsible";
+import { ExtractedRecords } from "../../components/organisms/ExtractedRecords";
+import { FetchTrail } from "../../components/organisms/FetchAttempts";
+import { ProblemAlert } from "../../components/molecules/ViewStates";
+import { Section } from "../../components/templates/Screen";
 import { Lines } from "./Fields";
 
 // RFC 9110 §15.5, §15.6: an error status.
@@ -52,7 +52,7 @@ function UrlResult({
   return (
     <Card>
       <Card.Header>
-        <Card.Title className="font-mono text-sm break-all">{result.url}</Card.Title>
+        <Card.Title className="text-code break-all">{result.url}</Card.Title>
       </Card.Header>
       <Card.Content className="flex flex-col gap-4">
         {refused.length === 0 ? null : (
@@ -125,7 +125,7 @@ export function TestStep({
           Test
         </Button>
       </div>
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
       {isStale && test.data !== undefined ? (
         <Typography.Paragraph size="sm" color="muted">
           The recipe or the URLs changed since this test: test again to see what they give.

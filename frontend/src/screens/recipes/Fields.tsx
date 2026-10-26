@@ -42,7 +42,7 @@ export function Line({
         autoComplete="off"
         spellCheck={false}
         placeholder={placeholder}
-        className={isMono ? "font-mono text-sm" : ""}
+        className={isMono ? "text-code" : ""}
       />
     </TextField>
   );
@@ -63,12 +63,7 @@ export function Lines({
   return (
     <TextField className="flex min-w-0 flex-col gap-1" value={value} onChange={onChange}>
       <Label>{label}</Label>
-      <TextArea
-        rows={4}
-        spellCheck={false}
-        placeholder={placeholder}
-        className="font-mono text-sm"
-      />
+      <TextArea rows={4} spellCheck={false} placeholder={placeholder} className="text-code" />
     </TextField>
   );
 }

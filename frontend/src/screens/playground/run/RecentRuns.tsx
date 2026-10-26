@@ -1,11 +1,8 @@
 import { Link } from "@heroui/react";
 import { useJobs } from "../../../api/hooks/jobs";
-import { problemOf } from "../../../api/hooks/query";
 import type { JobKind } from "../../../api/jobs";
-import { EmptyView } from "../../../components/EmptyView";
-import { LoadingView } from "../../../components/LoadingView";
-import { ProblemAlert } from "../../../components/ProblemAlert";
-import { Section } from "../../../components/Section";
+import { EmptyView, QueryView } from "../../../components/molecules/ViewStates";
+import { Section } from "../../../components/templates/Screen";
 import { JobRows } from "../../jobs/JobRows";
 
 /** How many runs the list shows. */
@@ -26,21 +23,21 @@ const RUN_COLUMNS = [
  * run that replaces the list moves nothing. */
 export function RecentRuns({ kind }: Readonly<{ kind: JobKind }>) {
   const jobs = useJobs({ filters: { kind, status: null }, cursor: null, limit: RECENT });
-  const problem = problemOf(jobs.error);
-  let content;
-  if (problem !== null) content = <ProblemAlert problem={problem} />;
-  else if (!jobs.isSuccess) content = <LoadingView label="Loading recent runs" />;
-  else if (jobs.data.items.length === 0)
-    content = (
-      <EmptyView title="No runs yet">
-        Each run you start here is listed here, and opens again with its results.
-      </EmptyView>
-    );
-  else content = <JobRows label="Recent runs" jobs={jobs.data.items} columns={RUN_COLUMNS} />;
   return (
     <div className="min-h-playground-output">
       <Section title="Recent runs" action={<Link href={`/jobs?kind=${kind}`}>All runs</Link>}>
-        {content}
+        <QueryView
+          query={jobs}
+          loading="Loading recent runs"
+          isEmpty={(data) => data.items.length === 0}
+          empty={
+            <EmptyView title="No runs yet">
+              Each run you start here is listed here, and opens again with its results.
+            </EmptyView>
+          }
+        >
+          {(data) => <JobRows label="Recent runs" jobs={data.items} columns={RUN_COLUMNS} />}
+        </QueryView>
       </Section>
     </div>
   );

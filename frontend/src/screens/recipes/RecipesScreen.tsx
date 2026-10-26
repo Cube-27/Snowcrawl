@@ -2,11 +2,8 @@ import { Button, Link, Table } from "@heroui/react";
 import { useNavigate, useParams } from "react-router";
 import type { ConfigSummary } from "../../api/configs";
 import { useSiteConfigs } from "../../api/hooks/configs";
-import { problemOf } from "../../api/hooks/query";
-import { EmptyView } from "../../components/EmptyView";
-import { LoadingView } from "../../components/LoadingView";
-import { PageHeader } from "../../components/PageHeader";
-import { ProblemAlert } from "../../components/ProblemAlert";
+import { EmptyView, QueryView } from "../../components/molecules/ViewStates";
+import { Screen } from "../../components/templates/Screen";
 import { useSchemaLabel } from "../sites/ConfigTables";
 import { configPath, sitePath } from "../sites/paths";
 import { newRecipePath, recipePath } from "./paths";
@@ -44,7 +41,7 @@ function RecipesTable({
             {(recipe) => (
               <Table.Row id={recipe.id} href={recipePath(recipe.id)}>
                 <Table.Cell>
-                  <ul className="flex flex-col gap-1 font-mono text-sm">
+                  <ul className="flex flex-col gap-1 text-code">
                     {recipe.patterns.map((pattern) => (
                       <li key={pattern}>{pattern}</li>
                     ))}
@@ -78,28 +75,29 @@ export function RecipesScreen() {
   const { host = "" } = useParams();
   const configs = useSiteConfigs(host);
   const schemaLabel = useSchemaLabel();
-  const problem = problemOf(configs.error);
-  const recipes = configs.isSuccess ? servingRecipes(configs.data) : [];
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader
-        title={`Recipes of ${host}`}
-        actions={
-          <>
-            <Link href={sitePath(host)}>Site configs</Link>
-            <NewRecipeButton host={host} />
-          </>
+    <Screen
+      title={`Recipes of ${host}`}
+      actions={
+        <>
+          <Link href={sitePath(host)}>Site configs</Link>
+          <NewRecipeButton host={host} />
+        </>
+      }
+    >
+      <QueryView
+        query={configs}
+        loading="Loading the site's recipes"
+        isEmpty={(data) => servingRecipes(data).length === 0}
+        empty={
+          <EmptyView title="No recipes yet">
+            A recipe serves this site's pages from the calls they make, without a browser. Build one
+            from two to five sample pages.
+          </EmptyView>
         }
-      />
-      {configs.isPending ? <LoadingView label="Loading the site's recipes" /> : null}
-      {problem === null ? null : <ProblemAlert problem={problem} />}
-      {configs.isSuccess && recipes.length === 0 ? (
-        <EmptyView title="No recipes yet">
-          A recipe serves this site's pages from the calls they make, without a browser. Build one
-          from two to five sample pages.
-        </EmptyView>
-      ) : null}
-      {recipes.length > 0 ? <RecipesTable recipes={recipes} schemaLabel={schemaLabel} /> : null}
-    </section>
+      >
+        {(data) => <RecipesTable recipes={servingRecipes(data)} schemaLabel={schemaLabel} />}
+      </QueryView>
+    </Screen>
   );
 }

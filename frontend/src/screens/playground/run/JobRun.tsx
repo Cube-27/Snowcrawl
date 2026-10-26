@@ -3,12 +3,12 @@ import { useJobEvents } from "../../../api/hooks/events";
 import { useJob, useJobRequest } from "../../../api/hooks/jobs";
 import { problemOf } from "../../../api/hooks/query";
 import { cancelState, type JobKind, type JobSummary } from "../../../api/jobs";
-import { ActivityFeed } from "../../../components/ActivityFeed";
-import { CancelJobAction } from "../../../components/CancelJobAction";
-import { JobStatusLabel } from "../../../components/JobStatusLabel";
-import { RunProgress } from "../../../components/RunProgress";
-import { StatusLabel } from "../../../components/StatusLabel";
-import { WebhookDeliveries } from "../../../components/WebhookDeliveries";
+import { ActivityFeed } from "../../../components/organisms/ActivityFeed";
+import { CancelJobAction } from "../../../components/molecules/CancelJobAction";
+import { JobStatusLabel } from "../../../components/molecules/StatusLabels";
+import { RunProgress } from "../../../components/molecules/RunProgress";
+import { StatusLabel } from "../../../components/atoms/StatusLabel";
+import { WebhookDeliveries } from "../../../components/organisms/WebhookDeliveries";
 import type { Problem } from "../../../api/problem";
 import { JobResults } from "../../jobs/JobResults";
 import { ScheduleRun } from "../../schedules/ScheduleRun";
@@ -17,6 +17,7 @@ import { RecentRuns } from "./RecentRuns";
 import { ResultsTable } from "./ResultsTable";
 import { RunExports } from "./RunExports";
 import { pageOutputs } from "./storedRequest";
+import { Section } from "../../../components/templates/Screen";
 
 /** A run's summary, one outlined surface: its status with Cancel and the exports on the right,
  * kept in place as the run goes, then its progress and outcomes. */
@@ -35,7 +36,7 @@ function RunSummary({
             <JobStatusLabel status={job.status} />
             {cancel === "requested" ? <StatusLabel text="cancel requested" tone="warning" /> : null}
           </div>
-          <div className="flex flex-wrap items-start gap-2">
+          <div className="flex min-w-0 flex-wrap items-start gap-2">
             {/* A cancel asked for ends the job once its claimed tasks end. */}
             <CancelJobAction id={job.id} isDisabled={cancel !== "cancellable"} />
             <ScheduleRun job={job} />
@@ -49,28 +50,32 @@ function RunSummary({
 }
 
 /** A job's run on the page: one flow down the page, its summary, then its results table, then
- * its live activity, collapsed. The run's events feed the activity and read the summary and the table again. */
+ * its live activity, collapsed. The run's events feed the activity and read the summary and the table again. A job
+ * with a schema shows its records, a row each with the record's JSON in its last column; a job without one shows its
+ * pages, each with its page JSON. A crawl also lists its pages, as the rows to pick for a batch. */
 function JobRunView({ job, withMetadata }: Readonly<{ job: JobSummary; withMetadata: boolean }>) {
   const activity = useJobEvents(job.id);
   // A job without a schema has page outputs, not records: its request says which.
   const request = useJobRequest(job.id).data;
   const outputs = request !== undefined && pageOutputs(request);
+  const selectable = job.kind === "crawl";
   return (
     <>
       <RunSummary job={job} withMetadata={withMetadata} outputs={outputs} />
       {/* A crawl's pages open as a batch; a batch's or extract's are its own input. */}
-      <ResultsTable
-        jobId={job.id}
-        withMetadata={withMetadata}
-        selectable={job.kind === "crawl"}
-        outputs={outputs}
-      />
+      {outputs || selectable ? (
+        <ResultsTable
+          jobId={job.id}
+          withMetadata={withMetadata}
+          selectable={selectable}
+          outputs={outputs}
+        />
+      ) : null}
       {/* A job with a schema extracts records: one row each, a column per schema field. */}
       {request === undefined || outputs ? null : (
-        <section className="flex flex-col gap-2">
-          <Typography.Heading level={2}>Records</Typography.Heading>
+        <Section title="Records">
           <JobResults jobId={job.id} />
-        </section>
+        </Section>
       )}
       <ActivityFeed activity={activity} />
       <WebhookDeliveries jobId={job.id} webhookUrl={job.webhook_url} />

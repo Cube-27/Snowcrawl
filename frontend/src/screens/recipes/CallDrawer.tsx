@@ -1,14 +1,14 @@
-import { Button, Drawer, Table, Typography } from "@heroui/react";
+import { Button, Table, Typography } from "@heroui/react";
 import { ArrowDownToLine } from "@gravity-ui/icons";
 import type { CallDetail, HeaderLines } from "../../api/captures";
 import { useCall, useHarExport } from "../../api/hooks/recipes";
 import { problemOf } from "../../api/hooks/query";
 import { saveJson } from "../../app/download";
-import { JsonView } from "../../components/JsonView";
-import { LoadingView } from "../../components/LoadingView";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { Section } from "../../components/Section";
+import { JsonView } from "../../components/molecules/JsonView";
+import { ProblemAlert, QueryView } from "../../components/molecules/ViewStates";
+import { Section } from "../../components/templates/Screen";
 import { sizeText } from "./endpoints";
+import { SideDrawer } from "../../components/molecules/SideDrawer";
 
 /** Header field lines in the order sent (RFC 9110 §5.3: a repeated name is not merged); "None" without any. */
 function HeaderTable({ label, headers }: Readonly<{ label: string; headers: HeaderLines | null }>) {
@@ -108,7 +108,7 @@ function HarDownload({ captureId }: Readonly<{ captureId: string }>) {
           Download HAR
         </Button>
       </div>
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
     </div>
   );
 }
@@ -122,39 +122,28 @@ export function CallDrawer({
   onClose,
 }: Readonly<{ captureId: string; index: number; sample: number; onClose: () => void }>) {
   const call = useCall(captureId, index);
-  const problem = problemOf(call.error);
   return (
-    <Drawer
-      isOpen
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
-      }}
+    <SideDrawer
+      title={
+        <>
+          Call {index} of sample {sample}
+        </>
+      }
+      header={
+        <>
+          {call.data === undefined ? null : (
+            <Typography.Paragraph size="sm" color="muted" className="break-all">
+              {call.data.method ?? "GET"} {call.data.url}
+            </Typography.Paragraph>
+          )}
+        </>
+      }
+      onClose={onClose}
     >
-      <Drawer.Backdrop>
-        <Drawer.Content placement="right">
-          <Drawer.Dialog>
-            <Drawer.CloseTrigger />
-            <Drawer.Header>
-              <Drawer.Heading>
-                Call {index} of sample {sample}
-              </Drawer.Heading>
-              {call.data === undefined ? null : (
-                <Typography.Paragraph size="sm" color="muted" className="break-all">
-                  {call.data.method ?? "GET"} {call.data.url}
-                </Typography.Paragraph>
-              )}
-            </Drawer.Header>
-            <Drawer.Body className="flex flex-col gap-6">
-              <HarDownload captureId={captureId} />
-              {call.isPending ? <LoadingView label="Loading the call" /> : null}
-              {problem === null ? null : <ProblemAlert problem={problem} />}
-              {call.data === undefined ? null : (
-                <CallBody call={call.data} filename={`call-${captureId}-${String(index)}.json`} />
-              )}
-            </Drawer.Body>
-          </Drawer.Dialog>
-        </Drawer.Content>
-      </Drawer.Backdrop>
-    </Drawer>
+      <HarDownload captureId={captureId} />
+      <QueryView query={call} loading="Loading the call">
+        {(data) => <CallBody call={data} filename={`call-${captureId}-${String(index)}.json`} />}
+      </QueryView>
+    </SideDrawer>
   );
 }

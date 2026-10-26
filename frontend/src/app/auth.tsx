@@ -2,7 +2,7 @@ import { Typography } from "@heroui/react";
 import { createContext, use, useMemo, useState, type ReactNode } from "react";
 import { Outlet } from "react-router";
 import { sameOriginClient, type ApiClient } from "../api/client";
-import { EmptyView } from "../components/EmptyView";
+import { EmptyView } from "../components/molecules/ViewStates";
 
 interface AccessContextValue {
   client: ApiClient;

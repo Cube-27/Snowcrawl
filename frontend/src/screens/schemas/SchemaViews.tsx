@@ -1,6 +1,6 @@
 import { Label, Table, TextArea, TextField } from "@heroui/react";
 import type { SchemaDef } from "../../api/schemas";
-import { FIELD_TYPES } from "../../components/schemaDocument";
+import { FIELD_TYPES } from "../../components/lib/schemaDocument";
 
 /** A schema's top-level fields, one row each. Type parameters and nested fields are in the JSON tab. */
 export function FieldsTable({ schema }: Readonly<{ schema: SchemaDef }>) {

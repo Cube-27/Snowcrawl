@@ -3,7 +3,7 @@ import { useState } from "react";
 import { problemOf } from "../../api/hooks/query";
 import { useUpdateSchedule } from "../../api/hooks/schedules";
 import type { Schedule } from "../../api/schedules";
-import { ProblemAlert } from "../../components/ProblemAlert";
+import { ProblemAlert } from "../../components/molecules/ViewStates";
 import { draftErrors, draftOf, parseRequest, scheduleChange, type ScheduleDraft } from "./cadence";
 import { DraftFields } from "./DraftFields";
 
@@ -36,7 +36,7 @@ function EditForm({ schedule, onSaved }: Readonly<{ schedule: Schedule; onSaved:
           <TextArea rows={10} spellCheck={false} className="font-mono" />
           <FieldError>{errors["request"]}</FieldError>
         </TextField>
-        {problem === null ? null : <ProblemAlert problem={problem} />}
+        <ProblemAlert problem={problem} />
       </Modal.Body>
       <Modal.Footer>
         <Button isPending={update.isPending} onPress={save}>

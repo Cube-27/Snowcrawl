@@ -14,10 +14,10 @@ import { configVersionLabel, type ConfigDetail } from "../../api/configs";
 import { useCorrectConfig } from "../../api/hooks/configs";
 import { problemOf } from "../../api/hooks/query";
 import type { FieldProblem } from "../../api/problem";
-import { FieldConfigStatusLabel } from "../../components/ConfigStatusLabel";
-import { FormActions } from "../../components/FormActions";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { StepsEditor } from "../../components/StepsEditor";
+import { FieldConfigStatusLabel } from "../../components/molecules/StatusLabels";
+import { FormActions } from "../../components/molecules/FormActions";
+import { ProblemAlert } from "../../components/molecules/ViewStates";
+import { StepsEditor } from "../../components/organisms/StepsEditor";
 import { correctionOf, fieldDrafts, type FieldDraft } from "./correction";
 import { configPath } from "./paths";
 import { ValidationReportView } from "./ValidationReportView";
@@ -119,7 +119,7 @@ export function CorrectionForm({
           });
         }}
       >
-        {problem === null ? null : <ProblemAlert problem={problem} />}
+        <ProblemAlert problem={problem} />
         {drafts.map((draft, index) => (
           <FieldCorrection
             key={draft.name}

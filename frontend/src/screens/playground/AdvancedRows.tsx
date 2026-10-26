@@ -1,8 +1,8 @@
-import { Button, Description, Input, Label, TextField } from "@heroui/react";
+import { Button, Description, Input, Label, TextField, Typography } from "@heroui/react";
 import { ArrowDown, ArrowUp, Plus, TrashBin } from "@gravity-ui/icons";
 import { useId } from "react";
 import type { CacheMode } from "../../api/scrape";
-import { isOptionOf, OptionSelect } from "../../components/OptionSelect";
+import { isOptionOf, OptionSelect } from "../../components/molecules/OptionSelect";
 import {
   ACTION_MODES,
   MAX_ACTIONS,
@@ -66,9 +66,9 @@ export function AdvancedRows({
       aria-labelledby={headingId}
       className="col-span-full flex flex-col gap-4 border-t border-border pt-4"
     >
-      <h3 id={headingId} className="text-sm font-medium">
+      <Typography.Heading level={3} id={headingId}>
         Advanced
-      </h3>
+      </Typography.Heading>
       <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-4">
         <TextAreaRow
           label="Headers"

@@ -5,10 +5,9 @@ import { problemOf } from "../../api/hooks/query";
 import { useCreateSchema, useSchema, useUpdateSchema } from "../../api/hooks/schemas";
 import type { Problem } from "../../api/problem";
 import type { SchemaDef } from "../../api/schemas";
-import { LoadingView } from "../../components/LoadingView";
-import { PageHeader } from "../../components/PageHeader";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { SchemaForm } from "../../components/SchemaForm";
+import { LoadingView, ProblemAlert } from "../../components/molecules/ViewStates";
+import { Screen } from "../../components/templates/Screen";
+import { SchemaForm } from "../../components/organisms/SchemaForm";
 import {
   contentOf,
   EMPTY_FORM,
@@ -16,7 +15,7 @@ import {
   newSchemaOf,
   type FormMode,
   type SchemaFormState,
-} from "../../components/schemaDocument";
+} from "../../components/lib/schemaDocument";
 import { schemaPath } from "./paths";
 
 /** Opens the schema the server stored, with a confirmation; `note` follows the name. */
@@ -52,8 +51,7 @@ function SchemaEditor({
   const navigate = useNavigate();
   const [form, setForm] = useState(() => (initial === null ? EMPTY_FORM : formOf(initial)));
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader title={title} description={description} />
+    <Screen title={title} description={description}>
       <SchemaForm
         form={form}
         mode={mode}
@@ -63,7 +61,7 @@ function SchemaEditor({
         onSubmit={onSave}
         onCancel={() => void navigate(cancelTo)}
       />
-    </section>
+    </Screen>
   );
 }
 

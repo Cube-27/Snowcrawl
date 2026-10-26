@@ -8,7 +8,7 @@ import {
   type AdvancedFetch,
 } from "../advanced";
 import type { SchemaPageKind } from "../../../api/schemas";
-import { isNewSchema, parseJson } from "../../../components/schemaDocument";
+import { isNewSchema, parseJson } from "../../../components/lib/schemaDocument";
 import {
   llmBudget,
   NO_ERRORS,

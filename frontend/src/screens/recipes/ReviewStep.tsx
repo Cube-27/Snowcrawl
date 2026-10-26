@@ -1,8 +1,8 @@
 import { Chip, Typography } from "@heroui/react";
 import type { FieldTypes } from "../../api/field";
 import type { CustomRecipe, Proposal, RecipeTestResult } from "../../api/recipes";
-import { FieldValue } from "../../components/FieldValue";
-import { Section } from "../../components/Section";
+import { FieldValue } from "../../components/molecules/FieldValue";
+import { Section } from "../../components/templates/Screen";
 import { CallEditor, type EditHandlers } from "./CallEditor";
 import { fieldSources, isEdited, sourceText } from "./draft";
 import { EditedMark, Lines } from "./Fields";
@@ -116,7 +116,7 @@ function FieldSources({
               ) : null}
             </div>
             {found.map((source) => (
-              <span key={sourceText(source)} className="font-mono text-sm break-all">
+              <span key={sourceText(source)} className="text-code break-all">
                 {sourceText(source)}
               </span>
             ))}

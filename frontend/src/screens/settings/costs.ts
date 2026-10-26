@@ -1,6 +1,6 @@
 import { today } from "@internationalized/date";
 import type { LlmUsage } from "../../api/usage";
-import { formatUsd } from "../../components/usd";
+import { formatUsd } from "../../components/lib/usd";
 
 /** The ranges the cost history offers, in days through today (UTC). The API takes up to a year. */
 export const RANGES = {

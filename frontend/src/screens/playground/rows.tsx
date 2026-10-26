@@ -8,7 +8,7 @@ import type {
   ScrapeFormat,
   ScreenshotArea,
 } from "../../api/scrape";
-import { METHOD_HINTS, PAGE_KINDS, WEBHOOK_EVENTS } from "../../components/requestOptions";
+import { METHOD_HINTS, PAGE_KINDS, WEBHOOK_EVENTS } from "../../components/lib/requestOptions";
 import type { FormatSettings } from "./formatOptions";
 import {
   CheckboxesRow,

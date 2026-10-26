@@ -43,7 +43,7 @@ describe("extract playground", () => {
 
     await extract();
 
-    await screen.findByRole("grid", { name: "Pages" });
+    await screen.findByText("No records yet");
     expect(posted(calls)).toEqual({
       urls: ["https://shop.test/items/1", "https://shop.test/items/*"],
       schema: { id: SCHEMA_ID },

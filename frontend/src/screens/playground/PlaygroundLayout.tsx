@@ -1,7 +1,7 @@
 import { Button, Form } from "@heroui/react";
 import { Pencil } from "@gravity-ui/icons";
 import type { ReactNode } from "react";
-import { PageHeader } from "../../components/PageHeader";
+import { Screen } from "../../components/templates/Screen";
 import { CommandBar } from "./CommandBar";
 import { GetCode } from "./getCode/GetCode";
 import type { ModeId } from "./modes";
@@ -48,8 +48,7 @@ export function PlaygroundLayout({
 }>) {
   const readOnly = onEdit !== null;
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader title="Playground" />
+    <Screen title="Playground">
       <ModeSwitch current={mode} />
       <ReadOnlyContext value={readOnly}>
         <Form
@@ -90,6 +89,6 @@ export function PlaygroundLayout({
         </Form>
       </ReadOnlyContext>
       {children}
-    </section>
+    </Screen>
   );
 }

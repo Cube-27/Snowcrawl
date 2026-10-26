@@ -6,10 +6,10 @@ import type { FieldTypes } from "../../api/field";
 import { useCaptureSample } from "../../api/hooks/recipes";
 import { problemOf } from "../../api/hooks/query";
 import type { SchemaDef } from "../../api/schemas";
-import { Collapsible } from "../../components/Collapsible";
-import { ExtractedRecords } from "../../components/ExtractedRecords";
-import { FormActions } from "../../components/FormActions";
-import { ProblemAlert } from "../../components/ProblemAlert";
+import { Collapsible } from "../../components/molecules/Collapsible";
+import { ExtractedRecords } from "../../components/organisms/ExtractedRecords";
+import { FormActions } from "../../components/molecules/FormActions";
+import { ProblemAlert } from "../../components/molecules/ViewStates";
 import { pairs, toAction, waitFor, type ActionRow } from "../playground/advanced";
 import { ActionRows } from "../playground/AdvancedRows";
 import { TextAreaRow, TextRow } from "../playground/OptionsPanel";
@@ -149,7 +149,7 @@ export function SampleForm({
         </Button>
       </FormActions>
       {/* Under the button: a refusal moves nothing above it. */}
-      {problem === null ? null : <ProblemAlert problem={problem} />}
+      <ProblemAlert problem={problem} />
       {kept?.capture_id === null ? <NotStored result={kept} /> : null}
     </Form>
   );

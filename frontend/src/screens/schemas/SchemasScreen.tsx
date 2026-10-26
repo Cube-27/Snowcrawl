@@ -1,13 +1,10 @@
 import { Button, Table } from "@heroui/react";
 import { useNavigate } from "react-router";
-import { problemOf } from "../../api/hooks/query";
 import { useSchemas } from "../../api/hooks/schemas";
 import type { SchemaDef } from "../../api/schemas";
-import { EmptyView } from "../../components/EmptyView";
-import { LoadingView } from "../../components/LoadingView";
-import { PageHeader } from "../../components/PageHeader";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { SchemaStatusLabel } from "../../components/SchemaStatusLabel";
+import { EmptyView, QueryView } from "../../components/molecules/ViewStates";
+import { Screen } from "../../components/templates/Screen";
+import { SchemaStatusLabel } from "../../components/molecules/StatusLabels";
 import { schemaPath } from "./paths";
 
 function NewSchemaButton() {
@@ -54,14 +51,11 @@ function SchemaTable({ schemas }: Readonly<{ schemas: readonly SchemaDef[] }>) {
 /** Every schema, one row per name, as the API lists them. */
 export function SchemasScreen() {
   const query = useSchemas();
-  const problem = problemOf(query.error);
-
   return (
-    <section className="flex flex-col gap-stack">
-      <PageHeader title="Schemas" actions={<NewSchemaButton />} />
-      {query.isPending ? <LoadingView label="Loading schemas" /> : null}
-      {problem === null ? null : <ProblemAlert problem={problem} />}
-      {query.isSuccess ? <SchemaTable schemas={query.data} /> : null}
-    </section>
+    <Screen title="Schemas" actions={<NewSchemaButton />}>
+      <QueryView query={query} loading="Loading schemas">
+        {(schemas) => <SchemaTable schemas={schemas} />}
+      </QueryView>
+    </Screen>
   );
 }

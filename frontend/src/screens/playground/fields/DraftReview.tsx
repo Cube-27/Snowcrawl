@@ -1,15 +1,14 @@
-import { Drawer, Typography } from "@heroui/react";
+import { Typography } from "@heroui/react";
 import { useState } from "react";
-import { problemOf } from "../../../api/hooks/query";
 import { useFieldsDraft } from "../../../api/hooks/schemas";
 import type { Problem } from "../../../api/problem";
 import type { PageKind } from "../../../api/scrape";
 import type { SchemaDef } from "../../../api/schemas";
-import { LoadingView } from "../../../components/LoadingView";
-import { ProblemAlert } from "../../../components/ProblemAlert";
-import { SchemaForm } from "../../../components/SchemaForm";
-import { formOf } from "../../../components/schemaDocument";
+import { QueryView } from "../../../components/molecules/ViewStates";
+import { SchemaForm } from "../../../components/organisms/SchemaForm";
+import { formOf } from "../../../components/lib/schemaDocument";
 import { reviewOf, type ReviewedSchema } from "./review";
+import { SideDrawer } from "../../../components/molecules/SideDrawer";
 
 /** The drafted schema in the schema editor; Run sends what `reviewOf` makes of it. */
 function ReviewForm({
@@ -60,34 +59,24 @@ export function DraftReview({
   onClose: () => void;
 }>) {
   const draft = useFieldsDraft(fields, pageKind);
-  const problem = problemOf(draft.error);
-  let body = <LoadingView label="Drafting the schema" />;
-  if (problem !== null) body = <ProblemAlert problem={problem} />;
-  else if (draft.data !== undefined)
-    body = <ReviewForm draft={draft.data} fields={fields} onRun={onRun} onCancel={onClose} />;
+  const body = (
+    <QueryView query={draft} loading="Drafting the schema">
+      {(data) => <ReviewForm draft={data} fields={fields} onRun={onRun} onCancel={onClose} />}
+    </QueryView>
+  );
   return (
-    <Drawer
-      isOpen
-      onOpenChange={(isOpen) => {
-        if (!isOpen) onClose();
-      }}
+    <SideDrawer
+      title="Review the drafted schema"
+      header={
+        <Typography.Paragraph size="sm" color="muted">
+          Drafted from {fields.length} field {fields.length === 1 ? "name" : "names"} for {pageKind}{" "}
+          pages. Run it as drafted, or edit it first: an edited schema runs inline under a name of
+          its own.
+        </Typography.Paragraph>
+      }
+      onClose={onClose}
     >
-      <Drawer.Backdrop>
-        <Drawer.Content placement="right">
-          <Drawer.Dialog>
-            <Drawer.CloseTrigger />
-            <Drawer.Header>
-              <Drawer.Heading>Review the drafted schema</Drawer.Heading>
-              <Typography.Paragraph size="sm" color="muted">
-                Drafted from {fields.length} field {fields.length === 1 ? "name" : "names"} for{" "}
-                {pageKind} pages. Run it as drafted, or edit it first: an edited schema runs inline
-                under a name of its own.
-              </Typography.Paragraph>
-            </Drawer.Header>
-            <Drawer.Body>{body}</Drawer.Body>
-          </Drawer.Dialog>
-        </Drawer.Content>
-      </Drawer.Backdrop>
-    </Drawer>
+      {body}
+    </SideDrawer>
   );
 }

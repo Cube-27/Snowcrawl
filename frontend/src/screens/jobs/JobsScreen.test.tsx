@@ -170,11 +170,11 @@ describe("Jobs table", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Next" }));
     expect(await within(await findJobsGrid()).findByText("Map")).toBeInTheDocument();
-    expect(screen.getByText("Rows 51–51 of 51")).toBeInTheDocument();
+    expect(screen.getByText("Rows 26–26 of 51")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next" })).toBeDisabled();
 
     await userEvent.click(screen.getByRole("button", { name: "Previous" }));
     expect(await screen.findByText("Rows 1–1 of 51")).toBeInTheDocument();
-    expect(listQueries(calls)).toEqual(["limit=50", "cursor=c2&limit=50", "limit=50"]);
+    expect(listQueries(calls)).toEqual(["limit=25", "cursor=c2&limit=25", "limit=25"]);
   });
 });

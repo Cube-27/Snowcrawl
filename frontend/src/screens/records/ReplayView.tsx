@@ -2,10 +2,10 @@ import { Table, Typography } from "@heroui/react";
 import type { FieldTypes, FieldTypeSpec } from "../../api/field";
 import type { ExtractedRecord, ReplayResult } from "../../api/records";
 import type { RecordField } from "../../api/scrape";
-import { EmptyView } from "../../components/EmptyView";
-import { FieldValue } from "../../components/FieldValue";
-import { ExtractedRecords } from "../../components/ExtractedRecords";
-import { StatusLabel } from "../../components/StatusLabel";
+import { EmptyView } from "../../components/molecules/ViewStates";
+import { FieldValue } from "../../components/molecules/FieldValue";
+import { ExtractedRecords } from "../../components/organisms/ExtractedRecords";
+import { StatusLabel } from "../../components/atoms/StatusLabel";
 import { diffFields } from "./diff";
 
 function SideValue({

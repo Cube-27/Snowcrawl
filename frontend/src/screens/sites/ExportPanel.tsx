@@ -4,10 +4,10 @@ import type { ConfigDetail, ExportFormat, ReleaseField, ReleaseReport } from "..
 import { useExportConfig } from "../../api/hooks/configs";
 import { problemOf } from "../../api/hooks/query";
 import { saveJson } from "../../app/download";
-import { Choices } from "../../components/Choices";
-import { FormActions } from "../../components/FormActions";
-import { ProblemAlert } from "../../components/ProblemAlert";
-import { StatusLabel } from "../../components/StatusLabel";
+import { Choices } from "../../components/molecules/Choices";
+import { FormActions } from "../../components/molecules/FormActions";
+import { ProblemAlert } from "../../components/molecules/ViewStates";
+import { StatusLabel } from "../../components/atoms/StatusLabel";
 import { ofPages, withNextPage } from "./report";
 
 const FORMATS: readonly (readonly [ExportFormat, string])[] = [
@@ -82,7 +82,7 @@ export function ExportPanel({ config }: Readonly<{ config: ConfigDetail }>) {
           });
         }}
       >
-        {problem === null ? null : <ProblemAlert problem={problem} />}
+        <ProblemAlert problem={problem} />
         <Choices label="Format" options={FORMATS} value={format} onChange={setFormat} />
         <FormActions>
           <Button type="submit" isPending={exported.isPending}>

@@ -1,5 +1,5 @@
 import { FieldError, Input, Label, NumberField, TextField } from "@heroui/react";
-import { Choices } from "../../components/Choices";
+import { Choices } from "../../components/molecules/Choices";
 import { MIN_MINUTES, type ScheduleDraft } from "./cadence";
 
 const EVERY = [

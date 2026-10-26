@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import type { SchemaDef } from "../../../api/schemas";
-import { formOf } from "../../../components/schemaDocument";
+import { formOf } from "../../../components/lib/schemaDocument";
 import { reviewOf } from "./review";
 import { fieldSpec } from "../../../test/schemas";
 

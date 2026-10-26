@@ -3,7 +3,7 @@ import { ArrowDownToLine } from "@gravity-ui/icons";
 import { useExportJob, useExportJobJson } from "../../../api/hooks/jobs";
 import { problemOf } from "../../../api/hooks/query";
 import { saveExportPages, saveJson } from "../../../app/download";
-import { MoreExports } from "../../../components/MoreExports";
+import { MoreExports } from "../../../components/molecules/MoreExports";
 
 // RFC 4180 §3: CSV's media type.
 const CSV = { extension: "csv", type: "text/csv" };
@@ -30,7 +30,7 @@ export function RunExports({
   const csv = useExportJob(jobId);
   const busy = json.isPending || csv.isPending;
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <Button
         variant="secondary"
         isPending={json.isPending}

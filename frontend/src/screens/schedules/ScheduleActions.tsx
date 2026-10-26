@@ -2,7 +2,7 @@ import { Button } from "@heroui/react";
 import { useNavigate } from "react-router";
 import { useDeleteSchedule, useRunSchedule, useSetSchedulePaused } from "../../api/hooks/schedules";
 import type { Schedule } from "../../api/schedules";
-import { ConfirmDialog } from "../../components/ConfirmDialog";
+import { ConfirmDialog } from "../../components/molecules/ConfirmDialog";
 import { runPath } from "../playground/modes";
 import { EditSchedule } from "./EditSchedule";
 

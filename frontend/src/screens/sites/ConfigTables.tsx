@@ -1,11 +1,11 @@
 import { Table, Typography } from "@heroui/react";
 import { useSchemas } from "../../api/hooks/schemas";
 import type { ConfigDetail, ConfigSummary, FieldConfigStatus } from "../../api/configs";
-import { confidenceText } from "../../components/ConfidenceCell";
-import { ConfigStatusLabel, FieldConfigStatusLabel } from "../../components/ConfigStatusLabel";
-import { keyedTexts } from "../../components/keys";
-import { LocatorText } from "../../components/LocatorText";
-import { stepText } from "../../components/steps";
+import { confidenceText } from "../../components/molecules/ConfidenceCell";
+import { ConfigStatusLabel, FieldConfigStatusLabel } from "../../components/molecules/StatusLabels";
+import { keyedTexts } from "../../components/lib/keys";
+import { LocatorText } from "../../components/atoms/LocatorText";
+import { stepText } from "../../components/lib/steps";
 import { configuredFields } from "./correction";
 import { configPath } from "./paths";
 
@@ -52,7 +52,7 @@ export function ConfigVersionsTable({
           <Table.Header>
             <Table.Column isRowHeader>Schema</Table.Column>
             <Table.Column>Page kind</Table.Column>
-            <Table.Column>Version</Table.Column>
+            <Table.Column className="numeric">Version</Table.Column>
             <Table.Column>Status</Table.Column>
             <Table.Column>Origin</Table.Column>
             <Table.Column>Fields</Table.Column>
@@ -62,7 +62,7 @@ export function ConfigVersionsTable({
               <Table.Row id={config.id} href={configPath(config.id)}>
                 <Table.Cell>{schemaLabel(config)}</Table.Cell>
                 <Table.Cell>{config.page_kind}</Table.Cell>
-                <Table.Cell>{config.version}</Table.Cell>
+                <Table.Cell className="numeric">{config.version}</Table.Cell>
                 <Table.Cell>
                   <ConfigStatusLabel status={config.status} />
                 </Table.Cell>
@@ -105,8 +105,8 @@ export function ConfigFieldsTable({ config }: Readonly<{ config: ConfigDetail }>
               <Table.Column isRowHeader>Field</Table.Column>
               <Table.Column>Status</Table.Column>
               <Table.Column>Steps</Table.Column>
-              <Table.Column>Yield</Table.Column>
-              <Table.Column>Validity</Table.Column>
+              <Table.Column className="numeric">Yield</Table.Column>
+              <Table.Column className="numeric">Validity</Table.Column>
             </Table.Header>
             <Table.Body items={rows}>
               {({ id, steps }) => (
@@ -127,8 +127,8 @@ export function ConfigFieldsTable({ config }: Readonly<{ config: ConfigDetail }>
                       )}
                     </ol>
                   </Table.Cell>
-                  <Table.Cell>{confidenceText(steps.yield)}</Table.Cell>
-                  <Table.Cell>{confidenceText(steps.validity)}</Table.Cell>
+                  <Table.Cell className="numeric">{confidenceText(steps.yield)}</Table.Cell>
+                  <Table.Cell className="numeric">{confidenceText(steps.validity)}</Table.Cell>
                 </Table.Row>
               )}
             </Table.Body>
