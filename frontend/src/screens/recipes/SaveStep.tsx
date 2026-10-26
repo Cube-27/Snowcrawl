@@ -95,7 +95,7 @@ function Conflicting({ host, problem }: Readonly<{ host: string; problem: Proble
 }
 
 /** Step 8: who sends the calls, the least interval between them, and saving: a new recipe, or the next version of
- * the one edited (`replaces`). When the last test (`tested`) shows the recipe filling fewer fields than normal
+ * the one edited (`replaces`). When the last test of this very recipe (`tested`) shows the recipe filling fewer fields than normal
  * extraction, saving needs the engineer's confirmation. Saving opens the saved recipe; a refusal says why, naming the
  * recipe whose patterns have the same shape. */
 export function SaveStep({
