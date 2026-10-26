@@ -20,14 +20,14 @@ function endpoint(bodyShape: string[] | null): Endpoint {
 describe("endpointText", () => {
   it("tells apart groups of one URL by their body's shape", () => {
     const titles = [
-      endpoint(["$.operationName", "$.variables.id"]),
-      endpoint(["$.operationName", "$.variables.slug"]),
+      endpoint(["$.operationName", "$.variables['id']"]),
+      endpoint(["$.operationName", "$.variables['slug']"]),
       endpoint(null),
     ].map(endpointText);
 
     expect(new Set(titles).size).toBe(3);
     expect(titles[0]).toBe(
-      "POST https://api.example.test/{1 segment} body {$.operationName, $.variables.id}",
+      "POST https://api.example.test/{1 segment} body {$.operationName, $.variables['id']}",
     );
   });
 });

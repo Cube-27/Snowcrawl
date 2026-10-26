@@ -21,7 +21,7 @@ export function endpointRef(endpoint: Endpoint): EndpointRef {
 }
 
 /** The request shape people read: `GET https://example.test/{3 segments}?page&size`, and the body's shape after it
- * when the calls send one (`POST https://example.test/{1 segment} body {$.operationName, $.variables.id}`), so groups
+ * when the calls send one (`POST https://example.test/{1 segment} body {$.operationName, $.variables['id']}`), so groups
  * of one URL that differ by their body read apart, as the server tells them apart. */
 export function endpointText(endpoint: Endpoint): string {
   const path = endpoint.has_path ? `/{${segmentsText(endpoint.segments)}}` : "/";

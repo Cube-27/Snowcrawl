@@ -36,7 +36,7 @@ from snowcrawl.config_ir.api_recipe.model import ApiRecipe, Pagination, with_pag
 from snowcrawl.config_ir.custom_recipe import CustomRecipe, InvalidRecipe
 from snowcrawl.config_ir.url_pattern import generalize
 from snowcrawl.config_ir.validation import HeldOutPage
-from snowcrawl.core.validation import field_error
+from snowcrawl.core.validation import error_path, field_error
 from snowcrawl.db.models import CaptureId, SchemaId
 from snowcrawl.services.recipe_calls import INDEX as _INDEX
 from snowcrawl.services.recipe_calls import Endpoint, SampleIds, Samples, listed, load_samples
@@ -111,7 +111,7 @@ def drafted(samples: Samples, main: CallRef | EndpointRef) -> Proposal:
         fields = _map(endpoint)
     if not fields:
         reason = "the main call's answers hold no value the samples published, so no field has a path"
-        raise InvalidRecipe([("main.map", reason)])
+        raise InvalidRecipe([(error_path(("main", "map")), reason)])
     answer = _answer(samples, calls)
     request, unbound, withheld = _request(requests, pagination, answer)
     recipe = _recipe(samples, {**request, "answer": answer, "map": fields})
