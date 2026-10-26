@@ -134,7 +134,9 @@ async def test_a_transient_failure_requeues_with_exponential_backoff(conn: Async
         # Make the task due again without waiting for the backoff.
         await conn.execute(update(UrlTask).values(next_attempt_at=func.now()))
 
-    assert delays == [timedelta(seconds=30), timedelta(seconds=60)]
+    # Full jitter (`core.retry.backoff_delay`): at most the doubled backoff.
+    assert timedelta(0) <= delays[0] <= timedelta(seconds=30)
+    assert timedelta(0) <= delays[1] <= timedelta(seconds=60)
     assert await _job_state(conn, job_id) == ("running", [])
 
 
@@ -174,7 +176,7 @@ async def test_an_expired_lease_is_requeued_with_backoff_and_the_old_claim_is_fe
         1,
         "lease expired",
     )
-    assert row.next_attempt_at == await _now(conn) + timedelta(seconds=30)
+    assert timedelta(0) <= row.next_attempt_at - await _now(conn) <= timedelta(seconds=30)
     assert (await _row(conn, live_id)).status == "claimed"
     with pytest.raises(LeaseLost):
         await complete_task(conn, stale, "extracted")

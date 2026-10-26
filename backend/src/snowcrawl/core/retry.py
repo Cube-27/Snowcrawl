@@ -1,18 +1,23 @@
 """What the retry rules of different layers share: the first backoff and the statuses that say "try again"."""
 
+import secrets
 from datetime import timedelta
 from typing import Final
 
 # The first backoff of a host that asked for fewer requests, and the queue's before it retries a task
 # that failed transiently; each retry doubles it.
 FIRST_BACKOFF: Final = timedelta(seconds=30)
+# The OS's source of randomness: a jitter needs no reproducible sequence, and none seeded by the process.
+_RANDOM: Final = secrets.SystemRandom()
 
 
 def backoff_delay(tries: int) -> timedelta:
-    """The backoff after try `tries` (1 for the first) failed: `FIRST_BACKOFF`, doubled per try. The queue retries a
-    task after it, and the polite fetch pauses a host by it (`acquire.politeness.backoff`)."""
-    delay: timedelta = FIRST_BACKOFF * 2 ** (tries - 1)
-    return delay
+    """The backoff after try `tries` (1 for the first) failed, with full jitter: uniformly random between none and
+    `FIRST_BACKOFF` doubled per try (AWS Architecture Blog, "Exponential Backoff And Jitter", 2015), so the clients
+    that failed together do not retry together. The queue retries a task after it, and the polite fetch pauses a host
+    by it (`acquire.politeness.backoff`)."""
+    ceiling: timedelta = FIRST_BACKOFF * 2 ** (tries - 1)
+    return ceiling * _RANDOM.random()
 
 
 def is_transient(status: int) -> bool:
