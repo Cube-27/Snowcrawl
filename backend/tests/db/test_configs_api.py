@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from snowcrawl.acquire.persist import store_capture
 from snowcrawl.acquire.types import FetchResult
+from snowcrawl.config_ir.active import active_config
 from snowcrawl.config_ir.custom_recipe import CustomRecipe
 from snowcrawl.db.models import (
     CaptureId,
@@ -396,9 +397,13 @@ async def test_a_recipe_of_a_shape_another_active_recipe_serves_is_refused(
     other_host = await client.post(
         f"/v1/sites/{world.host}/configs", json=_recipe(world, "item", patterns=["other.example.test/item/{slug}"])
     )
+    tokened = _recipe(world, "sale")
+    tokened["main"]["headers"] = [{"name": "x-api-key", "value": "a" * 24}]
+    token = await client.post(f"/v1/sites/{world.host}/configs", json=tokened)
 
     assert (taken.status_code, taken.json()["type"]) == (409, "conflict")
     assert (other_host.status_code, other_host.json()["type"]) == (422, "validation")
+    assert (token.status_code, token.json()["type"]) == (422, "validation")
     assert await world.configs() == [(1, "active", "operator")]
 
 
@@ -417,6 +422,27 @@ async def test_an_edit_replaces_the_recipe_and_only_its_active_version_is_edited
     assert (edited.json()["version"], edited.json()["ir"]["rate_ms"]) == (3, 500)
     assert [r.status_code for r in (stale, not_a_recipe, corrected)] == [409, 409, 409]
     assert await world.configs() == [(1, "active", "induced"), (2, "suspended", "operator"), (3, "active", "operator")]
+
+
+async def test_a_page_its_recipe_did_not_fetch_is_the_learned_configs(client: httpx.AsyncClient, world: World) -> None:
+    learned = await world.active_config(H2)
+    recipe = (await client.post(f"/v1/sites/{world.host}/configs", json=_recipe(world, "item"))).json()["id"]
+    url = f"{world.origin}/item/blue"
+    page = world.fetch_result(url, 200, _page("Blue"), (("Content-Type", "text/html"),))
+    answer = world.fetch_result(url, 200, b'{"data": {}}', method="api", final_url=f"{world.origin}/api/items/blue")
+
+    async with world.engine.connect() as conn:
+        serving = await active_config(conn, world.site_id, world.schema, world.data.vocabulary, url)
+
+    assert serving is not None
+    assert str(serving.id) == recipe
+    # The recipe's answer is the recipe's; the page fetched otherwise (for its formats) is extracted, and labelled, by
+    # the learned config.
+    on_answer, on_page = (serving.for_capture(r.bundle.manifest, None) for r in (answer, page))
+    assert on_answer is not None
+    assert str(on_answer.id) == recipe
+    assert on_page is not None
+    assert (on_page.id, on_page.custom) == (learned, False)
 
 
 # Learning.

@@ -40,6 +40,9 @@ class ActiveConfig:
     drifts: bool = True
     # A custom recipe's URL patterns (`config_ir.url_pattern`); none for a learned config.
     patterns: tuple[str, ...] = ()
+    # A custom recipe's: the learned config of its site, schema and page kind, which extracts a page the recipe did
+    # not fetch; None for a learned config, or when the scope has none.
+    rest: "ActiveConfig | None" = None
 
     @property
     def custom(self) -> bool:
@@ -50,10 +53,14 @@ class ActiveConfig:
         capture no active adapter reads holds the JSON an API recipe fetched: the config's recipe executor
         reads it, and as the page steps did not run, the page joins no drift window. A config
         without a recipe does not run on it: an earlier config's recipe fetched it (a replay), and page steps read a
-        page, not JSON."""
+        page, not JSON. Any other capture is a page: a custom recipe serves only what its calls fetched, so a page
+        fetched otherwise (for its formats, or after the recipe failed) is its `rest`'s, and the record names what
+        ran."""
         if manifest.method != "api" or (
             adapters is not None and adapters.reader(manifest.url, manifest.final_url) is not None
         ):
+            if self.custom:
+                return None if self.rest is None else self.rest.for_capture(manifest, adapters)
             return self
         return None if self.api is None else replace(self, executor=self.api, api=None, drifts=False)
 
