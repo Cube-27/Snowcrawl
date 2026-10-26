@@ -2,6 +2,7 @@ import { Button, Link, Table } from "@heroui/react";
 import { useNavigate, useParams } from "react-router";
 import type { ConfigSummary } from "../../api/configs";
 import { useSiteConfigs } from "../../api/hooks/configs";
+import { ApiProblem } from "../../api/hooks/query";
 import { EmptyView, QueryView } from "../../components/molecules/ViewStates";
 import { Screen } from "../../components/templates/Screen";
 import { useSchemaLabel } from "../sites/ConfigTables";
@@ -11,6 +12,11 @@ import { newRecipePath, recipePath } from "./paths";
 /** The recipes that serve: a custom recipe's older versions are suspended and stay on the site's config list. */
 function servingRecipes(configs: readonly ConfigSummary[]): ConfigSummary[] {
   return configs.filter((config) => config.custom && config.status === "active");
+}
+
+/** RFC 9110 §15.5.5: the site has no configs yet, so it has no recipes: an empty list, not a failure. */
+function isUnknownSite(error: Error | null): boolean {
+  return error instanceof ApiProblem && error.problem.status === 404;
 }
 
 function NewRecipeButton({ host }: Readonly<{ host: string }>) {
@@ -75,6 +81,12 @@ export function RecipesScreen() {
   const { host = "" } = useParams();
   const configs = useSiteConfigs(host);
   const schemaLabel = useSchemaLabel();
+  const empty = (
+    <EmptyView title="No recipes yet">
+      A recipe serves this site's pages from the calls they make, without a browser. Build one from
+      two to five sample pages.
+    </EmptyView>
+  );
   return (
     <Screen
       title={`Recipes of ${host}`}
@@ -86,15 +98,10 @@ export function RecipesScreen() {
       }
     >
       <QueryView
-        query={configs}
+        query={isUnknownSite(configs.error) ? { ...configs, error: null, data: [] } : configs}
         loading="Loading the site's recipes"
         isEmpty={(data) => servingRecipes(data).length === 0}
-        empty={
-          <EmptyView title="No recipes yet">
-            A recipe serves this site's pages from the calls they make, without a browser. Build one
-            from two to five sample pages.
-          </EmptyView>
-        }
+        empty={empty}
       >
         {(data) => <RecipesTable recipes={servingRecipes(data)} schemaLabel={schemaLabel} />}
       </QueryView>

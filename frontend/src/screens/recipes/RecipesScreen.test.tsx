@@ -5,12 +5,20 @@ import { describe, expect, it } from "vite-plus/test";
 import { routes } from "../../app/router";
 import type { CallDetail, CallList, CaptureResult, Endpoint } from "../../api/captures";
 import type { ConfigDetail, ConfigSummary } from "../../api/configs";
-import type { Proposal, RecipeTestResult, TestRun, WrittenRecipe } from "../../api/recipes";
+import type {
+  CustomRecipe,
+  Proposal,
+  RecipeTestResult,
+  TestRun,
+  WrittenRecipe,
+} from "../../api/recipes";
 import type { SchemaDef } from "../../api/schemas";
 import { problem, stubApi } from "../../test/api";
 import { catchDownloads } from "../../test/downloads";
 import { recordField } from "../../test/records";
 import { fieldSpec } from "../../test/schemas";
+import { NO_EDITS } from "./draft";
+import { ExtrasStep } from "./ExtrasStep";
 
 const HOST = "shop.example.test";
 const SCHEMA_ID = "0192a000-0000-7000-8000-000000000101";
@@ -276,6 +284,41 @@ function textbox(name: string, index = 0): HTMLElement {
 }
 
 describe("recipes screen", () => {
+  it("shows the empty view, not an error, for a site nothing was learned on", async () => {
+    stubApi({
+      [`GET /v1/sites/${HOST}/configs`]: () => problem(404, { title: "No such site" }),
+      "GET /v1/schemas": json({ items: [schema] }),
+    });
+    await open(`/sites/${HOST}/recipes`, `Recipes of ${HOST}`);
+
+    expect(await screen.findByText("No recipes yet")).toBeInTheDocument();
+    expect(screen.queryByText("No such site")).not.toBeInTheDocument();
+  });
+
+  it("reads a page field from the page's JSON-LD, with its type", async () => {
+    const edits: [readonly string[], unknown][] = [];
+    const recipe = { main: { map: { title: "$.name" } }, patterns: [], sent_by: "http" };
+    render(
+      <ExtrasStep
+        recipe={recipe as unknown as CustomRecipe}
+        fields={["availability"]}
+        problem={null}
+        handlers={{
+          edits: NO_EDITS,
+          onEdit: (part, value) => edits.push([part, value]),
+          onReset: () => undefined,
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole("radio", { name: "JSON-LD" }));
+    await userEvent.type(textbox("JSON-LD path of availability"), "$");
+
+    expect(edits.at(-1)).toEqual([
+      ["fields", "availability"],
+      { steps: [{ jsonld: "$" }], needs: "http" },
+    ]);
+  });
+
   it("lists the site's serving recipes with their patterns, drift and pending repair", async () => {
     stubApi({
       [`GET /v1/sites/${HOST}/configs`]: json({

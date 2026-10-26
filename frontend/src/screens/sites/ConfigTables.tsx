@@ -100,6 +100,9 @@ function mainCallRows(config: ConfigDetail): FieldRow[] {
 /** A config's fields: each one's steps in order (a custom recipe's main call's fields first), its status, and its
  * held-out yield and validity. */
 export function ConfigFieldsTable({ config }: Readonly<{ config: ConfigDetail }>) {
+  const { method } = config.ir.fetch;
+  // A custom recipe's config fetches through the recipe, and over HTTP the pages it does not serve.
+  const fetchMethod = config.custom ? `api recipe (pages it does not serve: ${method})` : method;
   const rows: FieldRow[] = [
     ...mainCallRows(config),
     ...Object.entries(configuredFields(config)).map(([name, steps]) => ({
@@ -114,7 +117,7 @@ export function ConfigFieldsTable({ config }: Readonly<{ config: ConfigDetail }>
   const { absent } = config.ir;
   return (
     <div className="flex flex-col gap-3">
-      <Typography.Paragraph>Fetch method: {config.ir.fetch.method}</Typography.Paragraph>
+      <Typography.Paragraph>Fetch method: {fetchMethod}</Typography.Paragraph>
       {listing == null ? null : (
         <Typography.Paragraph>
           Rows: <LocatorText locator={stepText(listing.row)} />

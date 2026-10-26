@@ -214,7 +214,7 @@ class _Reading:
         if not (self.recipe and spec.item is not None and len(map_paths(path)) == 1):
             return _read(path, document, at)
         nodes = json_doc.select(path, document, at)
-        scalars = [value for _, value in nodes if json_doc.is_scalar(value)]
+        scalars: list[JsonValue] = [value for _, value in nodes if json_doc.is_scalar(value)]
         return (scalars, nodes[0][0]) if scalars else None  # located at its first item
 
     def rows(self, query: str, fields: Mapping[str, str], document: JsonValue) -> tuple[list[Entity], list[Candidate]]:

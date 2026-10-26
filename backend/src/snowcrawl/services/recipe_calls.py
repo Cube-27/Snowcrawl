@@ -30,9 +30,9 @@ from snowcrawl.config_ir.held_out import load_captures, read_bundle
 from snowcrawl.config_ir.validation import Facts, HeldOutPage
 from snowcrawl.content.page import answer_text
 from snowcrawl.core.errors import Refusal
+from snowcrawl.db.models import Capture, CaptureId, Extraction, Job, Record, SchemaId, TaskRecord, UrlTask
 from snowcrawl.normalize.base import Context, Ok
 from snowcrawl.normalize.dispatch import normalize
-from snowcrawl.db.models import Capture, CaptureId, Extraction, Job, Record, SchemaId, TaskRecord, UrlTask
 from snowcrawl.schemas import registry
 from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
 from snowcrawl.services.captures import CaptureNotFound, bundle_of
