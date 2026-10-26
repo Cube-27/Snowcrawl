@@ -248,7 +248,12 @@ JOB_API = "https://jobs.example.test/api/jobs/1"
 def test_an_api_capture_is_read_by_the_adapter_that_detects_its_page_url_and_serves_its_endpoint() -> None:
     data = EngineData(VOCABULARY, DATA.orders, None, adapters=Registry([FakeAdapter()]))
     bundle = _bundle('{"title": "Engineer"}', method="api", url=JOB_URL, final_url=JOB_API)
-    result = _extract(bundle, JOB, data=data)
+    schema = JOB.model_copy(
+        update={
+            "fields": {**JOB.fields, "url": FieldSpec(type=FieldType.URL, description="d", schema_org="JobPosting.url")}
+        }
+    )
+    result = _extract(bundle, schema, data=data)
     assert result.entity is not None
     title = result.entity["title"]
     assert (title.value, title.source_kind, title.evidence, title.locator) == (
@@ -257,6 +262,8 @@ def test_an_api_capture_is_read_by_the_adapter_that_detects_its_page_url_and_ser
         "adapter",
         "adapter:synthetic:$['title']",
     )
+    # The capture stands for the page it was requested for: that page, not the endpoint, is the record's URL.
+    assert (result.entity["url"].value, result.entity["url"].derived_by) == (JOB_URL, "final_url")
 
 
 # --- cold listings (§4.7 "Listings") ---

@@ -4,12 +4,14 @@ record of each page it ran on.
 A (site, schema, page kind) with an active config extracts its pages in `config` mode with that config. The config
 row is the authority: `extraction_config` holds at most one active learned config per site, schema and page kind, and
 any number of active custom recipes, one per pattern shape. A page is extracted with the most specific recipe whose
-URL pattern it matches (`url_pattern.most_specific`), else with the learned config; a schema edit suspends the
-schema's active configs, so its pages start cold again. Each
-page the config ran on, served and resolved, is added to its drift window (`drift.record_run`).
+URL pattern it matches (`url_pattern.most_specific`), else with the learned config, which also extracts a recipe's
+page its recipe did not fetch (an `ActiveConfig`'s `rest`); a schema edit suspends the schema's active configs, so
+its pages start cold again. Each page the config ran on, served and resolved, is added to its drift window
+(`drift.record_run`).
 """
 
 from collections.abc import Collection, Sequence
+from dataclasses import replace
 from functools import partial
 from urllib.parse import urlsplit
 
@@ -45,7 +47,7 @@ async def active_config(
 ) -> ActiveConfig | None:
     """The active config of `site_id` for `schema` and its page kind that serves `url` (`select_config`), bound to
     its executor; None in cold mode."""
-    return await _bound_row(conn, select_config(await _active_rows(conn, site_id, schema), url), vocabulary)
+    return await _bound(conn, await _active_rows(conn, site_id, schema), url, vocabulary)
 
 
 async def learned_config(
@@ -70,7 +72,7 @@ async def pinned_config(
     if not config_ids:
         return None
     rows = (await conn.execute(select(*_COLUMNS).where(ExtractionConfig.id.in_(config_ids)))).all()
-    return await _bound_row(conn, select_config(rows, url), vocabulary)
+    return await _bound(conn, rows, url, vocabulary)
 
 
 def select_config(rows: Sequence[_Config], url: str) -> _Config | None:
@@ -82,6 +84,18 @@ def select_config(rows: Sequence[_Config], url: str) -> _Config | None:
     if chosen is not None:
         return by_pattern[chosen]
     return next((row for row in rows if not row.patterns), None)
+
+
+async def _bound(
+    conn: AsyncConnection, rows: Sequence[_Config], url: str, vocabulary: Vocabulary
+) -> ActiveConfig | None:
+    """The config of `rows` that serves `url` (`select_config`), bound; a recipe's with the learned config of `rows`,
+    bound, as its `rest`."""
+    config = await _bound_row(conn, select_config(rows, url), vocabulary)
+    if config is None or not config.custom:
+        return config
+    learned = next((row for row in rows if not row.patterns), None)
+    return replace(config, rest=await _bound_row(conn, learned, vocabulary))
 
 
 async def _bound_row(conn: AsyncConnection, row: _Config | None, vocabulary: Vocabulary) -> ActiveConfig | None:

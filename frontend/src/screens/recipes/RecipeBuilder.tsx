@@ -178,6 +178,11 @@ function RecipeSteps({
 }>) {
   const test = useTestRecipe();
   const fields = Object.keys(fieldTypes);
+  // The save step weighs only a test of the recipe it saves: an edit since makes the last test another recipe's.
+  const tested =
+    test.variables !== undefined && JSON.stringify(test.variables.recipe) === JSON.stringify(recipe)
+      ? test.data
+      : undefined;
   return (
     <>
       <ReviewStep
@@ -199,6 +204,7 @@ function RecipeSteps({
         host={host}
         recipe={recipe}
         replaces={replaces}
+        tested={tested}
         isDrafting={isDrafting}
         handlers={handlers}
       />

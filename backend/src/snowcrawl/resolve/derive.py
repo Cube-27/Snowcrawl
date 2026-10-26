@@ -178,7 +178,8 @@ def canonical_link(spec: FieldSpec, canonical_url: str | None, ctx: Context, hre
 
 
 def final_url(spec: FieldSpec, ctx: Context) -> Derived | None:
-    """RFC 9110 §15.4: the URL the request ended at after redirects, which is the page's own: the context's page URL."""
+    """RFC 9110 §15.4: the URL the request ended at after redirects, which is the page's own: the context's page URL
+    (an `api` capture's is the page its answer was requested for, not the endpoint's)."""
     return _page_url(spec, ctx.page_url, ctx, "final_url")
 
 

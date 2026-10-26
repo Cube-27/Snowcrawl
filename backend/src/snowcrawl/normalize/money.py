@@ -12,7 +12,10 @@ Accepts:
 - a JSON object from a structured source: schema.org `price` + `priceCurrency` (Offer, PriceSpecification), or the
   normalized form `amount` + `currency`. The amount is a JSON number or a string of digits with `.` as the decimal
   point (schema.org `price`: no grouping, no currency sign); a `price` written as display text instead (`$1,295.99`)
-  is read like text, in the stated currency, which any sign it writes must denote.
+  is read like text, in the stated currency, which any sign it writes must denote;
+- a bare JSON number (RFC 8259 §6), as a map reads it from an API answer: an amount without a currency, which takes the
+  page's (`_unwritten`). Written with decimals it is in major units; a whole number may count the currency's minor unit
+  (ISO 4217: cents) as well as its major one, so it is `Ambiguous("minor_unit")` unless the currency has no minor unit.
 
 A grounded amount always gives a value; its currency comes from the best evidence: the
 sign or code written with it, the item's structured data, a page-level declaration, the page's locale and region
@@ -62,7 +65,25 @@ def normalize(raw: Raw, spec: FieldSpec, ctx: Context) -> NormalizeResult:
         return _structured(raw, ctx, active=active)
     if isinstance(raw, str):
         return _per_text(raw, ctx, active=active)
+    if (number := numbers.json_decimal(raw)) is not None:
+        return _bare(number, ctx)
     return Invalid("not_money")
+
+
+def _bare(amount: Decimal, ctx: Context) -> NormalizeResult:
+    """A bare JSON number (module docstring). ISO 4217 minor unit (CLDR currency data): an amount written with decimals
+    is in major units, and no more of them than the currency has; a whole one is the count of major or of minor units,
+    which nothing settles where the currency has a minor unit or is unknown."""
+    currency = _unwritten(ctx, written=False)
+    places = None if currency.code is None else get_currency_precision(currency.code)
+    written = _places(amount)
+    if places is not None and written > places:
+        return Invalid("minor_unit")
+    major = _money(amount, currency)
+    if written > 0 or places == 0 or not isinstance(major, Ok):
+        return major
+    readings = [amount] if places is None else [amount, _shifted(amount, -places)]
+    return Ambiguous("minor_unit", tuple(_value(a, currency.code) for a in readings))
 
 
 def _per_text(raw: str, ctx: Context, *, active: bool, stated: str | None = None) -> NormalizeResult:

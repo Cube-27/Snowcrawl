@@ -137,6 +137,12 @@ class CaptureManifest(_Frozen):
     # carried it; counts only, no URLs (`content.signals`). Left out of the manifest when None, as `data_call` is.
     resources: dict[str, int] | None = Field(default=None, exclude_if=lambda value: value is None)
 
+    @property
+    def page_url(self) -> str:
+        """The URL of the page the capture stands for: an `api` capture's `url`, the page its answer was requested for
+        (its `final_url` is the endpoint's); else `final_url`, where the request ended (RFC 9110 §15.4)."""
+        return self.url if self.method == "api" else self.final_url
+
 
 class CaptureBundle(_Frozen):
     manifest: CaptureManifest

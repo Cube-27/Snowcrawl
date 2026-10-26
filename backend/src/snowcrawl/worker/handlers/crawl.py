@@ -188,7 +188,7 @@ async def _record_final_url(conn: AsyncConnection, task: ClaimedTask, page: Page
     recipe's capture (method `api`) stands for the page it was asked
     for: its final URL is the endpoint, which is no page of the crawl (as `rules.located` reads it)."""
     manifest = page.result.bundle.manifest
-    final_url = canonicalize(manifest.url if manifest.method == "api" else manifest.final_url)
+    final_url = canonicalize(manifest.page_url)
     await conn.execute(update(UrlTask).where(UrlTask.id == task.id).values(final_url=final_url))
 
 

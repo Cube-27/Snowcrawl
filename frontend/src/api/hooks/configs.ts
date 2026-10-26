@@ -8,6 +8,7 @@ import {
   learnSite,
   listSiteConfigs,
   rejectConfig,
+  retireRecipe,
   type Correction,
   type ExportFormat,
 } from "../configs";
@@ -47,8 +48,8 @@ export function useCorrectConfig(id: string) {
   });
 }
 
-/** A person's decision on a config waiting for approval: the answer is that version, and the version active before it
- * may be suspended, so every config is read again. */
+/** A person's decision on a config (approval, refusal, a recipe's retirement): the answer is that version, and others
+ * of its site may have changed status, so every config is read again. */
 function useDecideConfig(decide: typeof approveConfig, id: string) {
   const client = useApiClient();
   const queryClient = useQueryClient();
@@ -69,6 +70,11 @@ export function useApproveConfig(id: string) {
 /** Rejects the config: it is suspended. */
 export function useRejectConfig(id: string) {
   return useDecideConfig(rejectConfig, id);
+}
+
+/** Retires the recipe: it is suspended, and the learned config serves its URLs. */
+export function useRetireRecipe(id: string) {
+  return useDecideConfig(retireRecipe, id);
 }
 
 /** An export changes nothing on the server, so nothing is read again. */

@@ -5,8 +5,9 @@ A data call is a request for a product's JSON that the fetch makes beside the pr
 platform documents for a detail page (`adapters.platforms.product_json`), or an API recipe's request
 (`config_ir.api_recipe.execute`). Before its answer is used it must state the requested product (the identity check):
 a string or number equal to a key the request was made with (a handle, a slug, a product id), or a URL whose path is the
-page's path. An answer that does not is dropped and recorded on its attempt as `NOT_THE_PRODUCT`: an endpoint that
-ignores its key answers one product for every page.
+page's path; an HTML answer also by its canonical link, its `og:url` or a link of it, relative ones resolved against its
+document base URL (`page_refs`). An answer that does not is dropped and recorded on its attempt as
+`NOT_THE_PRODUCT`: an endpoint that ignores its key answers one product for every page.
 
 A documented platform answer that passes joins the page's HTTP capture as one more network body, marked with its
 platform (the network body's `data_call`), which the extraction reads as that platform documents it
@@ -23,6 +24,7 @@ from lxml import html as lxml_html
 from pydantic import JsonValue
 
 from snowcrawl.acquire.outcome import as_error
+from snowcrawl.acquire.page_refs import page_refs
 from snowcrawl.acquire.types import FetchResult
 from snowcrawl.core import json_text
 from snowcrawl.core.ids import uuid7
@@ -92,6 +94,15 @@ def _html_scalars(text: str) -> Iterator[str]:
         for value in (*element.attrib.values(), element.text or "", element.tail or "")
     )
     yield from islice(filter(None, values), _MAX_SCALARS)
+
+
+def _names_page(answer: FetchResult, page_url: str) -> bool:
+    """Whether the HTML `answer` names the page at `page_url`: its canonical link (RFC 6596), its `og:url` (Open Graph
+    protocol: the object's canonical URL) or one of its links (HTML Standard §4.6 `a href`), each resolved against its
+    document base URL (RFC 3986 §5; HTML Standard §2.4.1), has the page's path. The answer's own URL names nothing:
+    it is the request's."""
+    refs = page_refs(answer)
+    return _identifies((*refs.own[1:], *refs.links), page_url, ())
 
 
 def joined(page: FetchResult, call: FetchResult, key: str, platform: str) -> tuple[FetchResult | None, FetchResult]:
@@ -168,12 +179,12 @@ def identified(result: FetchResult, url: str, keys: tuple[str, ...], *, html: bo
     """A data call's `ok` answer when it states the product of the page at `url` it was requested with `keys` for
     (`identifies`: a parameter value, or a URL with the page's path); else an `error`, `NOT_THE_PRODUCT`, which is not
     used: a recipe's page is then served by its configured fetch, a companion call joins nothing. An `html` answer
-    states it in a text node or an attribute value (`_html_scalars`). An answer that is not JSON is the collector's to
-    report."""
+    states it in a text node or an attribute value (`_html_scalars`), or names the page by a URL it states about itself
+    or links to (`_names_page`). An answer that is not JSON is the collector's to report."""
     if result.block_class != "ok":
         return result
     if html:
-        found = _identifies(_html_scalars(result.bundle.text), url, keys)
+        found = _identifies(_html_scalars(result.bundle.text), url, keys) or _names_page(result, url)
         return result if found else as_error(result, NOT_THE_PRODUCT)
     try:
         answer = json_text.parse(result.bundle.body)

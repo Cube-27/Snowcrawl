@@ -5,7 +5,8 @@ serves every URL its patterns match (`config_ir.url_pattern`), in the selected s
 config it is stored as and `from_ir` reads it back. The field map is the main call's `map`, each extra call's `map`,
 and the fields read from the page itself (`fields`): each field has one source. Extra calls are the config's
 `recipes`, named by the `call` of the fields they fill, as a learned config's companion calls are. Credential values
-are refused as in every recipe (`api_recipe.model`).
+are refused as in every recipe (`api_recipe.model`), and so is a header value that looks like a token
+(`api_recipe.model.token_like`) when the recipe is saved: a recipe stores none, the request context supplies it.
 """
 
 from typing import Literal, Self
@@ -13,7 +14,7 @@ from typing import Literal, Self
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from snowcrawl.collect.api import map_paths
-from snowcrawl.config_ir.api_recipe.model import ApiRecipe
+from snowcrawl.config_ir.api_recipe.model import ApiRecipe, HeaderValue, token_like
 from snowcrawl.config_ir.model import (
     ExtractionConfigIR,
     FieldSteps,
@@ -167,9 +168,21 @@ def recipe_ir(
         ("", f"{name}: not a field of schema {schema.name}")
         for name in sorted(recipe.field_names() - set(schema.fields))
     ]
+    errors += _token_headers(recipe)
     if errors:
         raise InvalidRecipe(errors)
     try:
         return recipe.to_ir(schema, at=at, engine_version=engine_version)
     except ValidationError as e:
         raise InvalidRecipe([field_error(error) for error in e.errors()]) from None
+
+
+def _token_headers(recipe: CustomRecipe) -> list[tuple[str, str]]:
+    """The header values of `recipe`'s calls that look like a token (`token_like`), which no recipe stores."""
+    calls = (("main", recipe.main), *((f"calls.{name}", call) for name, call in recipe.calls.items()))
+    return [
+        (f"{where}.headers.{i}.value", "a recipe stores no token: name the header `from_context` to send the caller's")
+        for where, call in calls
+        for i, header in enumerate(call.headers)
+        if isinstance(header, HeaderValue) and token_like(header.value)
+    ]

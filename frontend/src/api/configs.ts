@@ -72,6 +72,15 @@ export function rejectConfig(client: ApiClient, id: string): Promise<ApiResult<C
   );
 }
 
+/** Retires an active custom recipe: it becomes `suspended`, with any repair of it waiting for approval, and the learned
+ * config serves its URLs again. */
+export function retireRecipe(client: ApiClient, id: string): Promise<ApiResult<ConfigDetail>> {
+  return apiResult(
+    () => client.POST("/v1/configs/{config_id}/retire", { params: { path: { config_id: id } } }),
+    "Retiring the recipe",
+  );
+}
+
 export function exportConfig(
   client: ApiClient,
   id: string,
