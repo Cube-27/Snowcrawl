@@ -101,18 +101,28 @@ def test_a_documented_answer_joins_only_for_its_product_and_reads_in_major_units
         assert recipe.attempts[-1].error == NOT_THE_PRODUCT
 
 
-@given(KEYS, KEYS, st.booleans())
-def test_an_html_answer_is_kept_only_when_it_states_the_requested_item(key: str, other: str, in_text: bool) -> None:
-    # An HTML answer states its item in a text node or an attribute value (HTML Standard §13.2).
-    page = f"{HOST}/item/{key}"
-    stating = f"<p>{key}</p>" if in_text else f"<div data-item='{key}'></div>"
-    body = f"<html><body><h1>Item</h1>{stating}</body></html>".encode()
+# How an HTML answer states its item: in a text node or an attribute value (HTML Standard §13.2), or by naming the
+# item's page in a relative link (HTML Standard §4.6), its canonical link (RFC 6596) or its og:url (Open Graph), each
+# resolved against the answer's URL (RFC 3986 §5).
+_STATED = {
+    "text": "<p>{key}</p>",
+    "attribute": "<div data-item='{key}'></div>",
+    "link": "<a href='../item/{key}'>More</a>",
+    "canonical": "<link rel='canonical' href='/item/{key}/'>",
+    "og": "<meta property='og:url' content='../item/{key}'>",
+}
 
-    kept = identified(fetched(f"{HOST}/fragment", 200, body, method="api"), page, (key,), html=True)
+
+@given(KEYS, KEYS, st.sampled_from(sorted(_STATED)))
+def test_an_html_answer_is_kept_only_when_it_states_the_requested_item(key: str, other: str, how: str) -> None:
+    body = f"<html><body><h1>Item</h1>{_STATED[how].format(key=key)}</body></html>".encode()
+    answer = f"{HOST}/fragments/item"
+
+    kept = identified(fetched(answer, 200, body, method="api"), f"{HOST}/item/{key}", (key,), html=True)
     assert (kept.block_class, kept.attempts[-1].error) == ("ok", None)
-    if other != key:
-        another = identified(fetched(f"{HOST}/fragment", 200, body, method="api"), page, (other,), html=True)
-        assert another.attempts[-1].error == NOT_THE_PRODUCT
+    if other.casefold() != key.casefold():
+        refused = identified(fetched(answer, 200, body, method="api"), f"{HOST}/item/{other}", (other,), html=True)
+        assert refused.attempts[-1].error == NOT_THE_PRODUCT
 
 
 def test_a_documented_answer_is_the_page_products_own_entity() -> None:
