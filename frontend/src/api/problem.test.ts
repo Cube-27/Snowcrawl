@@ -22,6 +22,7 @@ describe("problemOf", () => {
       detail: "The API key is revoked.",
       errors: [],
       retryAfter: null,
+      status: 401,
     });
   });
 
@@ -38,6 +39,7 @@ describe("problemOf", () => {
       detail: null,
       errors: [{ field: "url", reason: "not an absolute URL" }],
       retryAfter: null,
+      status: 401,
     });
   });
 
