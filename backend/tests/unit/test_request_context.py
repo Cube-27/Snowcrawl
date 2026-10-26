@@ -102,10 +102,10 @@ def test_the_callers_header_and_cookie_go_to_the_pages_host_and_stay_out_of_the_
     assert "s3cret" not in stored
 
 
-def _fetch_json(server: Server, endpoint: str, context: RequestContext) -> FetchResult:
+def _fetch_json(server: Server, endpoint: str, context: RequestContext, page_url: str | None = None) -> FetchResult:
     return asyncio.run(
         fetch_json(
-            JsonRequest(url=endpoint, page_url=server.url("/board")),
+            JsonRequest(url=endpoint, page_url=page_url or server.url("/board")),
             FetchPolicy(context=context),
             engine_version="test",
             impersonate=IMPERSONATE,
@@ -130,6 +130,17 @@ def test_a_json_call_to_another_host_carries_neither_the_header_nor_the_cookie(s
     assert same_host["cookie"] == "sid=s3cret"
     raw = next(headers for path, headers in server.requests if path == "shop.example.test/api/jobs")
     assert [(name, value) for name, value in raw if name.lower() == "accept"] == [("Accept", "application/x-test")]
+
+
+def test_a_call_from_an_https_page_over_cleartext_carries_neither_the_header_nor_the_cookie(server: Server) -> None:
+    # The same host and port as the page, but its scheme downgraded: another origin (RFC 6454 §4).
+    server.route("/api/jobs", Reply(200, (("Content-Type", "application/json"),), b"[]"))
+    context = _context({"Authorization": "Bearer t0ken"}, {"sid": "s3cret"})
+    _fetch_json(server, server.url("/api/jobs"), context, page_url=server.url("/board").replace("http:", "https:", 1))
+
+    downgraded = _sent(server, "shop.example.test/api/jobs")
+    assert "authorization" not in downgraded
+    assert "cookie" not in downgraded
 
 
 # --- the CLI -----------------------------------------------------------------------------------------------------

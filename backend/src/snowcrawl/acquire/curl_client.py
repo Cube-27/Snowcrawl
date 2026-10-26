@@ -238,39 +238,60 @@ async def follow(
     return response
 
 
+# An origin (RFC 6454 §4): the scheme and host, lowercased, and the port, the scheme's default when the URL names none.
+type _Origin = tuple[str, str, int]
+_DEFAULT_PORTS: Final = {"http": 80, "https": 443}  # RFC 9110 §4.2.1, §4.2.2
+
+
+def _origin_of(url: str) -> _Origin | None:
+    parts = urlsplit(url)
+    scheme, host = parts.scheme.lower(), parts.hostname
+    try:
+        port = parts.port or _DEFAULT_PORTS.get(scheme)
+    except ValueError:
+        return None
+    return None if host is None or port is None else (scheme, host, port)
+
+
 @dataclass(frozen=True)
 class _Caller:
-    """The caller's context as a fetch applies it: the host it belongs to, its headers and its cookies."""
+    """The caller's context as a fetch applies it: the origins it goes to, its headers and its cookies."""
 
-    host: str | None
+    origins: frozenset[_Origin] = frozenset()
     headers: HeaderList = ()
     cookies: tuple[SessionCookie, ...] = ()
 
     @classmethod
     def of(cls, url: str, context: RequestContext | None) -> "_Caller":
-        host = urlsplit(url).hostname
-        if context is None or host is None:
-            return cls(None)
+        origin = _origin_of(url)
+        if context is None or origin is None:
+            return cls()
+        scheme, host, _ = origin
         headers = tuple((name, value.get_secret_value()) for name, value in context.headers)
-        # Host-only cookies of the fetched URL's host (RFC 6265 §5.3 step 6), for every path, ending with the fetch.
+        # Host-only cookies of the fetched URL's host (RFC 6265 §5.3 step 6), for every path, ending with the fetch;
+        # given for an https page, they go over https only (`secure`, RFC 6265 §5.4 step 1).
         cookies = tuple(
             SessionCookie(
                 name=name,
                 value=value.get_secret_value(),
                 domain=host,
                 path="/",
-                secure=False,
+                secure=scheme == "https",
                 host_only=True,
                 expires=None,
             )
             for name, value in context.cookies
         )
-        return cls(host, headers, cookies)
+        # An http page's own upgrade to https (RFC 9110 §4.2.2) is its host still, over a channel that only adds
+        # protection.
+        upgrade = {("https", host, 443)} if scheme == "http" else set()
+        return cls(frozenset({origin, *upgrade}), headers, cookies)
 
     def headers_for(self, url: str) -> HeaderList:
-        """The caller's headers for a request to `url`: only to the host they were given for, so a redirect elsewhere
-        carries none of them (as RFC 9110 §15.4 leaves credentials to the user agent's judgement)."""
-        return self.headers if self.host is not None and urlsplit(url).hostname == self.host else ()
+        """The caller's headers for a request to `url`: only to the origin they were given for (RFC 6454 §4: scheme,
+        host and port) or its https upgrade, so a redirect to another host, port or a cleartext scheme carries none of
+        them (as RFC 9110 §15.4 leaves credentials to the user agent's judgement)."""
+        return self.headers if _origin_of(url) in self.origins else ()
 
 
 async def _checked(check: Awaitable[Target], deadline: float, last: Wire | None) -> Target:
