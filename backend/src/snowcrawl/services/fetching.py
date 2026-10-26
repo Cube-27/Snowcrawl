@@ -390,7 +390,7 @@ async def grown(
         raise RuntimeError("this process has no listing rung")
     host = urlsplit(url).hostname or ""
     drive = partial(_on_host, request=actions, deadline=deadline, host=host, known=known, admit_next=admit_next)
-    return await rung(url, policy, drive)
+    return await rung(url, policy, drive, deadline)
 
 
 async def _on_host(

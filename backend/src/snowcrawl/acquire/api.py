@@ -20,7 +20,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from snowcrawl.acquire.challenge import CHALLENGED, challenge_label
 from snowcrawl.acquire.classify import classify
-from snowcrawl.acquire.curl_client import Hop, Transport, send, set_field
+from snowcrawl.acquire.curl_client import DEFAULT_PORTS, Hop, Transport, origin, send, set_field
 from snowcrawl.acquire.impersonate import Impersonation
 from snowcrawl.acquire.locality import exit_place, language_headers
 from snowcrawl.acquire.outcome import Content, Sending
@@ -44,7 +44,6 @@ _BODY_HEADERS = frozenset({"content-encoding", "content-language", "content-loca
 SiteRelation = Literal["same-origin", "same-site", "cross-site"]
 # Fetch Metadata §2.1: across a redirect chain the value is the least related hop's.
 _RELATION_ORDER: Final[tuple[SiteRelation, ...]] = ("same-origin", "same-site", "cross-site")
-_DEFAULT_PORTS: Final = {"http": 80, "https": 443}  # RFC 9110 §4.2
 # The order in which Chromium sends a script's `fetch()` headers, as the browser rung's Chromium sends them to a
 # header echo service; the impersonation profile describes a navigation's. A header absent from a request is skipped.
 FETCH_HEADER_ORDER: Final = (
@@ -182,7 +181,7 @@ def _fetch_headers(page_url: str, url: str, method: str, before: SiteRelation) -
         # RFC 9218 §4: urgency 1, incremental, as Chromium sends for a script's fetch (a navigation is urgency 0).
         "Priority": "u=1, i",
     }
-    if method != "GET" or _origin(page_url) != _origin(url):
+    if method != "GET" or origin(page_url) != origin(url):
         headers["Origin"] = _serialized_origin(page_url)
     return headers
 
@@ -204,7 +203,7 @@ class _Redirect:
         before = _relation_of(headers.get("Sec-Fetch-Site"))
         for name, value in _fetch_headers(self.page_url, target.url, method, before).items():
             set_field(headers, name, value)
-        if method == "GET" and _origin(self.page_url) == _origin(target.url):
+        if method == "GET" and origin(self.page_url) == origin(target.url):
             set_field(headers, "Origin", None)
         return Hop(method, headers, body, FETCH_HEADER_ORDER)
 
@@ -213,27 +212,20 @@ def _relation_of(value: str | None) -> SiteRelation:
     return next((relation for relation in _RELATION_ORDER if relation == value), "same-origin")
 
 
-def _origin(url: str) -> tuple[str, str, int | None]:
-    """A URL's origin (RFC 6454 §4): scheme, host and port, the scheme's default port filled in."""
-    parts = urlsplit(url)
-    scheme = parts.scheme.lower()
-    return scheme, (parts.hostname or ""), parts.port or _DEFAULT_PORTS.get(scheme)
-
-
 def _serialized_origin(url: str) -> str:
     """RFC 6454 §6.2: scheme "://" host, and ":" port unless it is the scheme's default."""
-    scheme, host, port = _origin(url)
+    scheme, host, port = origin(url)
     netloc = f"[{host}]" if ":" in host else host
-    return f"{scheme}://{netloc}" if port == _DEFAULT_PORTS.get(scheme) else f"{scheme}://{netloc}:{port}"
+    return f"{scheme}://{netloc}" if port == DEFAULT_PORTS.get(scheme) else f"{scheme}://{netloc}:{port}"
 
 
 def site_relation(page_url: str, url: str) -> SiteRelation:
     """Fetch Metadata §2.1: `same-origin` for equal origins, `same-site` for the same scheme and site (HTML Standard
     §7.1.1 "same site": the registrable domain of the Public Suffix List, or the host itself where it has none),
     else `cross-site`."""
-    if _origin(page_url) == _origin(url):
+    if origin(page_url) == origin(url):
         return "same-origin"
-    (scheme_a, host_a, _), (scheme_b, host_b, _) = _origin(page_url), _origin(url)
+    (scheme_a, host_a, _), (scheme_b, host_b, _) = origin(page_url), origin(url)
     suffixes = default_suffixes()
     if scheme_a == scheme_b and suffixes.site(host_a) == suffixes.site(host_b):
         return "same-site"
@@ -247,7 +239,7 @@ def referrer(page_url: str, url: str) -> str | None:
     page = urlsplit(page_url)
     if page.scheme.lower() == "https" and urlsplit(url).scheme.lower() == "http":
         return None
-    if _origin(page_url) == _origin(url):
+    if origin(page_url) == origin(url):
         netloc = page.netloc.rpartition("@")[2]
         return urlunsplit((page.scheme, netloc, page.path or "/", page.query, ""))
     return _serialized_origin(page_url) + "/"

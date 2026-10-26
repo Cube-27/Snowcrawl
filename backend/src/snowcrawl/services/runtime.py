@@ -176,13 +176,14 @@ async def open_rungs(
         )
     ) as browser:
 
-        async def listing(url: str, policy: FetchPolicy, drive: Drive) -> PagedFetch:
+        async def listing(url: str, policy: FetchPolicy, drive: Drive, deadline: float) -> PagedFetch:
             # A listing with browser actions renders in the shared session too, holding one of its slots.
             return await browser.render(
                 lambda session: fetch_listing(
                     url,
                     policy,
                     drive,
+                    deadline,
                     session=session,
                     engine_version=ENGINE_VERSION,
                     connector=connector,

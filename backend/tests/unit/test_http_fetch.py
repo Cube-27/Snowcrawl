@@ -9,13 +9,15 @@ import asyncio
 import json
 import os
 from collections.abc import Iterator
+from dataclasses import replace
+from ipaddress import IPv4Address, IPv6Address
 from pathlib import Path
 
 import pytest
 
 from snowcrawl import cli
 from snowcrawl.acquire.http import fetch_http
-from snowcrawl.acquire.ssrf import SafeConnector
+from snowcrawl.acquire.ssrf import SafeConnector, Target
 from snowcrawl.acquire.types import AttemptRecord, FetchPolicy, FetchResult
 from snowcrawl.core.engine_version import ENGINE_VERSION
 from snowcrawl.storage.capture_bundle import decode, encode
@@ -83,6 +85,20 @@ def test_a_page_is_fetched_into_a_bundle_through_the_pinned_address(server: Serv
     assert manifest.engine_version == "test"
     assert manifest.fetch_policy == FetchPolicy().model_dump(mode="json")
     assert decode(encode(result.bundle)) == result.bundle
+
+
+def test_a_checked_address_that_refuses_is_passed_over_for_the_next(server: Server) -> None:
+    # The server listens on 127.0.0.1 only: the first address, ::1, refuses the connection.
+    class TwoAddresses(LoopbackConnector):
+        async def check(self, url: str) -> Target:
+            checked = await super().check(url)
+            return replace(checked, ip=IPv6Address("::1"), others=(IPv4Address("127.0.0.1"),))
+
+    server.route("/p", html(_PAGE))
+
+    result = fetch(server, server.url("/p"), connector=TwoAddresses(server.port, _DNS))
+
+    assert outcome(result) == (200, "ok", None)
 
 
 def test_a_refusal_standing_in_for_the_page_is_labelled_a_challenge_and_stays_blocked(server: Server) -> None:

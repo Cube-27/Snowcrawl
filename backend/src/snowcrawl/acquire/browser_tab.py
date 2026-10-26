@@ -137,7 +137,7 @@ class Tab(Protocol):
 Drive = Callable[[Tab], Awaitable[ActionsReport]]
 # `fetch_listing` bound to a process's shared browser, guard, proxy pools and site sessions: a listing's URL, its
 # policy and the driver.
-ListingRung = Callable[[str, FetchPolicy, Drive], Awaitable[PagedFetch]]
+ListingRung = Callable[[str, FetchPolicy, Drive, float], Awaitable[PagedFetch]]
 
 
 class _PatchrightTab:
@@ -311,6 +311,7 @@ async def fetch_listing(
     url: str,
     policy: FetchPolicy,
     drive: Drive,
+    deadline: float,
     *,
     session: BrowserSession,
     engine_version: str,
@@ -321,11 +322,13 @@ async def fetch_listing(
     """Render the listing at `url` as `fetch_browser` does and, when it is reached (`ok`), let `drive` act on it; the
     answer holds the document states the driver kept (at least one) and its report. A page not reached is the one
     page, with no report, labelled with the challenge it presents. The navigation is bounded by
-    `policy.browser_timeout_s`; the driver bounds its own actions. The render ends as `fetch_browser`'s does
+    `policy.browser_timeout_s`; the driver stops acting at `deadline` (`time.monotonic()`), and what follows the
+    navigation ends by then and a page's own time to render and be read: a browser that stops answering ends the
+    listing as a `timeout` rather than holding its slot. The render ends as `fetch_browser`'s does
     (`Render.finish`, with its `scope`), and the navigation's attempt (the first
     page's) carries the bytes the whole run moved (`Traffic`)."""
     run = Render(url, policy, engine_version, scope)
-    paged = await _listing(run, drive, session, connector or SafeConnector(), pools)
+    paged = await _listing(run, drive, deadline, session, connector or SafeConnector(), pools)
     if paged is None:
         first = run.result()
         paged = PagedFetch(pages=(first,), report=None)
@@ -341,6 +344,7 @@ async def fetch_listing(
 async def _listing(
     run: Render,
     drive: Drive,
+    deadline: float,
     session: BrowserSession,
     connector: SafeConnector,
     pools: Mapping[str, ProxyPool] | None,
@@ -361,10 +365,10 @@ async def _listing(
             tab = _PatchrightTab(
                 page, url=url, engine_version=run.engine_version, started=run.started, steps=run.steps, landed=landed
             )
-            report = await _driven(drive, tab)
-            # The driver's actions may have set cookies: the site's sessions are told those the context holds now.
-            run.cookies = await context_cookies(page.page.context)
-            if not tab.kept and not await tab.keep():
+            report = await _driven_by(
+                drive, tab, page, run, max(0.0, deadline - time.monotonic()) + policy.browser_timeout_s
+            )
+            if report is None:
                 return None
             return PagedFetch(pages=tuple(tab.kept), report=report.model_copy(update={"pages": len(tab.kept)}))
     except Failed as failed:
@@ -372,6 +376,26 @@ async def _listing(
     except TimeoutError:
         run.failed("timeout")
     return None
+
+
+async def _driven_by(
+    drive: Drive, tab: _PatchrightTab, page: Rendered, run: Render, seconds: float
+) -> ActionsReport | None:
+    """The driver's report once it is done and the context's cookies are read, within `seconds`; None when no state
+    was kept. Past `seconds` the browser has stopped answering: the states kept by then stand, as a time cap's do, and
+    with none kept the listing ends with a `TimeoutError`."""
+    try:
+        async with asyncio.timeout(seconds):
+            report = await _driven(drive, tab)
+            # The driver's actions may have set cookies: the site's sessions are told those the context holds now.
+            run.cookies = await context_cookies(page.page.context)
+            if not tab.kept and not await tab.keep():
+                return None
+            return report
+    except TimeoutError:
+        if not tab.kept:
+            raise
+        return ActionsReport(mechanism=None, stop="time_cap", actions=0, pages=len(tab.kept), items=0)
 
 
 async def _driven(drive: Drive, tab: _PatchrightTab) -> ActionsReport:

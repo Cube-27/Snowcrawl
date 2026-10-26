@@ -8,13 +8,16 @@ import asyncio
 import struct
 from collections.abc import AsyncIterator, Coroutine
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from ipaddress import IPv4Address, ip_address
 from urllib.parse import urlsplit
 
 import pytest
 
+from snowcrawl.acquire import socks_guard
 from snowcrawl.acquire.socks_guard import SocksGuard
 from snowcrawl.acquire.ssrf import IPAddress, SafeConnector, Target
+from snowcrawl.core.proxy import ProxyEndpoint
 
 _DNS = {"internal.example.com": "10.0.0.1", "public.example.com": "93.184.215.14"}
 
@@ -50,6 +53,32 @@ async def echo_server() -> AsyncIterator[int]:
         writer.close()
 
     server = await asyncio.start_server(echo, "127.0.0.1", 0)
+    try:
+        yield server.sockets[0].getsockname()[1]
+    finally:
+        server.close()
+
+
+@asynccontextmanager
+async def connect_proxy(origin_port: int, tunnels: list[str]) -> AsyncIterator[int]:
+    """An HTTP CONNECT proxy (RFC 9110 §9.3.6) that records the authority each tunnel names and sends every tunnel to
+    `origin_port` on loopback."""
+
+    async def pump(source: asyncio.StreamReader, sink: asyncio.StreamWriter) -> None:
+        while data := await source.read(1024):
+            sink.write(data)
+            await sink.drain()
+        sink.close()
+
+    async def serve(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        head = await reader.readuntil(b"\r\n\r\n")
+        tunnels.append(head.split(b" ")[1].decode())
+        origin_reader, origin_writer = await asyncio.open_connection("127.0.0.1", origin_port)
+        writer.write(b"HTTP/1.1 200 Connection established\r\n\r\n")
+        await writer.drain()
+        await asyncio.gather(pump(reader, origin_writer), pump(origin_reader, writer))
+
+    server = await asyncio.start_server(serve, "127.0.0.1", 0)
     try:
         yield server.sockets[0].getsockname()[1]
     finally:
@@ -122,5 +151,80 @@ def test_connect_to_a_rejected_target_is_refused_by_ruleset_and_recorded(host: s
         # RFC 1928 §6: X'02' connection not allowed by ruleset.
         assert head == b"\x05\x02"
         assert rejections == {(host, port): reason}
+
+    _run(scenario())
+
+
+def test_through_a_proxy_pool_the_tunnel_names_the_checked_address() -> None:
+    async def scenario() -> None:
+        tunnels: list[str] = []
+        async with echo_server() as port, connect_proxy(port, tunnels) as proxy_port:
+            upstream = ProxyEndpoint(host="127.0.0.1", port=proxy_port)
+            async with SocksGuard(PinnedConnector(), upstream=upstream) as guard:
+                head, reader, writer = await _socks(guard, _domain_request("shop.example.test", port))
+                await reader.readexactly(8)
+                writer.write(b"ping")
+                echoed = await reader.readexactly(9)
+                writer.close()
+
+        assert (head, echoed) == (b"\x05\x00", b"echo:ping")
+        assert tunnels == [f"127.0.0.1:{port}"]  # the address the guard checked, never the name
+
+    _run(scenario())
+
+
+def test_a_guard_keeps_its_latest_used_hosts_and_checks_a_forgotten_one_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(socks_guard, "_KEPT", 2)
+
+    async def scenario() -> list[str]:
+        connector = PinnedConnector()
+        async with echo_server() as port, SocksGuard(connector) as guard:
+            for host in ("a.example.test", "b.example.test", "a.example.test", "c.example.test", "b.example.test"):
+                head, _, writer = await _socks(guard, _domain_request(host, port))
+                writer.close()
+                assert head == b"\x05\x00"
+        return connector.lookups
+
+    # Kept: a, then a and b; a again from the cache, now the latest used; c forgets b, the least recently used; b is
+    # checked again.
+    assert _run(scenario()) == ["a.example.test", "b.example.test", "c.example.test", "b.example.test"]
+
+
+def test_a_check_whose_resolver_never_answers_is_refused_as_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(socks_guard, "_CHECK_MAX_S", 0.05)
+
+    class Stalled(SafeConnector):
+        async def check(self, url: str) -> Target:
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+    async def scenario() -> None:
+        async with SocksGuard(Stalled()) as guard:
+            head, _, writer = await _socks(guard, _domain_request("public.example.com", 443))
+            writer.close()
+            rejections = dict(guard.rejections)
+
+        assert head == b"\x05\x02"
+        assert rejections == {("public.example.com", 443): "dns"}
+
+    _run(scenario())
+
+
+def test_a_checked_address_that_refuses_is_passed_over_for_the_next() -> None:
+    class TwoAddresses(PinnedConnector):
+        async def check(self, url: str) -> Target:
+            # The echo server listens on 127.0.0.1 only: ::1 refuses the connection.
+            checked = await super().check(url)
+            return replace(checked, ip=ip_address("::1"), others=(IPv4Address("127.0.0.1"),))
+
+    async def scenario() -> None:
+        async with echo_server() as port, SocksGuard(TwoAddresses()) as guard:
+            head, reader, writer = await _socks(guard, _domain_request("shop.example.test", port))
+            await reader.readexactly(8)
+            writer.write(b"ping")
+            echoed = await reader.readexactly(9)
+            writer.close()
+
+        assert (head, echoed) == (b"\x05\x00", b"echo:ping")
 
     _run(scenario())

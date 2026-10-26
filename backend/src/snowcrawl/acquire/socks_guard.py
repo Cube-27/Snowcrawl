@@ -4,27 +4,31 @@ browser context sends every connection through.
 A request interceptor can't be the guard: the browser follows redirects itself, and interception sees only the
 first request of a redirect chain. Behind a SOCKS5 proxy the browser resolves no names (RFC 1928 §4 lets it send the
 host name), so each connection, on every redirect hop and from every frame or worker, names its host here. The
-guard checks it with `SafeConnector.check` and connects only to the checked address, which is fixed for the life of
-the guard: a name is resolved once per fetch, and a changed DNS answer can't redirect a later connection.
+guard checks it with `SafeConnector.check` and connects only to the checked address, which is kept for the guard's
+later connections: a name is resolved once per fetch, and a changed DNS answer can't redirect a later connection. The
+guard keeps the checks of at most `_KEPT` hosts, forgetting the oldest settled one past it, so a long-lived site
+profile does not grow without bound; a forgotten host is checked again from scratch.
 
 Only CONNECT with no authentication is spoken (RFC 1928 §3). Bytes are relayed unread, so TLS stays end to end
 between the browser and the site.
 
 With an `upstream` proxy pool, the guard still checks each host, then opens the connection as a CONNECT tunnel
-through the pool's proxy (`acquire.tunnel`), naming the host: the proxy resolves it, so the address can't be pinned.
+through the pool's proxy (`acquire.tunnel`) to a checked address: the proxy resolves no name, so it connects where
+the guard checked. The browser's TLS names the host inside the tunnel. A host's next checked address is tried when
+one does not answer.
 """
 
 import asyncio
 import contextlib
 import struct
-from collections.abc import Iterable
+from collections.abc import Awaitable, Callable, Iterable, Sequence
 from ipaddress import IPv4Address, IPv6Address
 from types import TracebackType
 from typing import Self, cast
 
 from snowcrawl.acquire.outcome import Traffic
-from snowcrawl.acquire.ssrf import RejectReason, SafeConnector, SsrfRejected, Target, authority, bracketed
-from snowcrawl.acquire.tunnel import TunnelRefused, open_tunnel
+from snowcrawl.acquire.ssrf import IPAddress, RejectReason, SafeConnector, SsrfRejected, Target, authority, bracketed
+from snowcrawl.acquire.tunnel import TunnelRefused, open_tunnel, tunneled
 from snowcrawl.core.proxy import ProxyEndpoint
 
 __all__ = ["SocksGuard"]
@@ -43,6 +47,14 @@ _COMMAND_NOT_SUPPORTED = 7
 _ADDRESS_TYPE_NOT_SUPPORTED = 8
 
 _CHUNK = 65_536
+# The hosts a guard keeps checks and refusals for: far more than one page's hosts (its own, CDNs, third parties).
+_KEPT = 512
+# A check whose name resolution has not answered by then fails as `dns`, as the system resolver gives up after two
+# tries of 5 s each by default (resolv.conf(5) `timeout`, `attempts`), so a stalled lookup holds no connection open.
+_CHECK_MAX_S = 10.0
+# How long a connection to one of a host's addresses is waited for before the next is tried: RFC 8305 §5's longest
+# connection attempt delay.
+_ATTEMPT_MAX_S = 2.0
 
 
 class _Refused(Exception):
@@ -150,21 +162,23 @@ class SocksGuard:
         target = await self._check(host, port)
         if self._upstream is not None:
             return await _tunnel(self._upstream, target)
-        try:
-            return await asyncio.open_connection(str(target.ip), target.port)
-        except OSError as e:
-            raise _Refused(_HOST_UNREACHABLE) from e
+        return await _direct(target)
 
     async def _check(self, host: str, port: int) -> Target:
         key = (host.lower(), port)
-        if key not in self._targets:
+        if key in self._targets:
+            self._targets[key] = self._targets.pop(key)  # the most recently used is forgotten last
+        else:
             # The scheme only selects `check`'s rules for web URLs: its port allowlist is the same for http and https,
             # and the tunnel carries whichever the page uses.
-            self._targets[key] = asyncio.ensure_future(self._connector.check(f"https://{bracketed(host)}:{port}/"))
+            _forget_oldest(self._targets, lambda kept: kept.done())
+            self._targets[key] = asyncio.ensure_future(self._bounded(f"https://{bracketed(host)}:{port}/"))
         check = self._targets[key]
         try:
             return await asyncio.shield(check)
         except SsrfRejected as e:
+            if key not in self.rejections:
+                _forget_oldest(self.rejections, lambda _: True)
             self.rejections[key] = e.reason
             if e.reason == "dns" and self._targets.get(key) is check:
                 # A resolver failure may be transient, and a site's context keeps its guard for later pages: the next
@@ -173,11 +187,50 @@ class SocksGuard:
                 del self._targets[key]
             raise _Refused(_NOT_ALLOWED) from e
 
+    async def _bounded(self, url: str) -> Target:
+        try:
+            async with asyncio.timeout(_CHECK_MAX_S):
+                return await self._connector.check(url)
+        except TimeoutError as e:
+            raise SsrfRejected("dns") from e
 
-async def _tunnel(proxy: ProxyEndpoint, target: Target) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    """A CONNECT tunnel to `target`'s host through `proxy` (`open_tunnel`), its failures as SOCKS5 replies."""
+
+def _forget_oldest[K, V](kept: dict[K, V], settled: Callable[[V], bool]) -> None:
+    """Make room for one more entry in `kept`, at most `_KEPT` long: the oldest `settled` one goes."""
+    if len(kept) < _KEPT:
+        return
+    oldest = next((key for key, value in kept.items() if settled(value)), None)
+    if oldest is not None:
+        del kept[oldest]
+
+
+type _Streams = tuple[asyncio.StreamReader, asyncio.StreamWriter]
+
+
+async def _first_answering(addresses: Sequence[IPAddress], connect: Callable[[str], Awaitable[_Streams]]) -> _Streams:
+    """`connect` to the first of `addresses` that answers. Each but the last gets `_ATTEMPT_MAX_S`, so one that drops
+    the connection silently does not hold the rest back; the last one's failure is raised."""
+    *earlier, last = addresses
+    for ip in earlier:
+        with contextlib.suppress(OSError, TunnelRefused, TimeoutError):
+            async with asyncio.timeout(_ATTEMPT_MAX_S):
+                return await connect(str(ip))
+    return await connect(str(last))
+
+
+async def _direct(target: Target) -> _Streams:
+    """A connection to the first of `target`'s checked addresses that answers."""
     try:
-        return await open_tunnel(proxy, target.host, target.port)
+        return await _first_answering(target.addresses, lambda ip: asyncio.open_connection(ip, target.port))
+    except OSError as e:
+        raise _Refused(_HOST_UNREACHABLE) from e
+
+
+async def _tunnel(proxy: ProxyEndpoint, target: Target) -> _Streams:
+    """A CONNECT tunnel through `proxy` (`open_tunnel`) to the first of `target`'s checked addresses it reaches
+    (`tunneled`), its failures as SOCKS5 replies."""
+    try:
+        return await _first_answering(tunneled(target), lambda ip: open_tunnel(proxy, ip, target.port))
     except OSError as e:
         raise _Refused(_HOST_UNREACHABLE) from e
     except TunnelRefused as e:

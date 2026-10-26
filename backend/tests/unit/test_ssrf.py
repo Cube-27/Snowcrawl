@@ -42,6 +42,7 @@ _NON_PUBLIC = [
     "64:ff9b::7f00:1",  # NAT64 well-known prefix embedding 127.0.0.1, RFC 6052
     "2002:7f00:1::1",  # 6to4 embedding 127.0.0.1, RFC 3056
     "2001:db8::1",  # documentation, RFC 3849
+    "fec0::1",  # site-local, deprecated by RFC 3879
 ]
 
 
@@ -108,9 +109,13 @@ def test_ports_outside_the_web_set_are_rejected(url: str) -> None:
 
 # Hosts the WHATWG URL Standard parses as IPv4 although they are not dotted quads.
 _NUMERIC_HOSTS = ["2130706433", "0x7f.1", "127.1", "127.0.0.1.", "017700000001", "www.example.0x7f"]
+# Hosts parsers read differently: a percent-encoding, and dots IDNA maps to U+002E (UTS #46).
+_AMBIGUOUS_HOSTS = ["a%2eexample.test", "127\u30020\u30020\u30021", "a\uff0eexample.test", "a\uff61example.test"]
 
 
-@pytest.mark.parametrize("url", ["http:///p", "http://:80/", *(f"http://{host}/" for host in _NUMERIC_HOSTS)])
+@pytest.mark.parametrize(
+    "url", ["http:///p", "http://:80/", *(f"http://{host}/" for host in (*_NUMERIC_HOSTS, *_AMBIGUOUS_HOSTS))]
+)
 def test_malformed_or_non_canonical_hosts_are_rejected(url: str) -> None:
     resolver = StubResolver({})
     assert _reason(SafeConnector(resolver), url) == "host"
@@ -129,7 +134,9 @@ def test_malformed_or_non_canonical_hosts_are_rejected(url: str) -> None:
 def test_public_target_is_pinned_to_the_checked_address(url: str, port: int) -> None:
     resolver = StubResolver({"www.example.com": [_PUBLIC_V4, _PUBLIC_V6]})
     target = asyncio.run(SafeConnector(resolver).check(url))
-    assert target == Target(url=url, host="www.example.com", port=port, ip=IPv4Address(_PUBLIC_V4))
+    assert target == Target(
+        url=url, host="www.example.com", port=port, ip=IPv4Address(_PUBLIC_V4), others=(ip_address(_PUBLIC_V6),)
+    )
     assert resolver.calls == ["www.example.com"]
 
 

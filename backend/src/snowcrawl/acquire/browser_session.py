@@ -45,6 +45,7 @@ from snowcrawl.core.proxy import UNDECLARED, ExitPlace, ProxyEndpoint, ProxyPool
 from snowcrawl.storage.capture_bundle import HeaderList
 
 __all__ = [
+    "CLOSE_MAX_S",
     "BrowserSession",
     "ContextKey",
     "Failed",
@@ -135,6 +136,9 @@ _PROXY_ALL_LOOPBACK = "<-loopback>"
 # in a job usually comes within seconds.
 _OPEN_PROFILES: Final = BROWSER_CONTEXTS
 _PROFILE_IDLE_S = 60.0
+# A tab closes within this, or its browser has stopped answering: the close is given up, so it holds no render slot,
+# and its profile is not kept for another page.
+CLOSE_MAX_S: Final = 10.0
 # The browser's identity (`browser_identity`), read once per process and mode: the installed Chrome does not change
 # while the process runs.
 _IDENTITY: dict[tuple[str, bool], "Identity"] = {}
