@@ -65,14 +65,32 @@ def test_unset_the_target_follows_the_browser_and_names_the_major_of_its_handsha
     assert f"Chrome {_NEWER}" in caplog.text
 
 
-def test_an_explicit_target_is_kept_with_its_own_headers_and_starts_no_browser(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_explicit_target_is_kept_and_names_the_browsers_platform_where_it_renders(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def read(_headless: bool) -> HeaderList:
+        return _BROWSER
+
+    monkeypatch.setattr(impersonate, "_read_headers", read)
+    monkeypatch.setenv("SNOWCRAWL_IMPERSONATE", f"chrome{_PROFILES[0]}")
+
+    chosen = asyncio.run(rung_impersonation(AcquireSettings(), browser_rung=True))
+
+    assert chosen.target == nearest_target(_PROFILES[0])
+    assert chosen.headers == (("User-Agent", _of(_PROFILES[0])[0][1]), _BROWSER[3])
+    assert chosen.replaying(True).headers == _BROWSER
+
+
+def test_an_explicit_target_where_nothing_renders_keeps_its_own_headers_and_starts_no_browser(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     async def unread(_headless: bool) -> None:
-        raise AssertionError("no browser starts for an explicit target")
+        raise AssertionError("no browser starts for an explicit target where nothing renders")
 
     monkeypatch.setattr(impersonate, "_read_headers", unread)
     monkeypatch.setenv("SNOWCRAWL_IMPERSONATE", f"chrome{_PROFILES[0]}")
 
-    chosen = asyncio.run(rung_impersonation(AcquireSettings(), browser_rung=True))
+    chosen = asyncio.run(rung_impersonation(AcquireSettings(), browser_rung=False))
 
     assert chosen == Impersonation(nearest_target(_PROFILES[0]))
 

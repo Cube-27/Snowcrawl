@@ -10,10 +10,13 @@ profile's own client hints, `Accept` and order, with the browser's platform (its
 the product token, `Sec-CH-UA-Platform`) and its `Accept-Language`. A profile more majors behind than
 `SNOWCRAWL_IMPERSONATE_LAG` warns at startup to upgrade curl_cffi. A request that carries cookies the browser rung
 earned (`acquire.session`) sends the browser's own headers in either case: a clearance cookie may be bound to the user
-agent that earned it. A target the operator sets (`SNOWCRAWL_IMPERSONATE`) is kept with its own headers and starts no
-browser. A process that runs the browser rung does not start when that Chrome cannot be read (`BrowserUnread`): its HTTP
-rung would name another browser than its renders. A process without it (`snowcrawl fetch` over HTTP) keeps the default
-target's own headers, with a warning.
+agent that earned it. A target the operator sets (`SNOWCRAWL_IMPERSONATE`) is kept in place of the nearest profile: in a
+process that runs the browser rung, with the browser's headers as above when it is a desktop Chrome profile (the
+browser's own on earned cookies alone when it names another client), so the HTTP rung names the platform its renders
+do; in a process without it, or when that Chrome cannot be read, with its own headers, starting no browser. Without an
+operator's target, a process that runs the browser rung does not start when that Chrome cannot be read
+(`BrowserUnread`): its HTTP rung would name another browser than its renders. A process without it (`snowcrawl fetch`
+over HTTP) keeps the default target's own headers, with a warning.
 """
 
 import logging
@@ -66,29 +69,39 @@ async def rung_impersonation(settings: AcquireSettings, *, browser_rung: bool) -
     """The impersonation of the rungs: the browser rung's Chrome (module docstring). `browser_rung`: the process also
     renders in that browser. Raises `BrowserUnread` for such a process when its Chrome cannot be read."""
     configured = settings.impersonate
-    if _IMPERSONATE in settings.model_fields_set:
+    explicit = _IMPERSONATE in settings.model_fields_set
+    if explicit and not browser_rung:
         return Impersonation(configured)
+    # An operator's target is the escape when the browser cannot be read: it starts with its own headers.
+    required = browser_rung and not explicit
     try:
         headers = await _read_headers(settings.browser_headless)
     except (PlaywrightError, OSError) as e:  # the driver or the browser could not be started
-        return _unread("did not start", configured, browser_rung, e)
+        return _unread("did not start", configured, required, e)
     agent = next((value for name, value in headers if name.lower() == _USER_AGENT), "")
     major = _CHROME_PRODUCT.search(agent)
     if major is None:
-        return _unread("names no Chrome in its user agent", configured, browser_rung)
+        return _unread("names no Chrome in its user agent", configured, required)
     browser = int(major.group(1))
-    target = nearest_target(browser)
-    profile = cast(int, _major(target))
-    if lags(browser, profile, settings.impersonate_lag):
+    return _following(configured if explicit else nearest_target(browser), headers, browser, settings.impersonate_lag)
+
+
+def _following(target: BrowserTypeLiteral, headers: HeaderList, browser: int, lag: int) -> Impersonation:
+    """`target` with the headers of the browser of major `browser` (module docstring); an operator's target that is no
+    desktop Chrome profile names another client, and sends the browser's only with the cookies it earned."""
+    profile = _major(target)
+    if profile is None:
+        return Impersonation(target, (), headers)
+    if lags(browser, profile, lag):
         log.warning(
-            "curl_cffi's nearest Chrome profile %s is %d majors behind Chrome %d: upgrade curl_cffi",
+            "curl_cffi's Chrome profile %s is %d majors behind Chrome %d: upgrade curl_cffi",
             target,
             browser - profile,
             browser,
         )
     if profile == browser:
         return Impersonation(target, headers)
-    log.warning("no curl_cffi Chrome profile for Chrome %s: impersonating %s", browser, target)
+    log.warning("impersonating %s for Chrome %s: the headers name the profile's major", target, browser)
     return Impersonation(target, _naming(headers, profile), headers)
 
 
