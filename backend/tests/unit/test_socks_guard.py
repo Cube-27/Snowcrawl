@@ -173,20 +173,21 @@ def test_through_a_proxy_pool_the_tunnel_names_the_checked_address() -> None:
     _run(scenario())
 
 
-def test_a_guard_keeps_its_latest_hosts_and_checks_a_forgotten_one_again(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_guard_keeps_its_latest_used_hosts_and_checks_a_forgotten_one_again(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(socks_guard, "_KEPT", 2)
 
     async def scenario() -> list[str]:
         connector = PinnedConnector()
         async with echo_server() as port, SocksGuard(connector) as guard:
-            for host in ("a.example.test", "b.example.test", "a.example.test", "c.example.test", "a.example.test"):
+            for host in ("a.example.test", "b.example.test", "a.example.test", "c.example.test", "b.example.test"):
                 head, _, writer = await _socks(guard, _domain_request(host, port))
                 writer.close()
                 assert head == b"\x05\x00"
         return connector.lookups
 
-    # Kept: a, then a and b; a again from the cache; c forgets a, the oldest; a is checked again.
-    assert _run(scenario()) == ["a.example.test", "b.example.test", "c.example.test", "a.example.test"]
+    # Kept: a, then a and b; a again from the cache, now the latest used; c forgets b, the least recently used; b is
+    # checked again.
+    assert _run(scenario()) == ["a.example.test", "b.example.test", "c.example.test", "b.example.test"]
 
 
 def test_a_check_whose_resolver_never_answers_is_refused_as_dns(monkeypatch: pytest.MonkeyPatch) -> None:

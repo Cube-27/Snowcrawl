@@ -8,13 +8,19 @@ address the guard never saw.
 
 import asyncio
 
-from snowcrawl.acquire.ssrf import bracketed
+from snowcrawl.acquire.ssrf import IPAddress, Target, bracketed
 from snowcrawl.core.proxy import ProxyEndpoint
 
-__all__ = ["TunnelRefused", "open_tunnel"]
+__all__ = ["TunnelRefused", "open_tunnel", "tunneled"]
 
 # The longest CONNECT response head read: a proxy that sends more is refused rather than buffered without bound.
 _HEAD_MAX_BYTES = 16_384
+
+
+def tunneled(target: Target) -> tuple[IPAddress, ...]:
+    """`target`'s checked addresses in the order a tunnel tries them: IPv4 first. The resolver orders them by this
+    host's routes (RFC 6724), not the proxy exit's, which may have no IPv6 route; every exit reaches IPv4."""
+    return tuple(sorted(target.addresses, key=lambda ip: ip.version))
 
 
 class TunnelRefused(Exception):

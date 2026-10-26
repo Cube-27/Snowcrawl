@@ -39,21 +39,25 @@ from snowcrawl.acquire.redirects import MAX_REDIRECTS
 from snowcrawl.acquire.redirects import location as redirect_location
 from snowcrawl.acquire.session import SessionCookie, SiteSession
 from snowcrawl.acquire.ssrf import SafeConnector, SsrfRejected, Target, bracketed
+from snowcrawl.acquire.tunnel import tunneled
 from snowcrawl.acquire.types import FetchPolicy, RequestContext
 from snowcrawl.core.proxy import ProxyEndpoint, ProxyPool, UnknownProxyPool, pool_endpoint, proxy_pool
 from snowcrawl.storage.capture_bundle import HeaderList
 
 __all__ = [
     "BODY_CAP",
+    "DEFAULT_PORTS",
     "Failed",
     "Hop",
     "Limits",
+    "Origin",
     "Redirected",
     "Sent",
     "Transport",
     "Wire",
     "curl_transport",
     "follow",
+    "origin",
     "pinned",
     "reason",
     "send",
@@ -238,35 +242,31 @@ async def follow(
     return response
 
 
-# An origin (RFC 6454 §4): the scheme and host, lowercased, and the port, the scheme's default when the URL names none.
-type _Origin = tuple[str, str, int]
-_DEFAULT_PORTS: Final = {"http": 80, "https": 443}  # RFC 9110 §4.2.1, §4.2.2
+DEFAULT_PORTS: Final = {"http": 80, "https": 443}  # RFC 9110 §4.2
+type Origin = tuple[str, str, int | None]
 
 
-def _origin_of(url: str) -> _Origin | None:
+def origin(url: str) -> Origin:
+    """A URL's origin (RFC 6454 §4): scheme, host and port, the scheme's default port filled in."""
     parts = urlsplit(url)
-    scheme, host = parts.scheme.lower(), parts.hostname
-    try:
-        port = parts.port or _DEFAULT_PORTS.get(scheme)
-    except ValueError:
-        return None
-    return None if host is None or port is None else (scheme, host, port)
+    scheme = parts.scheme.lower()
+    return scheme, (parts.hostname or ""), parts.port or DEFAULT_PORTS.get(scheme)
 
 
 @dataclass(frozen=True)
 class _Caller:
     """The caller's context as a fetch applies it: the origins it goes to, its headers and its cookies."""
 
-    origins: frozenset[_Origin] = frozenset()
+    origins: frozenset[Origin] = frozenset()
     headers: HeaderList = ()
     cookies: tuple[SessionCookie, ...] = ()
 
     @classmethod
     def of(cls, url: str, context: RequestContext | None) -> "_Caller":
-        origin = _origin_of(url)
-        if context is None or origin is None:
+        page = origin(url)
+        scheme, host, _ = page
+        if context is None or not host:
             return cls()
-        scheme, host, _ = origin
         headers = tuple((name, value.get_secret_value()) for name, value in context.headers)
         # Host-only cookies of the fetched URL's host (RFC 6265 §5.3 step 6), for every path, ending with the fetch;
         # given for an https page, they go over https only (`secure`, RFC 6265 §5.4 step 1).
@@ -285,13 +285,13 @@ class _Caller:
         # An http page's own upgrade to https (RFC 9110 §4.2.2) is its host still, over a channel that only adds
         # protection.
         upgrade = {("https", host, 443)} if scheme == "http" else set()
-        return cls(frozenset({origin, *upgrade}), headers, cookies)
+        return cls(frozenset({page, *upgrade}), headers, cookies)
 
     def headers_for(self, url: str) -> HeaderList:
         """The caller's headers for a request to `url`: only to the origin they were given for (RFC 6454 §4: scheme,
         host and port) or its https upgrade, so a redirect to another host, port or a cleartext scheme carries none of
         them (as RFC 9110 §15.4 leaves credentials to the user agent's judgement)."""
-        return self.headers if _origin_of(url) in self.origins else ()
+        return self.headers if origin(url) in self.origins else ()
 
 
 async def _checked(check: Awaitable[Target], deadline: float, last: Wire | None) -> Target:
@@ -459,7 +459,7 @@ def pinned(target: Target) -> dict[CurlOpt, object]:
 
 
 def _through(proxy: ProxyEndpoint, target: Target) -> dict[CurlOpt, object]:
-    ip = bracketed(str(target.ip))
+    ip = bracketed(str(tunneled(target)[0]))
     options: dict[CurlOpt, object] = {
         # The proxy's host alone, with its type and port set apart: curl's CURLPROXY_HTTP (0) speaks plain HTTP to
         # the proxy, the only kind a pool is (`snowcrawl.core.proxy`); pages inside the tunnel keep their own TLS.
@@ -468,10 +468,10 @@ def _through(proxy: ProxyEndpoint, target: Target) -> dict[CurlOpt, object]:
         CurlOpt.PROXYTYPE: _CURLPROXY_HTTP,
         # A CONNECT tunnel for http pages too (RFC 9110 §9.3.6): the proxy relays bytes and never rewrites a request.
         CurlOpt.HTTPPROXYTUNNEL: 1,
-        # The CONNECT names the first checked address, not the host: a proxy would resolve a name itself, to an address
-        # the guard never checked. CURLOPT_CONNECT_TO's empty host matches every name on the port, and the request's
-        # Host and TLS server name keep the URL's host. No CURLOPT_RESOLVE: it would also redirect the connection to
-        # the proxy.
+        # The CONNECT names a checked address (`tunneled`), not the host: a proxy would resolve a name itself, to an
+        # address the guard never checked. CURLOPT_CONNECT_TO's empty host matches every name on the port, and the
+        # request's Host and TLS server name keep the URL's host. No CURLOPT_RESOLVE: it would also redirect the
+        # connection to the proxy.
         CurlOpt.CONNECT_TO: _slist(f":{target.port}:{ip}:{target.port}"),
         # An empty list overrides the environment's `no_proxy`, which would otherwise send matching hosts direct,
         # resolved by curl rather than the guard (CURLOPT_NOPROXY).

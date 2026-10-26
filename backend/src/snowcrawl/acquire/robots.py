@@ -1,4 +1,5 @@
-"""Robots.txt (RFC 9309): fetched once per origin per 24 hours, kept in `site.robots_snapshot`, and
+"""Robots.txt (RFC 9309): fetched once per origin per 24 hours (an unreachable one again after `UNREACHABLE_TTL`),
+kept in `site.robots_snapshot`, and
 read with Protego: RFC 9309 matching (§2.2.2: the longest match wins, `allow` on a tie; §2.2.3: `*` and `$`), plus the
 `Crawl-delay` and `Sitemap:` extensions.
 
@@ -89,12 +90,15 @@ def at_origin(url: str, path: str) -> str:
     return urlunsplit((parts.scheme, netloc, path, "", ""))
 
 
-def snapshot_of(result: FetchResult) -> RobotsSnapshot:
-    """The rules a robots.txt fetch yields, with no body when it was unreachable, which allows nothing (RFC 9309
-    §2.3.1.4: a 5xx status or a network error; and a 429, which asks for fewer requests, RFC 6585 §4, rather than
-    saying the file is unavailable)."""
+def snapshot_of(result: FetchResult) -> RobotsSnapshot | None:
+    """The rules a robots.txt fetch yields, with no body when the server answered that it is unreachable, which allows
+    nothing (RFC 9309 §2.3.1.4: a 5xx status; and a 429, which asks for fewer requests, RFC 6585 §4, rather than
+    saying the file is unavailable). `None` when no answer arrived (a network error, also unreachable): its cause may
+    be this side's (a resolver or a timeout of ours), so it is not kept."""
     manifest = result.bundle.manifest
     status, error = manifest.status_code, result.attempts[-1].error
+    if status == 0:
+        return None
     body: str | None = None
     if 200 <= status < 300 and error is None:
         # RFC 9309 §2.3: UTF-8. A byte order mark (Unicode §23.8) is not part of the first line: kept, it would make
@@ -111,7 +115,8 @@ async def site_robots(
 ) -> Robots | None:
     """The robots rules for `url` on its site, from the snapshot of its origin's robots.txt in the site's `stored`
     snapshots while it is fresh (`RobotsSnapshot.ttl`); otherwise fetched, outside any transaction, and stored beside
-    the site's other fresh snapshots in a transaction of its own. `None` when robots.txt is unreachable."""
+    the site's other fresh snapshots in a transaction of its own. `None` when robots.txt is unreachable
+    (`snapshot_of`)."""
     now = datetime.now(UTC)
     target = robots_url(url)
     fresh = {
@@ -119,6 +124,8 @@ async def site_robots(
     }
     if (snapshot := fresh.get(target)) is None:
         snapshot = snapshot_of(await fetch(target))
+        if snapshot is None:
+            return None
         kept = _SNAPSHOTS.dump_json({**fresh, target: snapshot}).decode()
         async with engine.begin() as conn:
             await conn.execute(update(Site).where(Site.id == site_id).values(robots_snapshot=kept))

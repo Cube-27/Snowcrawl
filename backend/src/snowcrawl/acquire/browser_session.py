@@ -136,8 +136,8 @@ _PROXY_ALL_LOOPBACK = "<-loopback>"
 # in a job usually comes within seconds.
 _OPEN_PROFILES: Final = BROWSER_CONTEXTS
 _PROFILE_IDLE_S = 60.0
-# A tab or a profile's browser closes within this, or its browser has stopped answering: the close is given up, so it
-# holds no render slot, and the rest of what closes with it still does (`AsyncExitStack` runs every exit callback).
+# A tab closes within this, or its browser has stopped answering: the close is given up, so it holds no render slot,
+# and its profile is not kept for another page.
 CLOSE_MAX_S: Final = 10.0
 # The browser's identity (`browser_identity`), read once per process and mode: the installed Chrome does not change
 # while the process runs.
@@ -199,9 +199,8 @@ class OpenProfile:
 
     async def close(self) -> None:
         self.closing = True
-        with contextlib.suppress(PlaywrightError, TimeoutError):
-            async with asyncio.timeout(CLOSE_MAX_S):
-                await self.stack.aclose()
+        with contextlib.suppress(PlaywrightError):
+            await self.stack.aclose()
 
 
 # What a profile is (`context_key`): the site, the proxy pool and endpoint.

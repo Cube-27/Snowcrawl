@@ -365,18 +365,37 @@ async def _listing(
             tab = _PatchrightTab(
                 page, url=url, engine_version=run.engine_version, started=run.started, steps=run.steps, landed=landed
             )
-            async with asyncio.timeout(max(0.0, deadline - time.monotonic()) + policy.browser_timeout_s):
-                report = await _driven(drive, tab)
-                # The driver's actions may have set cookies: the site's sessions are told those the context holds now.
-                run.cookies = await context_cookies(page.page.context)
-                if not tab.kept and not await tab.keep():
-                    return None
+            report = await _driven_by(
+                drive, tab, page, run, max(0.0, deadline - time.monotonic()) + policy.browser_timeout_s
+            )
+            if report is None:
+                return None
             return PagedFetch(pages=tuple(tab.kept), report=report.model_copy(update={"pages": len(tab.kept)}))
     except Failed as failed:
         run.failed(failed.error, failed.exchange)
     except TimeoutError:
         run.failed("timeout")
     return None
+
+
+async def _driven_by(
+    drive: Drive, tab: _PatchrightTab, page: Rendered, run: Render, seconds: float
+) -> ActionsReport | None:
+    """The driver's report once it is done and the context's cookies are read, within `seconds`; None when no state
+    was kept. Past `seconds` the browser has stopped answering: the states kept by then stand, as a time cap's do, and
+    with none kept the listing ends with a `TimeoutError`."""
+    try:
+        async with asyncio.timeout(seconds):
+            report = await _driven(drive, tab)
+            # The driver's actions may have set cookies: the site's sessions are told those the context holds now.
+            run.cookies = await context_cookies(page.page.context)
+            if not tab.kept and not await tab.keep():
+                return None
+            return report
+    except TimeoutError:
+        if not tab.kept:
+            raise
+        return ActionsReport(mechanism=None, stop="time_cap", actions=0, pages=len(tab.kept), items=0)
 
 
 async def _driven(drive: Drive, tab: _PatchrightTab) -> ActionsReport:

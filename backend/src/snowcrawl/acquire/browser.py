@@ -16,7 +16,6 @@ site session.
 """
 
 import asyncio
-import contextlib
 import re
 import time
 from collections.abc import AsyncIterator, Mapping
@@ -359,9 +358,13 @@ async def rendered(
         finally:
             if shown is not None:
                 shown.calls.cancel()
-            with contextlib.suppress(PlaywrightError, TimeoutError):
+            try:
                 async with asyncio.timeout(CLOSE_MAX_S):
                     await page.close()
+            except PlaywrightError:
+                pass
+            except TimeoutError:
+                held.keep = False  # the tab stays open in the profile: no later page shares it
 
 
 async def presented(page: Page, session: BrowserSession) -> None:
