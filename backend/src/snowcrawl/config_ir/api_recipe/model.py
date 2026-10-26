@@ -297,8 +297,16 @@ class LinkPagination(_Model):
     rows: EngineJsonPath
 
 
+class OnePagePagination(_Model):
+    """The listing's one response holds every row `rows` selects: there is no next request."""
+
+    kind: Literal["none"]
+    rows: EngineJsonPath
+
+
 Pagination = Annotated[
-    ParamPagination | CursorPagination | NextUrlPagination | LinkPagination, Field(discriminator="kind")
+    ParamPagination | CursorPagination | NextUrlPagination | LinkPagination | OnePagePagination,
+    Field(discriminator="kind"),
 ]
 
 

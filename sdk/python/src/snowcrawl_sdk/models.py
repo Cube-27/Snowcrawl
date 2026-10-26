@@ -905,6 +905,14 @@ class NormalizeOpOutput(RootModel[dict[str, dict[str, Any]]]):
     root: dict[str, dict[str, Any]]
 
 
+class OnePagePagination(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+    )
+    kind: Annotated[Literal["none"], Field(title="Kind")]
+    rows: Annotated[str, Field(title="Rows")]
+
+
 class OutcomeCounts(BaseModel):
     auth_wall: Annotated[int, Field(title="Auth Wall")]
     blocked: Annotated[int, Field(title="Blocked")]
@@ -1615,7 +1623,12 @@ class ApiRecipeInput(BaseModel):
     map: Annotated[dict[str, str], Field(title="Map")]
     method: Annotated[Method, Field(title="Method")]
     pagination: Annotated[
-        ParamPagination | CursorPagination | NextUrlPagination | LinkPagination | None,
+        ParamPagination
+        | CursorPagination
+        | NextUrlPagination
+        | LinkPagination
+        | OnePagePagination
+        | None,
         Field(title="Pagination"),
     ] = None
     params_from_url: Annotated[
@@ -1638,7 +1651,12 @@ class ApiRecipeOutput(BaseModel):
     map: Annotated[dict[str, str], Field(title="Map")]
     method: Annotated[Method, Field(title="Method")]
     pagination: Annotated[
-        ParamPagination | CursorPagination | NextUrlPagination | LinkPagination | None,
+        ParamPagination
+        | CursorPagination
+        | NextUrlPagination
+        | LinkPagination
+        | OnePagePagination
+        | None,
         Field(title="Pagination"),
     ] = None
     params_from_url: Annotated[dict[str, str], Field(title="Params From Url")]

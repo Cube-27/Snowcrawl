@@ -21,6 +21,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, NonNegativeInt, ValidationError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from snowcrawl.collect import json_doc
 from snowcrawl.collect.network_match import SUCCESS, DataCall, EndpointKey, endpoint_key
 from snowcrawl.config_ir.api_recipe.binding import (
     Ambiguous,
@@ -32,7 +33,7 @@ from snowcrawl.config_ir.api_recipe.binding import (
 )
 from snowcrawl.config_ir.api_recipe.headers import proposed
 from snowcrawl.config_ir.api_recipe.listing import ListingPage, first_page_request, page_series, series_pagination
-from snowcrawl.config_ir.api_recipe.model import ApiRecipe, Pagination, with_pagination
+from snowcrawl.config_ir.api_recipe.model import ApiRecipe, OnePagePagination, Pagination, with_pagination
 from snowcrawl.config_ir.custom_recipe import CustomRecipe, InvalidRecipe
 from snowcrawl.config_ir.url_pattern import generalize
 from snowcrawl.config_ir.validation import HeldOutPage
@@ -170,7 +171,7 @@ def _listing_requests(samples: Samples, calls: Mapping[CaptureId, int], rows: st
         found = _series(_listing_page(page, url), calls.get(page.capture_id))
         if found:
             series.append((page, url, found))
-    pagination = series_pagination([calls for _, _, calls in series], rows)
+    pagination = series_pagination([calls for _, _, calls in series], rows) or _one_page(series)
     if pagination is None:
         raise InvalidRecipe([("main", "no sample's calls of the main endpoint show how the next page is asked")])
     requests = []
@@ -178,6 +179,21 @@ def _listing_requests(samples: Samples, calls: Mapping[CaptureId, int], rows: st
         if (request := first_page_request(calls_of[0], pagination)) is not None:
             requests.append(Sample(url, request, page_data(page.page)))
     return requests, pagination
+
+
+def _one_page(series: Sequence[tuple[HeldOutPage, str, tuple[DataCall, ...]]]) -> Pagination | None:
+    """No pagination (`none`) when the samples show the call returns every row: each made one call of the series, and
+    its rows are as many as the rows the sample published (a sample that published none shows nothing)."""
+    for page, _, calls in series:
+        if len(calls) != 1 or not page.rows or _row_count(calls[0]) != len(page.rows):
+            return None
+    rows = series[0][2][0].rows if series else None
+    return None if rows is None else OnePagePagination(kind="none", rows=rows)
+
+
+def _row_count(data: DataCall) -> int:
+    rows = [] if data.rows is None else json_doc.select(data.rows, data.call.document)
+    return sum(isinstance(row, dict) for _, row in rows)
 
 
 def _listing_page(page: HeldOutPage, url: str) -> ListingPage:

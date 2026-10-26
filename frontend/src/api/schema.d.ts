@@ -1088,7 +1088,7 @@ export interface components {
              */
             method: "GET" | "POST";
             /** Pagination */
-            pagination?: (components["schemas"]["ParamPagination"] | components["schemas"]["CursorPagination"] | components["schemas"]["NextUrlPagination"] | components["schemas"]["LinkPagination"]) | null;
+            pagination?: (components["schemas"]["ParamPagination"] | components["schemas"]["CursorPagination"] | components["schemas"]["NextUrlPagination"] | components["schemas"]["LinkPagination"] | components["schemas"]["OnePagePagination"]) | null;
             /**
              * Params From Url
              * @default {}
@@ -1133,7 +1133,7 @@ export interface components {
              */
             method: "GET" | "POST";
             /** Pagination */
-            pagination: (components["schemas"]["ParamPagination"] | components["schemas"]["CursorPagination"] | components["schemas"]["NextUrlPagination"] | components["schemas"]["LinkPagination"]) | null;
+            pagination: (components["schemas"]["ParamPagination"] | components["schemas"]["CursorPagination"] | components["schemas"]["NextUrlPagination"] | components["schemas"]["LinkPagination"] | components["schemas"]["OnePagePagination"]) | null;
             /**
              * Params From Url
              * @default {}
@@ -3535,6 +3535,19 @@ export interface components {
             [key: string]: {
                 [key: string]: unknown;
             };
+        };
+        /**
+         * OnePagePagination
+         * @description The listing's one response holds every row `rows` selects: there is no next request.
+         */
+        OnePagePagination: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "none";
+            /** Rows */
+            rows: string;
         };
         /**
          * OutcomeCounts

@@ -139,6 +139,7 @@
                     "cursor": "#/components/schemas/CursorPagination",
                     "link": "#/components/schemas/LinkPagination",
                     "next_url": "#/components/schemas/NextUrlPagination",
+                    "none": "#/components/schemas/OnePagePagination",
                     "param": "#/components/schemas/ParamPagination"
                   },
                   "propertyName": "kind"
@@ -155,6 +156,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/LinkPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OnePagePagination"
                   }
                 ]
               },
@@ -266,6 +270,7 @@
                     "cursor": "#/components/schemas/CursorPagination",
                     "link": "#/components/schemas/LinkPagination",
                     "next_url": "#/components/schemas/NextUrlPagination",
+                    "none": "#/components/schemas/OnePagePagination",
                     "param": "#/components/schemas/ParamPagination"
                   },
                   "propertyName": "kind"
@@ -282,6 +287,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/LinkPagination"
+                  },
+                  {
+                    "$ref": "#/components/schemas/OnePagePagination"
                   }
                 ]
               },
@@ -6752,6 +6760,27 @@
           "additionalProperties": true,
           "type": "object"
         },
+        "type": "object"
+      },
+      "OnePagePagination": {
+        "additionalProperties": false,
+        "description": "The listing's one response holds every row `rows` selects: there is no next request.",
+        "properties": {
+          "kind": {
+            "const": "none",
+            "title": "Kind",
+            "type": "string"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "rows"
+        ],
+        "title": "OnePagePagination",
         "type": "object"
       },
       "OutcomeCounts": {
