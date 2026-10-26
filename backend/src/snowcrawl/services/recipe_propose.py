@@ -21,9 +21,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, NonNegativeInt, ValidationError
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from snowcrawl.collect import json_doc
 from snowcrawl.collect.api import map_paths
-from snowcrawl.collect.network_match import SUCCESS, DataCall, EndpointKey, endpoint_key
+from snowcrawl.collect.network_match import SUCCESS, DataCall, EndpointKey, endpoint_key, holds_rows
 from snowcrawl.config_ir.api_recipe.binding import (
     Ambiguous,
     CapturedRequest,
@@ -184,17 +183,13 @@ def _listing_requests(samples: Samples, calls: Mapping[CaptureId, int], rows: st
 
 def _one_page(series: Sequence[tuple[HeldOutPage, str, tuple[DataCall, ...]]]) -> Pagination | None:
     """No pagination (`none`) when the samples show the call returns every row: each made one call of the series, and
-    its rows are as many as the rows the sample published (a sample that published none shows nothing)."""
+    its rows hold every row the sample published (`network_match.holds_rows`; a sample that published none shows
+    nothing)."""
     for page, _, calls in series:
-        if len(calls) != 1 or not page.rows or _row_count(calls[0]) != len(page.rows):
+        if len(calls) != 1 or not holds_rows(calls[0], [row.published for row in page.rows]):
             return None
     rows = series[0][2][0].rows if series else None
     return None if rows is None else OnePagePagination(kind="none", rows=rows)
-
-
-def _row_count(data: DataCall) -> int:
-    rows = [] if data.rows is None else json_doc.select(data.rows, data.call.document)
-    return sum(isinstance(row, dict) for _, row in rows)
 
 
 def _listing_page(page: HeldOutPage, url: str) -> ListingPage:

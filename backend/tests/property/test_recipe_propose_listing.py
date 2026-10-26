@@ -1,6 +1,6 @@
 """A listing draft (`services.recipe_propose.drafted`) over generated samples whose one call answers rows: the draft
-has no pagination (`none`) exactly when every sample's call returns as many rows as the sample published; otherwise
-nothing shows how the next page is asked."""
+has no pagination (`none`) exactly when every sample's call holds every row the sample published (a row published
+twice is held once); otherwise nothing shows how the next page is asked."""
 
 import json
 from datetime import UTC, datetime
@@ -37,8 +37,9 @@ SCHEMA = SchemaDef(
 _MAIN = EndpointRef(method="GET", origin="https://api.example.test", has_path=True, segments=1, suffix="", query=["c"])
 
 
-def _page(number: int, rows: int, published: int) -> tuple[HeldOutPage, str]:
-    """Sample `number`: its call answers `rows` items, the page shows them and the engine published `published`."""
+def _page(number: int, rows: int, whole: bool) -> tuple[HeldOutPage, str]:
+    """Sample `number`: its call answers `rows` items and the page shows them; the engine published each, the first
+    twice, and when not `whole` one more the call does not hold."""
     titles = [f"Item {number} title {i}" for i in range(rows)]
     price: JsonValue = {"amount": "12.50", "currency": "USD"}
     body = json.dumps({"items": [{"title": title, "price": price} for title in titles]}).encode()
@@ -47,14 +48,15 @@ def _page(number: int, rows: int, published: int) -> tuple[HeldOutPage, str]:
     shown = "".join(f"<li>{title}</li>" for title in titles)
     bundle = capture(f"<html><body><ul>{shown}</ul></body></html>".encode(), url=url, method="browser", network=network)
     ctx = Context(captured_at=datetime(2026, 10, 26, tzinfo=UTC), base_url=url, page_url=url)
-    facts = tuple(Facts(published={"title": title, "price": price}) for title in titles[:published])
+    published = [titles[0], *titles, *([] if whole else [f"Item {number} not in the call"])]
+    facts = tuple(Facts(published={"title": title, "price": price}) for title in published)
     return HeldOutPage(CaptureId(UUID(int=number + 1)), ParsedPage.of(bundle), ctx, Facts(), facts), url
 
 
 @settings(max_examples=25, deadline=None)
 @given(st.lists(st.tuples(st.integers(3, 8), st.booleans()), min_size=2, max_size=4))
 def test_a_listing_whose_one_call_returns_every_row_has_no_pagination(plan: list[tuple[int, bool]]) -> None:
-    pages = [_page(number, rows, rows if whole else rows - 1) for number, (rows, whole) in enumerate(plan)]
+    pages = [_page(number, rows, whole) for number, (rows, whole) in enumerate(plan)]
     samples = Samples(SCHEMA, [page for page, _ in pages], [url for _, url in pages])
 
     if all(whole for _, whole in plan):

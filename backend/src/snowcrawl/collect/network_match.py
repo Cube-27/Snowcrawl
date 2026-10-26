@@ -19,6 +19,7 @@ show fewer than `MIN_ITEMS` is no listing's rows (`acquire.items`).
 """
 
 import re
+from collections import Counter
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, replace
 from functools import cached_property
@@ -156,18 +157,43 @@ class DataCall:
 def data_calls(page: ParsedPage, published: Sequence[Mapping[str, JsonValue]] = ()) -> list[DataCall]:
     """The page's calls that carry data, best first: by row hits, then visible values; ties keep capture order. Empty
     when the page does not hold its bodies' manifest entries. `published` are the rows the engine published from the
-    page, when known: a call's rows are then the array whose items hold the most of them (`_rows`)."""
+    page, when known: a call's rows are then the array whose items hold the most of them (`_rows`), and the calls of
+    one endpoint list one array (`_endpoint_rows`)."""
     if len(page.network_entries) != len(page.network):
         return []
     found: list[DataCall] = []
+    held: dict[int, int] = {}  # per call, how many of its rows hold a published row's string
     memo: dict[str, bool] = {}
     stated = _published_strings(published)
     for call in read_calls(page.network_entries, page.network):
         visible = len(visible_paths(call.document, page, memo))
         if visible:
-            rows, hits = _rows(call.document, page, memo, stated)
+            rows, hits, held[call.index] = _rows(call.document, page, memo, stated)
             found.append(DataCall(call, visible, rows, hits))
+    if stated:
+        found = _endpoint_rows(found, held)
     return sorted(found, key=lambda data: (-data.row_hits, -data.visible))
+
+
+def _endpoint_rows(found: list[DataCall], held: Mapping[int, int]) -> list[DataCall]:
+    """The calls with each taking the row query of its endpoint's call whose rows hold the most published rows, when
+    its own answer holds `MIN_ITEMS` object items there: the calls of one endpoint answer the pages of one listing (a
+    first batch, then the next), and a capture whose page steps replaced the items shown (a "next" click) shows only
+    the last call's, so an earlier call's rows are read from that structure, not from what the page still shows."""
+    best: dict[EndpointKey, DataCall] = {}
+    for data in found:
+        here = held[data.call.index]
+        current = best.get(data.call.endpoint)
+        if data.rows is not None and here > 0 and (current is None or here > held[current.call.index]):
+            best[data.call.endpoint] = data
+    return [_with_rows(data, best.get(data.call.endpoint)) for data in found]
+
+
+def _with_rows(data: DataCall, best: DataCall | None) -> DataCall:
+    if best is None or best.rows is None or best.rows == data.rows:
+        return data
+    items = json_doc.select(best.rows, data.call.document)
+    return data if sum(isinstance(item, dict) for _, item in items) < MIN_ITEMS else replace(data, rows=best.rows)
 
 
 # One listing's series: the request method, the literal origin and path its calls share, the request body shape and
@@ -244,6 +270,17 @@ def state_calls(states: Sequence[ParsedPage], published: Sequence[Mapping[str, J
     return sorted(found, key=lambda data: (-data.row_hits, -data.visible))
 
 
+def holds_rows(data: DataCall, published: Sequence[Mapping[str, JsonValue]]) -> bool:
+    """Whether the call's rows hold every row in `published` (one at least): each published row has a string, in the
+    text form, that some of the rows hold and not every one (a value every row repeats, a currency, says nothing of
+    which row it is). A row the engine published twice is held once."""
+    items = [] if data.rows is None else json_doc.select(data.rows, data.call.document)
+    strings = [_strings(item) for _, item in items if isinstance(item, dict)]
+    holders = Counter(text for own in strings for text in own)
+    held = {text for text, count in holders.items() if count < len(strings)}
+    return bool(published) and all(_published_strings([row]) & held for row in published)
+
+
 def _published_strings(rows: Sequence[Mapping[str, JsonValue]]) -> frozenset[str]:
     """The strings of published row values, in the text form (module docstring)."""
     return frozenset(
@@ -257,11 +294,11 @@ def _published_strings(rows: Sequence[Mapping[str, JsonValue]]) -> frozenset[str
 
 def _rows(
     document: JsonValue, page: ParsedPage, memo: dict[str, bool], published: frozenset[str] = frozenset()
-) -> tuple[str | None, int]:
-    """The row query of the array whose items show the most strings of their own, and how many items do. With
-    `published` row strings, the array whose items hold the most of those first: a page also shows arrays that are
-    not its rows (filter facets, menus), whose items' strings are no row's values."""
-    best: tuple[str | None, int] = (None, 0)
+) -> tuple[str | None, int, int]:
+    """The row query of the array whose items show the most strings of their own, how many items do, and how many hold
+    a `published` row string. With `published` row strings, the array whose items hold the most of those first: a
+    page also shows arrays that are not its rows (filter facets, menus), whose items' strings are no row's values."""
+    best: tuple[str | None, int, int] = (None, 0, 0)
     rank = (0, 0)
     for path, value in json_doc.nodes(document):
         if isinstance(value, list) and json_doc.is_query(query := path + _EVERY_ITEM):
@@ -270,7 +307,7 @@ def _rows(
                 continue
             here = (_own_hits(value, page, memo, published) if published else 0, hits)
             if here > rank:
-                best, rank = (query, hits), here
+                best, rank = (query, hits, here[0]), here
     return best
 
 

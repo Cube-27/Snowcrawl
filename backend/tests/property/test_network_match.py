@@ -1,5 +1,6 @@
 """A call's rows (`data_calls`): rows the engine published choose the array whose items hold them over another array
-the page shows. Over generated white space: an item's strings are compared in the text form the page text is indexed
+the page shows, and the calls of one endpoint read that array even where the page no longer shows its items. Over
+generated white space: an item's strings are compared in the text form the page text is indexed
 in, so white space around or inside a value changes neither which items show a string of their own nor how many do."""
 
 import json
@@ -50,3 +51,32 @@ def test_published_rows_choose_the_array_whose_items_hold_them(extra: int, order
 
     assert [data.rows for data in data_calls(page)] == ["$['facets'][*]"]
     assert [data.rows for data in data_calls(page, [{"title": name} for name in _NAMES])] == ["$['items'][*]"]
+
+
+@given(st.integers(min_value=1, max_value=4))
+def test_the_calls_of_one_endpoint_read_the_rows_its_best_call_holds(extra: int) -> None:
+    # A first page the capture's "next" step replaced: only the second call's items are still shown, beside a filter
+    # list both answers carry.
+    labels = [f"Filter label {i}" for i in range(len(_NAMES) + extra)]
+    first = [{"name": f"Earlier item {i}"} for i in range(len(_NAMES))]
+    second = [{"name": name} for name in _NAMES]
+    network = tuple(
+        call(
+            i,
+            "https://api.example.test/search",
+            json.dumps({"facets": [{"label": label} for label in labels], "items": items}).encode(),
+            method="POST",
+            request_body=json.dumps({"offset": i * 6}),
+        )
+        for i, items in enumerate((first, second))
+    )
+    shown = "".join(f"<li>{text}</li>" for text in [*labels, *_NAMES])
+    page = ParsedPage(
+        f"<html><body><ul>{shown}</ul></body></html>",
+        tuple(body for _, body in network),
+        tuple(entry for entry, _ in network),
+    )
+
+    rows = {data.call.index: data.rows for data in data_calls(page, [{"title": name} for name in _NAMES])}
+
+    assert rows == {0: "$['items'][*]", 1: "$['items'][*]"}
