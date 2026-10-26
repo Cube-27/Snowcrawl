@@ -4,8 +4,10 @@ browser context sends every connection through.
 A request interceptor can't be the guard: the browser follows redirects itself, and interception sees only the
 first request of a redirect chain. Behind a SOCKS5 proxy the browser resolves no names (RFC 1928 §4 lets it send the
 host name), so each connection, on every redirect hop and from every frame or worker, names its host here. The
-guard checks it with `SafeConnector.check` and connects only to the checked address, which is fixed for the life of
-the guard: a name is resolved once per fetch, and a changed DNS answer can't redirect a later connection.
+guard checks it with `SafeConnector.check` and connects only to the checked address, which is kept for the guard's
+later connections: a name is resolved once per fetch, and a changed DNS answer can't redirect a later connection. The
+guard keeps the checks of at most `_KEPT` hosts, forgetting the oldest settled one past it, so a long-lived site
+profile does not grow without bound; a forgotten host is checked again from scratch.
 
 Only CONNECT with no authentication is spoken (RFC 1928 §3). Bytes are relayed unread, so TLS stays end to end
 between the browser and the site.
@@ -18,7 +20,7 @@ the guard checked. The browser's TLS names the host inside the tunnel.
 import asyncio
 import contextlib
 import struct
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from ipaddress import IPv4Address, IPv6Address
 from types import TracebackType
 from typing import Self, cast
@@ -44,6 +46,11 @@ _COMMAND_NOT_SUPPORTED = 7
 _ADDRESS_TYPE_NOT_SUPPORTED = 8
 
 _CHUNK = 65_536
+# The hosts a guard keeps checks and refusals for: far more than one page's hosts (its own, CDNs, third parties).
+_KEPT = 512
+# A check whose name resolution has not answered by then fails as `dns`, as the system resolver gives up after two
+# tries of 5 s each by default (resolv.conf(5) `timeout`, `attempts`), so a stalled lookup holds no connection open.
+_CHECK_MAX_S = 10.0
 
 
 class _Refused(Exception):
@@ -161,11 +168,13 @@ class SocksGuard:
         if key not in self._targets:
             # The scheme only selects `check`'s rules for web URLs: its port allowlist is the same for http and https,
             # and the tunnel carries whichever the page uses.
-            self._targets[key] = asyncio.ensure_future(self._connector.check(f"https://{bracketed(host)}:{port}/"))
+            _forget_oldest(self._targets, lambda kept: kept.done())
+            self._targets[key] = asyncio.ensure_future(self._bounded(f"https://{bracketed(host)}:{port}/"))
         check = self._targets[key]
         try:
             return await asyncio.shield(check)
         except SsrfRejected as e:
+            _forget_oldest(self.rejections, lambda _: True)
             self.rejections[key] = e.reason
             if e.reason == "dns" and self._targets.get(key) is check:
                 # A resolver failure may be transient, and a site's context keeps its guard for later pages: the next
@@ -173,6 +182,22 @@ class SocksGuard:
                 # connection started). A refusal by policy stands.
                 del self._targets[key]
             raise _Refused(_NOT_ALLOWED) from e
+
+    async def _bounded(self, url: str) -> Target:
+        try:
+            async with asyncio.timeout(_CHECK_MAX_S):
+                return await self._connector.check(url)
+        except TimeoutError as e:
+            raise SsrfRejected("dns") from e
+
+
+def _forget_oldest[K, V](kept: dict[K, V], settled: Callable[[V], bool]) -> None:
+    """Make room for one more entry in `kept`, at most `_KEPT` long: the oldest `settled` one goes."""
+    if len(kept) < _KEPT:
+        return
+    oldest = next((key for key, value in kept.items() if settled(value)), None)
+    if oldest is not None:
+        del kept[oldest]
 
 
 async def _tunnel(proxy: ProxyEndpoint, target: Target) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:

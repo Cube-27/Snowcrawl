@@ -13,6 +13,7 @@ from urllib.parse import urlsplit
 
 import pytest
 
+from snowcrawl.acquire import socks_guard
 from snowcrawl.acquire.socks_guard import SocksGuard
 from snowcrawl.acquire.ssrf import IPAddress, SafeConnector, Target
 from snowcrawl.core.proxy import ProxyEndpoint
@@ -167,5 +168,41 @@ def test_through_a_proxy_pool_the_tunnel_names_the_checked_address() -> None:
 
         assert (head, echoed) == (b"\x05\x00", b"echo:ping")
         assert tunnels == [f"127.0.0.1:{port}"]  # the address the guard checked, never the name
+
+    _run(scenario())
+
+
+def test_a_guard_keeps_its_latest_hosts_and_checks_a_forgotten_one_again(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(socks_guard, "_KEPT", 2)
+
+    async def scenario() -> list[str]:
+        connector = PinnedConnector()
+        async with echo_server() as port, SocksGuard(connector) as guard:
+            for host in ("a.example.test", "b.example.test", "a.example.test", "c.example.test", "a.example.test"):
+                head, _, writer = await _socks(guard, _domain_request(host, port))
+                writer.close()
+                assert head == b"\x05\x00"
+        return connector.lookups
+
+    # Kept: a, then a and b; a again from the cache; c forgets a, the oldest; a is checked again.
+    assert _run(scenario()) == ["a.example.test", "b.example.test", "c.example.test", "a.example.test"]
+
+
+def test_a_check_whose_resolver_never_answers_is_refused_as_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(socks_guard, "_CHECK_MAX_S", 0.05)
+
+    class Stalled(SafeConnector):
+        async def check(self, url: str) -> Target:
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+    async def scenario() -> None:
+        async with SocksGuard(Stalled()) as guard:
+            head, _, writer = await _socks(guard, _domain_request("public.example.com", 443))
+            writer.close()
+            rejections = dict(guard.rejections)
+
+        assert head == b"\x05\x02"
+        assert rejections == {("public.example.com", 443): "dns"}
 
     _run(scenario())
