@@ -258,7 +258,8 @@ async def challenge_of(
         return None
     names = tuple(cookie.name for cookie in cookies)
     status, headers = exchange.status, exchange.response_headers
-    return await asyncio.to_thread(challenge_label, status, headers, text, exchange.url, names)
+    label = partial(challenge_label, block_class=block_class, rendered=True)
+    return await asyncio.to_thread(label, status, headers, text, exchange.url, names)
 
 
 async def classified(

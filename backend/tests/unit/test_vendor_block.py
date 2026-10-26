@@ -3,6 +3,7 @@ worker task retried at most once after the back-off. Results are synthetic (RFC 
 network."""
 
 import time
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import pytest
@@ -98,8 +99,12 @@ def test_a_vendor_blocked_task_is_retried_once_after_the_back_off_then_ends_bloc
 
     first, second = _ended(page, _task(1)), _ended(page, _task(2))
 
-    assert first == Failed(
-        f"challenge: {VENDOR}", transient=True, after=FIRST_BACKOFF, exhausted="blocked", capture_id=page[1]
+    # The back-off is jittered (`core.retry.backoff_delay`): at most the first.
+    assert isinstance(first, Failed)
+    assert first.after is not None
+    assert first.after <= FIRST_BACKOFF
+    assert replace(first, after=None) == Failed(
+        f"challenge: {VENDOR}", transient=True, exhausted="blocked", capture_id=page[1]
     )
     assert second == Finished("blocked", reason=f"challenge: {VENDOR}", capture_id=page[1])
     blocked = Finished("blocked", reason=f"challenge: {VENDOR}", capture_id=browser_met[1])

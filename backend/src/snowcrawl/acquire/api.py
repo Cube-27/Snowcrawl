@@ -148,9 +148,11 @@ def answer_class(status: int, body: bytes, raw: bool) -> tuple[BlockClass, str |
         except ValueError:
             return "error", "decode_error"
         return "ok", None
-    # The status rules apply; the body is not HTML, so it is never a shell.
-    block_class = classify(status, (), "")
-    return ("error", "unexpected_status") if block_class == "ok" else (block_class, None)
+    # A 1xx or an unfollowed 3xx (RFC 9110 §15.2, §15.4) answers nothing; otherwise the status rules apply, and the
+    # body is not HTML, so it is never a shell.
+    if status < 400:
+        return "error", "unexpected_status"
+    return classify(status, (), ""), None
 
 
 def _first_hop(request: JsonRequest, language: Mapping[str, str]) -> Hop:

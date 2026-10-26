@@ -75,7 +75,8 @@ async def fetch_http(
         if block_class in CHALLENGED:
             # The document's links resolve against the URL that served it (RFC 3986 §5), the last hop's.
             served = last.exchange.url
-            challenge = await asyncio.to_thread(challenge_label, last.status, last.response_headers, text, served)
+            label = partial(challenge_label, block_class=block_class)
+            challenge = await asyncio.to_thread(label, last.status, last.response_headers, text, served)
     elif sent.error == BODY_CAP and last is not None and unread_media(last.status, last.response_headers):
         # The body was stopped, which no page reader would read: its status and media type class the answer.
         block_class = "unsupported_media"

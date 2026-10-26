@@ -69,3 +69,24 @@ def test_usable_content_beats_a_stand_in_marker(sig: ChallengeSignature) -> None
     price = '<meta property="product:price:amount" content="9.50">'
     marked = _page(f"<!-- {sig.stand_in_markers[0]} -->{price}")
     assert block_class_of(200, _HTML, marked, types=("Offer", "Product")) == "ok"
+
+
+@pytest.mark.parametrize("signature", [s for s in SIGNATURES if s.header_names or s.cookie_prefixes or s.script_paths])
+def test_a_2xx_shell_is_labelled_by_cookies_headers_and_script_paths_only_with_structural_corroboration(
+    signature: ChallengeSignature,
+) -> None:
+    # A script-only document a vendor fronts: its signature without a stand-in marker. Over HTTP no script ran, so
+    # nothing structural says it stands in for the page; a refusal status, or the browser's render still showing a
+    # shell, does.
+    scripts = "".join(f'<script src="https://cdn.example.test{path}x.js"></script>' for path in signature.script_paths)
+    shell = f'<html><head><script src="/app.js"></script>{scripts}</head><body><div id="root"></div></body></html>'
+    headers = (
+        *_HTML,
+        *((name, "1") for name in signature.header_names),
+        *(("set-cookie", f"{prefix}1=v") for prefix in signature.cookie_prefixes),
+    )
+
+    assert block_class_of(200, headers, shell) == "shell"
+    assert challenge_label(200, headers, shell, URL, block_class="shell") is None
+    assert challenge_label(200, headers, shell, URL, block_class="shell", rendered=True) == signature.vendor
+    assert challenge_label(403, headers, shell, URL) == signature.vendor
