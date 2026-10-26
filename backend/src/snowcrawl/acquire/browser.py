@@ -41,6 +41,7 @@ from snowcrawl.acquire.browser_capture import (
 )
 from snowcrawl.acquire.browser_scroll import SCROLL_MAX_S, scroll_back, scroll_through, watch
 from snowcrawl.acquire.browser_session import (
+    CLOSE_MAX_S,
     BrowserSession,
     ContextKey,
     Failed,
@@ -358,8 +359,9 @@ async def rendered(
         finally:
             if shown is not None:
                 shown.calls.cancel()
-            with contextlib.suppress(PlaywrightError):
-                await page.close()
+            with contextlib.suppress(PlaywrightError, TimeoutError):
+                async with asyncio.timeout(CLOSE_MAX_S):
+                    await page.close()
 
 
 async def presented(page: Page, session: BrowserSession) -> None:

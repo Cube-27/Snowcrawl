@@ -96,7 +96,7 @@ class Web:
         body = json.dumps({"result": {"rows": rows, "next": None if following is None else str(following)}})
         return self.fetch_result(request.page_url, 200, body.encode(), method="api")
 
-    async def listing(self, url: str, policy: FetchPolicy, drive: Drive) -> PagedFetch:
+    async def listing(self, url: str, policy: FetchPolicy, drive: Drive, _deadline: float) -> PagedFetch:
         self.listed.append(url)
         page = self.fetch_result(url, 200, listing_page(self.origin, NAMES[:2]), method="browser", policy=policy)
         return PagedFetch(pages=(page,), report=None)

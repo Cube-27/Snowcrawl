@@ -172,7 +172,7 @@ class _ElsewhereTab(_ScrollTab):
 def test_a_listing_whose_tab_left_its_host_is_not_driven(tmp_path: Path) -> None:
     tab = _ElsewhereTab(30, 5, None)
 
-    async def listing(url: str, policy: FetchPolicy, drive: Drive) -> PagedFetch:
+    async def listing(url: str, policy: FetchPolicy, drive: Drive, _deadline: float) -> PagedFetch:
         report = await drive(tab)
         return PagedFetch(pages=(unserved(url, policy, "test", "error", "unused"),), report=report)
 

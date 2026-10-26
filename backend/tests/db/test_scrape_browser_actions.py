@@ -32,7 +32,7 @@ class Listing:
     asked: list[tuple[str, FetchPolicy]] = field(default_factory=list)
     drives: list[Drive] = field(default_factory=list)
 
-    async def __call__(self, url: str, policy: FetchPolicy, drive: Drive) -> PagedFetch:
+    async def __call__(self, url: str, policy: FetchPolicy, drive: Drive, _deadline: float) -> PagedFetch:
         self.asked.append((url, policy))
         self.drives.append(drive)
         results = tuple(
