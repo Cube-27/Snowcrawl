@@ -87,8 +87,9 @@ from snowcrawl.storage.capture_bundle import HeaderList
 _NOT_FOUND = frozenset({404, 410})
 # RFC 9110 §15.5.2: 401 asks for the user's credentials, which no rung has.
 _AUTH_WALL = 401
-# RFC 9110 §15.5.4 (403), §15.5.8 (407), §15.6.4 (503); RFC 6585 §4 (429); RFC 7725 §3 (451).
-_BLOCKED = frozenset({403, 407, 429, 451, 503})
+# RFC 9110 §15.5.4 (403), §15.6.4 (503); RFC 6585 §4 (429); RFC 7725 §3 (451). Not 407 (RFC 9110 §15.5.8): the
+# proxy the request went through asked for its credentials, which says nothing of the site; it is an `error`.
+_BLOCKED = frozenset({403, 429, 451, 503})
 # RFC 9110 §15.5.4: a server MAY answer 403 with a representation; when it holds the page's own data, it is the page.
 _FORBIDDEN = 403
 # HTML Standard: these elements' contents are never rendered as page text (script data, style sheets, fallback
@@ -188,7 +189,9 @@ def classify(
     if unread_media(status, headers):
         return "unsupported_media"
     if not 200 <= status < 300:
-        return "ok"
+        # RFC 9110 §15.4: a 3xx asks the client to act further (follow its `Location`, or choose, a 300); one the
+        # fetch left unfollowed (no `Location`, a 300, the hop limit) holds no page; nor does a 1xx (§15.2).
+        return "error"
     return _document_class(text, headers, (page_kind, redirect), types, content_only=content_only)
 
 

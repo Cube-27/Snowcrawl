@@ -26,15 +26,17 @@ _EMPTY_APP = '<html><head><script src="/app.js"></script></head><body><div id="r
         (410, "not_found"),
         (401, "auth_wall"),
         (403, "blocked"),
-        (407, "blocked"),
+        # The proxy asked for credentials (RFC 9110 §15.5.8): no refusal by the site.
+        (407, "error"),
         (451, "blocked"),
         # 503 is a server error that asks the client to back off: blocked wins over error.
         (503, "blocked"),
         (400, "error"),
         (500, "error"),
         (200, "ok"),
-        # The fetcher follows redirects; a 3xx reaching classify is not a 2xx page, so the shell rule does not apply.
-        (301, "ok"),
+        # The fetcher follows redirects; a 3xx reaching classify was left unfollowed and holds no page.
+        (300, "error"),
+        (301, "error"),
     ],
 )
 def test_status_decides_before_the_body(status: int, expected: BlockClass) -> None:
