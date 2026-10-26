@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncConnection, AsyncEngine
 
 from snowcrawl.collect import json_doc
 from snowcrawl.collect.network_match import SUCCESS, EndpointKey, data_calls, endpoint_key
-from snowcrawl.config_ir.api_recipe.discovery import Normalized, body_readings, field_hits
+from snowcrawl.config_ir.api_recipe.discovery import Normalized, body_readings
 from snowcrawl.config_ir.held_out import load_captures, read_bundle
 from snowcrawl.config_ir.validation import Facts, HeldOutPage
 from snowcrawl.content.page import answer_text
@@ -226,14 +226,16 @@ def _one_schema(captures: Sequence[CaptureId], schemas: Mapping[CaptureId, Schem
     return schemas[captures[0]]
 
 
-def listed(pages: Sequence[HeldOutPage], schema: SchemaDef) -> CallList:
-    """The call list of the sample `pages` (module docstring)."""
+def listed(pages: Sequence[HeldOutPage], schema: SchemaDef, only: EndpointKey | None = None) -> CallList:
+    """The call list of the sample `pages` (module docstring); of the endpoint `only` alone, when given."""
     groups: dict[EndpointKey, _Group] = {}
     for number, page in enumerate(pages):
         published = [row.published for row in page.rows]
         rows = {data.call.index: data.rows for data in data_calls(page.page, published) if data.rows is not None}
         for index, entry, data in _calls(page):
             key = endpoint_key(entry.method, entry.url, entry.request_body, entry.request_headers)
+            if only is not None and key != only:
+                continue
             group = groups.setdefault(key, _Group())
             group.calls.append(_summary(page.capture_id, index, entry, data))
             group.samples[page.capture_id] = None
@@ -275,9 +277,10 @@ def _match(group: _Group, number: int, entry: NetworkBody, data: bytes, page: He
     except ValueError:
         return
     published = page.facts.published
-    typed, hits = body_readings(document, published, page.ctx, schema)
+    readings = body_readings(document, page.ctx, schema)
+    typed, hits = readings.typed, readings.hits(published)
     for row in page.rows:
-        for name, paths in field_hits(typed, document, row.published, page.ctx, schema).items():
+        for name, paths in readings.hits(row.published).items():
             hits.setdefault(name, {}).update(dict.fromkeys(INDEX.sub("[*]", path) for path in paths))
     _add(group.published, hits, number)
     stated = hits.keys() | published.keys() | {name for row in page.rows for name in row.published}
