@@ -1,7 +1,7 @@
 """Challenge labels on attempts: which anti-bot challenge, if any, a `blocked` or `shell` response presents
 (`CHALLENGED`: a site's missing page or failure is no challenge, whatever cookies its edge sets). The label is the
-vendor whose signature the response shows (`adapters.challenges`, site data), else `STRUCTURAL` when the generic
-signal holds, else none.
+vendor whose signature the response shows (`adapters.challenges`, site data; on a 2xx shell, only with structural
+corroboration), else `STRUCTURAL` when the generic signal holds, else none.
 
 The block class comes from status and structure (`classify`) and, for a 2xx HTML document,
 from a vendor's stand-in marker (`block_class_of`), the only site data that selects it; a label changes neither it nor
@@ -75,19 +75,41 @@ def challenge_signal(status: int, headers: HeaderList, text: str, url: str) -> b
 
 
 def challenge_label(
-    status: int, headers: HeaderList, text: str, url: str, cookie_names: Iterable[str] = ()
+    status: int,
+    headers: HeaderList,
+    text: str,
+    url: str,
+    cookie_names: Iterable[str] = (),
+    *,
+    block_class: BlockClass | None = None,
+    rendered: bool = False,
 ) -> str | None:
     """The label of a response in a `CHALLENGED` class. `headers` are as received, `Set-Cookie` included: only
     the cookie names are read (RFC 6265 §4.1.1, the name before the first `=`), never a value. `cookie_names` adds the
     names a browser holds for the page, whose capture records no `Set-Cookie`. A 451 is `LEGAL`, whatever else it
-    shows."""
+    shows. A `shell` (`block_class`, a 2xx document, `classify`) is labelled by a vendor only with structural
+    corroboration (`_corroborated`): a vendor sets its cookies and headers and loads its script on the pages it lets
+    through too, so on a document served with success they say only that the vendor fronts the site; on a refusal
+    status they name the refuser."""
     if status == _UNAVAILABLE_FOR_LEGAL_REASONS:
         return LEGAL
     names = (*_cookie_names(headers), *cookie_names)
     signature = vendor_of((name for name, _ in headers), names, text)
+    if signature is not None and block_class == "shell":
+        return _corroborated(signature.vendor, status, headers, text, url, rendered=rendered)
     if signature is not None:
         return signature.vendor
     return STRUCTURAL if challenge_signal(status, headers, text, url) else None
+
+
+def _corroborated(vendor: str, status: int, headers: HeaderList, text: str, url: str, *, rendered: bool) -> str | None:
+    """The vendor of a 2xx shell whose structure shows a challenge: a vendor's stand-in marker (that vendor's), or,
+    `rendered` by the browser, a document that stands in for the page until it navigates on
+    (`classify.interstitial`); None for a shell that shows neither."""
+    stand_in = stand_in_vendor(text)
+    if stand_in is not None:
+        return stand_in.vendor
+    return vendor if rendered and interstitial(status, headers, text, url, rendered=True) else None
 
 
 def vendor_block(result: FetchResult) -> str | None:
