@@ -40,6 +40,13 @@ from snowcrawl.schemas.types import SchemaDef
 # RFC 8259 §11: the JSON media type, the one header a recipe starts with.
 _ACCEPT: Final = HeaderValue(name="Accept", value="application/json")
 _NO_SINGLE_HEADER: Final = "no single captured header makes the replay reproduce the sample values"
+# The headers the HTTP rung sends itself as a script's `fetch()` does (its user agent, client hints, language, Fetch
+# metadata and priority: one coherent fingerprint), which a recipe never holds; but `Accept` and a body's
+# `Content-Type`, which are the request's own.
+_RUNG_OWN: Final = frozenset(FETCH_HEADER_ORDER) - {"accept", "content-type"}
+# Of those, the ones that name the client, which a replay never tries: `Referer` and `Origin` name the request's page,
+# and a page's referrer policy (W3C Referrer Policy §3) can make its endpoint need the captured ones.
+_CLIENT_OWN: Final = _RUNG_OWN - {"referer", "origin"}
 
 
 @dataclass(frozen=True)
@@ -102,12 +109,10 @@ def _with_headers(spec: RequestSpec, headers: list[RecipeHeader]) -> RequestSpec
 def proposed(samples: Sequence[Sample], answer: Answer) -> tuple[list[RecipeHeader], list[str]]:
     """The headers a custom recipe's draft sends, from its sample requests and without a replay: `Accept:
     application/json` for a JSON answer, and each captured header a recipe may hold whose value is the same on every
-    sample, except those the HTTP rung sends itself as a script's `fetch()` does (its user agent, client hints and
-    Fetch metadata: one coherent fingerprint). A captured `Accept` replaces the default; a body's `Content-Type` is the
-    request's own (Fetch §5.2 sends `text/plain` without one). Also the names of the captured headers never sent
-    (`_captured`)."""
-    own = frozenset(FETCH_HEADER_ORDER) - {"accept", "content-type"}
-    captured, withheld = _captured(samples, skip=own)
+    sample, except those the HTTP rung sends itself (`_RUNG_OWN`). A captured `Accept` replaces the default; a body's
+    `Content-Type` is the request's own (Fetch §5.2 sends `text/plain` without one). Also the names of the captured
+    headers never sent (`_captured`)."""
+    captured, withheld = _captured(samples, skip=_RUNG_OWN)
     headers: list[RecipeHeader] = [_ACCEPT] if answer == "json" else []
     # RFC 9110 §5.1: field names are case-insensitive; a captured Accept replaces the recipe's.
     if any(header.name.lower() == "accept" for header in captured):
@@ -120,8 +125,9 @@ def _candidates(pages: Sequence[ReplayPage]) -> tuple[list[RecipeHeader], list[s
     names of the captured ones never sent."""
     context = pages[0].context if pages else None
     supplied = context.header_names() if context is not None else frozenset()
-    # A field the request context supplies is a reference, never the captured value (the caller's secret).
-    candidates, withheld = _captured([page.sample for page in pages], skip=supplied)
+    # A field the request context supplies is a reference, never the captured value (the caller's secret); one that
+    # names the HTTP rung's client is never a recipe's.
+    candidates, withheld = _captured([page.sample for page in pages], skip=supplied | _CLIENT_OWN)
     names = sorted(supplied - CLIENT_FIELDS)
     return [*candidates, *(ContextHeader(name=name, from_context=True) for name in names)], withheld
 

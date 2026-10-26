@@ -81,6 +81,7 @@ _HEADED_PRODUCT: Final = "Chrome/"
 _HEADLESS: Final = "headless"
 _USER_AGENT: Final = "user-agent"
 _USER_AGENT_SWITCH: Final = "--user-agent="
+_PLATFORM: Final = "sec-ch-ua-platform"
 _OVERRIDE: Final = "Emulation.setUserAgentOverride"
 # The targets that run a page's scripts outside its tabs and frames (HTML Standard §10.2.6 shared workers, Service
 # Workers §3.1), in CDP's target types.
@@ -103,7 +104,7 @@ _NAMING_HEADERS: Final = frozenset(
         _USER_AGENT,
         "sec-ch-ua",
         "sec-ch-ua-mobile",
-        "sec-ch-ua-platform",
+        _PLATFORM,
         "accept",
         "accept-language",
         "upgrade-insecure-requests",
@@ -155,7 +156,13 @@ class Identity:
 
     @property
     def agent(self) -> str:
-        return next((value for name, value in self.headers if name == _USER_AGENT), "")
+        return next((value for name, value in self.headers if name.lower() == _USER_AGENT), "")
+
+    @property
+    def platform(self) -> str:
+        """The platform `Sec-CH-UA-Platform` names, its value an sf-string (RFC 8941 §3.3.3) unquoted."""
+        value = next((value for name, value in self.headers if name.lower() == _PLATFORM), "")
+        return value.strip('"')
 
 
 class Failed(Exception):
@@ -382,9 +389,9 @@ async def browser_identity(playwright: Playwright, *, headless: bool = True) -> 
         finally:
             await browser.close()
     headers = tuple(
-        (name, value.replace(_HEADLESS_PRODUCT, _HEADED_PRODUCT, 1) if name == _USER_AGENT else value)
+        (name, value.replace(_HEADLESS_PRODUCT, _HEADED_PRODUCT, 1) if name.lower() == _USER_AGENT else value)
         for name, value in sent.items()
-        if name in _NAMING_HEADERS
+        if name.lower() in _NAMING_HEADERS
     )
     identity = Identity(headers, {_HINT_FIELDS.get(name, name): value for name, value in hints.items()})
     if _HEADLESS in json.dumps([identity.headers, identity.metadata]).lower():
@@ -396,7 +403,8 @@ async def browser_identity(playwright: Playwright, *, headless: bool = True) -> 
 @asynccontextmanager
 async def _listening(sent: dict[str, str]) -> AsyncIterator[str]:
     """A listener on the loopback address that records the header fields of the first request it reads into `sent`
-    (RFC 9112 §5, names in lowercase) and answers each request with an empty page; the URL to navigate to."""
+    (RFC 9112 §5, each name spelled as the browser sent it, which the HTTP rung sends it as over HTTP/1.1; names compare
+    case-insensitively, RFC 9110 §5.1) and answers each request with an empty page; the URL to navigate to."""
 
     async def serve(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         with contextlib.suppress(OSError, asyncio.IncompleteReadError, asyncio.LimitOverrunError):
@@ -405,7 +413,7 @@ async def _listening(sent: dict[str, str]) -> AsyncIterator[str]:
                 for line in head.decode("latin-1").split("\r\n")[1:]:
                     name, colon, value = line.partition(":")
                     if colon:
-                        sent[name.strip().lower()] = value.strip()
+                        sent[name.strip()] = value.strip()
             writer.write(_EMPTY_PAGE)
             await writer.drain()
         writer.close()
@@ -427,7 +435,7 @@ def _mode_options(session: BrowserSession, site: ContextKey) -> _ModeOptions:
     (`_USER_AGENT_SWITCH`) and the screen of the site's profile (`acquire.desktop_screen`); headful, none of ours."""
     if not session.headless:
         return {"headless": False}
-    screen = desktop_screen(profile_name(*site))
+    screen = desktop_screen(profile_name(*site), session.identity.platform)
     return {"headless": True, "args": [_USER_AGENT_SWITCH + session.identity.agent, *screen.launch_args()]}
 
 

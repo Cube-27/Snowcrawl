@@ -458,7 +458,7 @@ def test_the_probe_reads_what_every_request_of_a_page_its_frame_and_workers_pres
     scripts = {"/worker.js", "/service-worker.js", "/shared-worker.js"}
     assert set(sent) >= {"/with-worker", "/framed", "/api/n/7", "/api/n/8", *scripts}
     assert {headers["user-agent"] for headers in sent.values()} == {identity.agent}
-    named = dict(identity.headers)
+    named = {name.lower(): value for name, value in identity.headers}
     for document in ("/with-worker", "/framed"):
         assert {name: sent[document].get(name) for name in named} == named
     page = lxml_html.fromstring(result.bundle.body)
@@ -472,18 +472,20 @@ def test_a_page_is_laid_out_in_a_maximised_window_on_the_screen_of_its_profile(
     browser: Browser, server: Server
 ) -> None:
     """Owner 2026-10-23: the screen is the site profile's (`acquire.desktop_screen`), and what the page reads of it is
-    one desktop's: a work area of the screen less a taskbar, the window filling it, the viewport inside its toolbars."""
+    one desktop's: a work area of the screen less its platform's bar, the window filling it, the viewport inside its
+    toolbars."""
     url = server.url("/geometry")
     key = context_key(url, SiteSessions().scope_for(FetchPolicy()), None)
     assert key is not None
-    screen = desktop_screen(profile_name(*key))
+    screen = desktop_screen(profile_name(*key), browser.session.identity.platform)
 
     result = browser.fetch(url)
 
     read = json.loads(lxml_html.fromstring(result.bundle.body).get_element_by_id("geometry").text_content())
     assert (read["width"], read["height"], read["devicePixelRatio"]) == (screen.width, screen.height, screen.scale)
-    assert (read["availWidth"], read["screenX"], read["screenY"]) == (screen.width, 0, 0)
-    assert screen.height > read["availHeight"] == read["outerHeight"] > read["innerHeight"]
+    assert (read["availWidth"], read["screenX"], read["screenY"]) == (screen.width, 0, screen.top)
+    work_area = screen.height - screen.top - screen.bottom
+    assert work_area == read["availHeight"] == read["outerHeight"] > read["innerHeight"]
     assert read["outerWidth"] == read["innerWidth"] == screen.width
 
 

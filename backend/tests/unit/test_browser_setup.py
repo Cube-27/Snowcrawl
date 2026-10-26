@@ -208,7 +208,7 @@ _MODES: dict[bool, dict[str, object]] = {
         "headless": True,
         "args": [
             "--user-agent=" + _OWN_UA.replace("HeadlessChrome/", "Chrome/"),
-            *desktop_screen(profile_name("example.test", None, None)).launch_args(),
+            *desktop_screen(profile_name("example.test", None, None), "Linux").launch_args(),
         ],
     },
     False: {"headless": False},

@@ -117,7 +117,8 @@ def _fetch_json(server: Server, endpoint: str, context: RequestContext) -> Fetch
 def test_a_json_call_to_another_host_carries_neither_the_header_nor_the_cookie(server: Server) -> None:
     # An adapter's or a recipe's endpoint on another host than the page the caller named.
     server.route("/api/jobs", Reply(200, (("Content-Type", "application/json"),), b"[]"))
-    context = _context({"Authorization": "Bearer t0ken"}, {"sid": "s3cret"})
+    # A header of the call's own (`Accept`) in another case is replaced, not sent twice (RFC 9110 §5.1).
+    context = _context({"Authorization": "Bearer t0ken", "accept": "application/x-test"}, {"sid": "s3cret"})
     _fetch_json(server, server.url("/api/jobs", "api.example.test"), context)
     _fetch_json(server, server.url("/api/jobs"), context)
 
@@ -127,6 +128,8 @@ def test_a_json_call_to_another_host_carries_neither_the_header_nor_the_cookie(s
     same_host = _sent(server, "shop.example.test/api/jobs")
     assert same_host["authorization"] == "Bearer t0ken"
     assert same_host["cookie"] == "sid=s3cret"
+    raw = next(headers for path, headers in server.requests if path == "shop.example.test/api/jobs")
+    assert [(name, value) for name, value in raw if name.lower() == "accept"] == [("Accept", "application/x-test")]
 
 
 # --- the CLI -----------------------------------------------------------------------------------------------------

@@ -20,7 +20,7 @@ from urllib.parse import urlsplit, urlunsplit
 
 from snowcrawl.acquire.challenge import CHALLENGED, challenge_label
 from snowcrawl.acquire.classify import classify
-from snowcrawl.acquire.curl_client import Hop, Transport, send
+from snowcrawl.acquire.curl_client import Hop, Transport, send, set_field
 from snowcrawl.acquire.impersonate import Impersonation
 from snowcrawl.acquire.locality import exit_place, language_headers
 from snowcrawl.acquire.outcome import Content, Sending
@@ -158,18 +158,11 @@ def _first_hop(request: JsonRequest, language: Mapping[str, str]) -> Hop:
     headers: dict[str, str | None] = {**language}
     headers.update(_fetch_headers(request.page_url, request.url, request.method, "same-origin"))
     for name, value in request.headers:
-        _replace(headers, name, value)
+        set_field(headers, name, value)
     if request.body is not None and not any(name.lower() == _CONTENT_TYPE for name in headers):
         headers["Content-Type"] = _TEXT_BODY
     body = None if request.body is None else request.body.encode()
     return Hop(request.method, headers, body, FETCH_HEADER_ORDER)
-
-
-def _replace(headers: dict[str, str | None], name: str, value: str | None) -> None:
-    """Set `name` in `headers`, replacing a field of the same name in any case (RFC 9110 §5.1)."""
-    for existing in [key for key in headers if key.lower() == name.lower()]:
-        del headers[existing]
-    headers[name] = value
 
 
 def _fetch_headers(page_url: str, url: str, method: str, before: SiteRelation) -> dict[str, str | None]:
@@ -208,9 +201,9 @@ class _Redirect:
             headers = {name: value for name, value in headers.items() if name.lower() not in _BODY_HEADERS}
         before = _relation_of(headers.get("Sec-Fetch-Site"))
         for name, value in _fetch_headers(self.page_url, target.url, method, before).items():
-            _replace(headers, name, value)
+            set_field(headers, name, value)
         if method == "GET" and _origin(self.page_url) == _origin(target.url):
-            _replace(headers, "Origin", None)
+            set_field(headers, "Origin", None)
         return Hop(method, headers, body, FETCH_HEADER_ORDER)
 
 
