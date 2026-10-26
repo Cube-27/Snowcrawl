@@ -173,7 +173,7 @@ def test_credentials_and_tokens_are_never_sent_and_named_when_needed(port: int, 
     assert result == NotLearnable(
         reason="the replay needs a header a recipe never keeps (a credential, a token or a per-page value): "
         "Authorization, X-Api-Key",
-        # Accept and X-Requested-With: the user agent, Referer and Accept-Language are the HTTP rung's own.
-        headers_tried=2,
+        # Accept, Referer and X-Requested-With: the user agent and Accept-Language are the HTTP rung's own.
+        headers_tried=3,
     )
     assert all("authorization" not in r and "x-api-key" not in r for r in received)

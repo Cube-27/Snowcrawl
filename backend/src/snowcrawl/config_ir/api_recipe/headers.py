@@ -44,6 +44,9 @@ _NO_SINGLE_HEADER: Final = "no single captured header makes the replay reproduce
 # metadata and priority: one coherent fingerprint), which a recipe never holds; but `Accept` and a body's
 # `Content-Type`, which are the request's own.
 _RUNG_OWN: Final = frozenset(FETCH_HEADER_ORDER) - {"accept", "content-type"}
+# Of those, the ones that name the client, which a replay never tries: `Referer` and `Origin` name the request's page,
+# and a page's referrer policy (W3C Referrer Policy §3) can make its endpoint need the captured ones.
+_CLIENT_OWN: Final = _RUNG_OWN - {"referer", "origin"}
 
 
 @dataclass(frozen=True)
@@ -122,9 +125,9 @@ def _candidates(pages: Sequence[ReplayPage]) -> tuple[list[RecipeHeader], list[s
     names of the captured ones never sent."""
     context = pages[0].context if pages else None
     supplied = context.header_names() if context is not None else frozenset()
-    # A field the request context supplies is a reference, never the captured value (the caller's secret); one the HTTP
-    # rung sends itself is never a recipe's.
-    candidates, withheld = _captured([page.sample for page in pages], skip=supplied | _RUNG_OWN)
+    # A field the request context supplies is a reference, never the captured value (the caller's secret); one that
+    # names the HTTP rung's client is never a recipe's.
+    candidates, withheld = _captured([page.sample for page in pages], skip=supplied | _CLIENT_OWN)
     names = sorted(supplied - CLIENT_FIELDS)
     return [*candidates, *(ContextHeader(name=name, from_context=True) for name in names)], withheld
 
