@@ -81,6 +81,7 @@ _HEADED_PRODUCT: Final = "Chrome/"
 _HEADLESS: Final = "headless"
 _USER_AGENT: Final = "user-agent"
 _USER_AGENT_SWITCH: Final = "--user-agent="
+_PLATFORM: Final = "sec-ch-ua-platform"
 _OVERRIDE: Final = "Emulation.setUserAgentOverride"
 # The targets that run a page's scripts outside its tabs and frames (HTML Standard §10.2.6 shared workers, Service
 # Workers §3.1), in CDP's target types.
@@ -103,7 +104,7 @@ _NAMING_HEADERS: Final = frozenset(
         _USER_AGENT,
         "sec-ch-ua",
         "sec-ch-ua-mobile",
-        "sec-ch-ua-platform",
+        _PLATFORM,
         "accept",
         "accept-language",
         "upgrade-insecure-requests",
@@ -156,6 +157,12 @@ class Identity:
     @property
     def agent(self) -> str:
         return next((value for name, value in self.headers if name.lower() == _USER_AGENT), "")
+
+    @property
+    def platform(self) -> str:
+        """The platform `Sec-CH-UA-Platform` names, its value an sf-string (RFC 8941 §3.3.3) unquoted."""
+        value = next((value for name, value in self.headers if name.lower() == _PLATFORM), "")
+        return value.strip('"')
 
 
 class Failed(Exception):
@@ -428,7 +435,7 @@ def _mode_options(session: BrowserSession, site: ContextKey) -> _ModeOptions:
     (`_USER_AGENT_SWITCH`) and the screen of the site's profile (`acquire.desktop_screen`); headful, none of ours."""
     if not session.headless:
         return {"headless": False}
-    screen = desktop_screen(profile_name(*site))
+    screen = desktop_screen(profile_name(*site), session.identity.platform)
     return {"headless": True, "args": [_USER_AGENT_SWITCH + session.identity.agent, *screen.launch_args()]}
 
 

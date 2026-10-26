@@ -472,18 +472,20 @@ def test_a_page_is_laid_out_in_a_maximised_window_on_the_screen_of_its_profile(
     browser: Browser, server: Server
 ) -> None:
     """Owner 2026-10-23: the screen is the site profile's (`acquire.desktop_screen`), and what the page reads of it is
-    one desktop's: a work area of the screen less a taskbar, the window filling it, the viewport inside its toolbars."""
+    one desktop's: a work area of the screen less its platform's bar, the window filling it, the viewport inside its
+    toolbars."""
     url = server.url("/geometry")
     key = context_key(url, SiteSessions().scope_for(FetchPolicy()), None)
     assert key is not None
-    screen = desktop_screen(profile_name(*key))
+    screen = desktop_screen(profile_name(*key), browser.session.identity.platform)
 
     result = browser.fetch(url)
 
     read = json.loads(lxml_html.fromstring(result.bundle.body).get_element_by_id("geometry").text_content())
     assert (read["width"], read["height"], read["devicePixelRatio"]) == (screen.width, screen.height, screen.scale)
-    assert (read["availWidth"], read["screenX"], read["screenY"]) == (screen.width, 0, 0)
-    assert screen.height > read["availHeight"] == read["outerHeight"] > read["innerHeight"]
+    assert (read["availWidth"], read["screenX"], read["screenY"]) == (screen.width, 0, screen.top)
+    work_area = screen.height - screen.top - screen.bottom
+    assert work_area == read["availHeight"] == read["outerHeight"] > read["innerHeight"]
     assert read["outerWidth"] == read["innerWidth"] == screen.width
 
 
