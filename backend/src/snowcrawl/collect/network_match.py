@@ -234,12 +234,14 @@ def series_key(data: DataCall) -> SeriesKey | None:
 class LearnedCalls:
     """A learned listing recipe (Appendix A #59) as the calls a page makes show it: the request method, the origin and
     path segments of its endpoint URL template (None for a segment holding a placeholder, which any value fills), the
+    format suffix its path ends with (`path_suffix`, which a placeholder segment keeps literal: `{p1}.json`), the
     row query and the field map, paths relative to a row. The `xhr` collector reads the calls it matches with that
     map, text fields included, instead of proving paths on the page."""
 
     method: str
     origin: str
     segments: tuple[str | None, ...]
+    suffix: str
     rows: str
     map: Mapping[str, str]
 
@@ -252,6 +254,7 @@ class LearnedCalls:
             and str(entry.method).upper() == self.method
             and f"{parts.scheme}://{parts.netloc}" == self.origin
             and len(segments) == len(self.segments)
+            and path_suffix(parts.path) == self.suffix
             and all(want is None or want == got for want, got in zip(self.segments, segments, strict=True))
         )
 

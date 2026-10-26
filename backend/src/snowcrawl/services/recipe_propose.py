@@ -171,7 +171,7 @@ def _listing_requests(samples: Samples, calls: Mapping[CaptureId, int], rows: st
         found = _series(_listing_page(page, url), calls.get(page.capture_id))
         if found:
             series.append((page, url, found))
-    pagination = series_pagination([calls for _, _, calls in series], rows) or _one_page(series)
+    pagination = series_pagination([calls for _, _, calls in series], rows) or _one_page(series, len(samples.pages))
     if pagination is None:
         raise InvalidRecipe([("main", "no sample's calls of the main endpoint show how the next page is asked")])
     requests = []
@@ -181,10 +181,12 @@ def _listing_requests(samples: Samples, calls: Mapping[CaptureId, int], rows: st
     return requests, pagination
 
 
-def _one_page(series: Sequence[tuple[HeldOutPage, str, tuple[DataCall, ...]]]) -> Pagination | None:
-    """No pagination (`none`) when the samples show the call returns every row: each made one call of the series, and
-    its rows hold every row the sample published (`network_match.holds_rows`; a sample that published none shows
-    nothing)."""
+def _one_page(series: Sequence[tuple[HeldOutPage, str, tuple[DataCall, ...]]], samples: int) -> Pagination | None:
+    """No pagination (`none`) when the `samples` show the call returns every row: each made one call of the series,
+    and its rows hold every row the sample published (`network_match.holds_rows`; a sample that published none, or
+    made no call of the series, shows nothing)."""
+    if len(series) != samples:
+        return None
     for page, _, calls in series:
         if len(calls) != 1 or not holds_rows(calls[0], [row.published for row in page.rows]):
             return None

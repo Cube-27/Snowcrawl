@@ -25,7 +25,7 @@ from pydantic import (
 
 from snowcrawl.collect import json_doc
 from snowcrawl.collect.api import map_paths
-from snowcrawl.collect.network_match import LearnedCalls
+from snowcrawl.collect.network_match import LearnedCalls, path_suffix
 from snowcrawl.config_ir.portable_regex import PCRE_FLAGS, check_pattern
 from snowcrawl.config_ir.xpath1 import check_xpath1
 from snowcrawl.db.models import CaptureId
@@ -421,6 +421,7 @@ class ApiRecipe(RequestSpec):
             method=self.method,
             origin=f"{parts.scheme}://{parts.netloc}",
             segments=tuple(None if PLACEHOLDER.search(segment) else segment for segment in segments),
+            suffix=path_suffix(parts.path),
             rows=self.pagination.rows,
             map=self.map,
         )

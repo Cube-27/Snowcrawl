@@ -176,8 +176,10 @@ class DataCalls:
     reads: asyncio.Semaphore = field(default_factory=lambda: asyncio.Semaphore(_READS_AT_ONCE))
 
     def on_request(self, request: Request, page_url: str) -> None:
-        """Count `request` in flight when it is a data call of the page at `page_url` (`_CALLS`)."""
-        if request.resource_type in _CALLS and (_same_site(request.url, page_url) or _asks_json(request)):
+        """Count `request` in flight when it is a data call of the page at `page_url` (`_CALLS`, or a preload,
+        `_PRELOAD`, whose answer's label is not known yet)."""
+        called = request.resource_type in _CALLS or request.resource_type == _PRELOAD
+        if called and (_same_site(request.url, page_url) or _asks_json(request)):
             self.in_flight.add(request)
 
     def on_done(self, request: Request) -> None:
