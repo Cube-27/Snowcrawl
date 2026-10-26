@@ -327,7 +327,12 @@ class _Page:
     def _read(cls, source: _Source, page: ParsedPage) -> "_Page":
         manifest, schema, data = source.bundle.manifest, source.schema, source.data
         ctx = page_context(
-            page, manifest.final_url, manifest.fetched_at, request_url=manifest.url, headers=manifest.headers.response
+            page,
+            manifest.final_url,
+            manifest.fetched_at,
+            request_url=manifest.url,
+            page_url=manifest.page_url,
+            headers=manifest.headers.response,
         )
         ctx = with_page_declarations(ctx, page)
         learned = None if source.config is None else source.config.learned_calls

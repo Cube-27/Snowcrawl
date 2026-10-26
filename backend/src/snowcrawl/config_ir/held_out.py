@@ -348,6 +348,11 @@ def read_bundle(bundle: CaptureBundle) -> tuple[ParsedPage, Context]:
     page = ParsedPage.of(bundle)
     manifest = bundle.manifest
     ctx = page_context(
-        page, manifest.final_url, manifest.fetched_at, request_url=manifest.url, headers=manifest.headers.response
+        page,
+        manifest.final_url,
+        manifest.fetched_at,
+        request_url=manifest.url,
+        page_url=manifest.page_url,
+        headers=manifest.headers.response,
     )
     return page, with_page_declarations(ctx, page)

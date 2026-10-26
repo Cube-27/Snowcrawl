@@ -25,9 +25,11 @@ def page_context(
     *,
     request_locale: str | None = None,
     request_url: str | None = None,
+    page_url: str | None = None,
     headers: Sequence[tuple[str, str]] = (),
 ) -> Context:
-    """The page's context; `request_url` is the URL the page was requested at, `headers` the response's, as
+    """The page's context; `final_url` is the URL its document came from, `request_url` the URL it was requested at,
+    `page_url` the page it stands for when that is another (`CaptureManifest.page_url`), `headers` the response's, as
     received."""
     return Context(
         html_lang=strip(html_lang(page)),
@@ -37,7 +39,7 @@ def page_context(
         request_locale=request_locale,
         captured_at=captured_at,
         base_url=document_base_url(page, final_url),
-        page_url=final_url,
+        page_url=page_url or final_url,
         request_url=request_url,
     )
 

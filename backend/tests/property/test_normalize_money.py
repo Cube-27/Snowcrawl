@@ -248,3 +248,27 @@ def test_the_cldr_release_is_the_one_the_manifest_pins() -> None:
     [pin] = (p for p in manifest["packaged"] if p["name"] == "CLDR units")
 
     assert (babel.__version__, get_cldr_version()) == (pin["package_version"], pin["version"])
+
+
+@given(st.integers(1, 10**9), st.sampled_from([*_CODES, None]))
+def test_a_bare_number_reads_in_major_units_only_when_its_digits_or_currency_settle_it(
+    count: int, code: str | None
+) -> None:
+    # ISO 4217 minor unit: a whole number counts the major or the minor unit unless the currency has none; one written
+    # with decimals is in major units. The currency is the page's, as for any amount written without one.
+    ctx = _ctx(page_currencies=() if code is None else (code,))
+    places = None if code is None else babel.numbers.get_currency_precision(code)
+    whole = money.normalize(count, MONEY, ctx)
+    if places == 0:
+        assert whole == _ok(str(count), code, "page", checked=False)
+    else:
+        assert isinstance(whole, Ambiguous)
+        assert whole.reason == "minor_unit"
+        assert {"amount": str(count), "currency": code} in whole.options
+    decimals = count / 100
+    read = money.normalize(decimals, MONEY, ctx)
+    written = Decimal(repr(decimals))
+    if places is not None and -int(written.as_tuple().exponent) > places:
+        assert read == Invalid("minor_unit")
+    else:
+        assert read == _ok(format(written, "f"), code, "unknown" if code is None else "page", checked=False)

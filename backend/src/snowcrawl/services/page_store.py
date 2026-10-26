@@ -393,7 +393,7 @@ async def store_further(
             config=config,
             margins=margins,
             caller_supplied=caller_supplied,
-            page_url=canonicalize(page.bundle.manifest.final_url),
+            page_url=canonicalize(page.bundle.manifest.page_url),
         )
         failed = failed or kept.outcome == "failed"
         records.extend((record, extraction) for record in kept.records)
