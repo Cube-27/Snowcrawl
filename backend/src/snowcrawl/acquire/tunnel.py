@@ -2,8 +2,8 @@
 (`socks_guard`); the HTTP and JSON rungs have curl open theirs (`curl_client`), so every rung reaches a site through a
 pool by a tunnel the proxy relays unread.
 
-The tunnel names the host: the proxy resolves it, so the address can't be pinned. The SSRF guard has checked the host
-before.
+The tunnel names the address the SSRF guard checked, never a host name: a proxy would resolve a name itself, to an
+address the guard never saw.
 """
 
 import asyncio
@@ -26,8 +26,8 @@ class TunnelRefused(Exception):
 
 
 async def open_tunnel(proxy: ProxyEndpoint, host: str, port: int) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    """A CONNECT tunnel to `host`:`port` through `proxy`; any 2xx answer opens it. Raises `OSError` when the proxy
-    can't be reached and `TunnelRefused` when it refuses the tunnel."""
+    """A CONNECT tunnel to `host`:`port`, a checked address, through `proxy`; any 2xx answer opens it. Raises
+    `OSError` when the proxy can't be reached and `TunnelRefused` when it refuses the tunnel."""
     reader, writer = await asyncio.open_connection(proxy.host, proxy.port, limit=_HEAD_MAX_BYTES)
     # RFC 9112 §3.2.3: CONNECT names the authority.
     authority_form = f"{bracketed(host)}:{port}"
@@ -35,7 +35,7 @@ async def open_tunnel(proxy: ProxyEndpoint, host: str, port: int) -> tuple[async
     if proxy.authorization is not None:
         head.append(f"Proxy-Authorization: {proxy.authorization}")
     try:
-        # The host is ASCII: a browser names it in IDNA (A-label) form, and URL parsing gives the JSON rung the same.
+        # An address literal is ASCII.
         writer.write(("\r\n".join(head) + "\r\n\r\n").encode("ascii"))
         await writer.drain()
         # A 2xx CONNECT response ends with its header section: what follows belongs to the tunnel (RFC 9110 §9.3.6).

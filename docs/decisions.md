@@ -58,6 +58,10 @@ Reasoning for a single change goes in its PR body.
   `Accept-Language` match the address the site sees. Why: one coherent identity per fetch.
 - **Sticky exits per site.** A `{session}` gateway gives each site one exit address across its HTTP, JSON and browser
   fetches until the session ages out or a fetch through it fails. Why: a site must not see one visitor from many places.
+- **A proxy tunnel goes to the checked address.** Every CONNECT through a pool names the address the SSRF guard
+  resolved and checked, never the host name, which the proxy would resolve again, to an address nobody checked. The
+  page's Host and TLS server name stay the host's. Cost: our resolver picks the address, so an exit's geo-DNS answer
+  (a CDN node near the exit) is lost. Why: the guard must check where the connection goes.
 - **Parse once.** Every consumer reads one shared parse of a capture; captures replay through the same `extract_page`.
 - **Documented platform product JSON** (Shopify Ajax, WooCommerce Store API) is one companion request per detail page.
 

@@ -1,5 +1,6 @@
 """The one curl_cffi client of the HTTP and JSON rungs: a session impersonating Chrome,
-every request pinned to the address the SSRF guard checked or sent through a proxy pool's CONNECT tunnel, bodies capped
+every request pinned to the address the SSRF guard checked, directly or through a proxy pool's CONNECT tunnel to it,
+bodies capped
 while they stream, redirects followed by hand through the guard with the fetch's own cookies, and every
 failure a short reason that never contains the URL.
 
@@ -18,7 +19,7 @@ from functools import partial
 from typing import Final, Literal, cast
 from urllib.parse import urlsplit
 
-from curl_cffi import Curl, CurlECode, CurlHttpVersion, CurlOpt
+from curl_cffi import Curl, CurlECode, CurlHttpVersion, CurlOpt, ffi, lib
 from curl_cffi.curl import (
     CURL_WRITEFUNC_ERROR,
     CURLINFO_DATA_IN,
@@ -366,7 +367,7 @@ async def _request(
             sent.append(data)
 
     options: dict[CurlOpt, object] = {
-        **(pinned(target) if proxy is None else _through(proxy)),
+        **(pinned(target) if proxy is None else _through(proxy, target)),
         # curl speaks only the schemes the guard admits, whatever URL reaches it (CURLOPT_PROTOCOLS_STR).
         CurlOpt.PROTOCOLS_STR: "http,https",
         CurlOpt.MAXFILESIZE_LARGE: limits.max_body_bytes,  # counts body bytes as received, before decoding
@@ -435,9 +436,8 @@ def pinned(target: Target) -> dict[CurlOpt, object]:
     }
 
 
-def _through(proxy: ProxyEndpoint) -> dict[CurlOpt, object]:
-    # No CURLOPT_RESOLVE: its `*` would also redirect the connection to the proxy. The proxy resolves the page's host
-    # itself; the guard checked that host before this request.
+def _through(proxy: ProxyEndpoint, target: Target) -> dict[CurlOpt, object]:
+    ip = bracketed(str(target.ip))
     options: dict[CurlOpt, object] = {
         # The proxy's host alone, with its type and port set apart: curl's CURLPROXY_HTTP (0) speaks plain HTTP to
         # the proxy, the only kind a pool is (`snowcrawl.core.proxy`); pages inside the tunnel keep their own TLS.
@@ -446,6 +446,11 @@ def _through(proxy: ProxyEndpoint) -> dict[CurlOpt, object]:
         CurlOpt.PROXYTYPE: _CURLPROXY_HTTP,
         # A CONNECT tunnel for http pages too (RFC 9110 §9.3.6): the proxy relays bytes and never rewrites a request.
         CurlOpt.HTTPPROXYTUNNEL: 1,
+        # The CONNECT names the checked address, not the host: a proxy would resolve a name itself, to an address the
+        # guard never checked. CURLOPT_CONNECT_TO's empty host matches every name on the port, and the request's Host
+        # and TLS server name keep the URL's host. No CURLOPT_RESOLVE: it would also redirect the connection to the
+        # proxy.
+        CurlOpt.CONNECT_TO: _slist(f":{target.port}:{ip}:{target.port}"),
         # An empty list overrides the environment's `no_proxy`, which would otherwise send matching hosts direct,
         # resolved by curl rather than the guard (CURLOPT_NOPROXY).
         CurlOpt.NOPROXY: "",
@@ -455,6 +460,16 @@ def _through(proxy: ProxyEndpoint) -> dict[CurlOpt, object]:
         options[CurlOpt.PROXYUSERNAME] = proxy.username
         options[CurlOpt.PROXYPASSWORD] = proxy.password or ""
     return options
+
+
+def _slist(*items: str) -> object:
+    """A `curl_slist` of `items`, freed once unreferenced, for a list option curl_cffi builds no list for (it does for
+    CURLOPT_RESOLVE and the header lists). The session's options hold it while the request runs, and the handle is
+    reset when the request ends (`AsyncSession.release_curl`), so curl keeps no pointer to it after."""
+    head = ffi.NULL
+    for item in items:
+        head = lib.curl_slist_append(head, item.encode())
+    return ffi.gc(head, lib.curl_slist_free_all)
 
 
 def _wire(target: Target, response: Response, sent: list[bytes], body: bytes) -> Wire:

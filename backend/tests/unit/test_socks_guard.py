@@ -15,6 +15,7 @@ import pytest
 
 from snowcrawl.acquire.socks_guard import SocksGuard
 from snowcrawl.acquire.ssrf import IPAddress, SafeConnector, Target
+from snowcrawl.core.proxy import ProxyEndpoint
 
 _DNS = {"internal.example.com": "10.0.0.1", "public.example.com": "93.184.215.14"}
 
@@ -50,6 +51,32 @@ async def echo_server() -> AsyncIterator[int]:
         writer.close()
 
     server = await asyncio.start_server(echo, "127.0.0.1", 0)
+    try:
+        yield server.sockets[0].getsockname()[1]
+    finally:
+        server.close()
+
+
+@asynccontextmanager
+async def connect_proxy(origin_port: int, tunnels: list[str]) -> AsyncIterator[int]:
+    """An HTTP CONNECT proxy (RFC 9110 §9.3.6) that records the authority each tunnel names and sends every tunnel to
+    `origin_port` on loopback."""
+
+    async def pump(source: asyncio.StreamReader, sink: asyncio.StreamWriter) -> None:
+        while data := await source.read(1024):
+            sink.write(data)
+            await sink.drain()
+        sink.close()
+
+    async def serve(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        head = await reader.readuntil(b"\r\n\r\n")
+        tunnels.append(head.split(b" ")[1].decode())
+        origin_reader, origin_writer = await asyncio.open_connection("127.0.0.1", origin_port)
+        writer.write(b"HTTP/1.1 200 Connection established\r\n\r\n")
+        await writer.drain()
+        await asyncio.gather(pump(reader, origin_writer), pump(origin_reader, writer))
+
+    server = await asyncio.start_server(serve, "127.0.0.1", 0)
     try:
         yield server.sockets[0].getsockname()[1]
     finally:
@@ -122,5 +149,23 @@ def test_connect_to_a_rejected_target_is_refused_by_ruleset_and_recorded(host: s
         # RFC 1928 §6: X'02' connection not allowed by ruleset.
         assert head == b"\x05\x02"
         assert rejections == {(host, port): reason}
+
+    _run(scenario())
+
+
+def test_through_a_proxy_pool_the_tunnel_names_the_checked_address() -> None:
+    async def scenario() -> None:
+        tunnels: list[str] = []
+        async with echo_server() as port, connect_proxy(port, tunnels) as proxy_port:
+            upstream = ProxyEndpoint(host="127.0.0.1", port=proxy_port)
+            async with SocksGuard(PinnedConnector(), upstream=upstream) as guard:
+                head, reader, writer = await _socks(guard, _domain_request("shop.example.test", port))
+                await reader.readexactly(8)
+                writer.write(b"ping")
+                echoed = await reader.readexactly(9)
+                writer.close()
+
+        assert (head, echoed) == (b"\x05\x00", b"echo:ping")
+        assert tunnels == [f"127.0.0.1:{port}"]  # the address the guard checked, never the name
 
     _run(scenario())

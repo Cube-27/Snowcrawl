@@ -11,7 +11,8 @@ Only CONNECT with no authentication is spoken (RFC 1928 §3). Bytes are relayed 
 between the browser and the site.
 
 With an `upstream` proxy pool, the guard still checks each host, then opens the connection as a CONNECT tunnel
-through the pool's proxy (`acquire.tunnel`), naming the host: the proxy resolves it, so the address can't be pinned.
+through the pool's proxy (`acquire.tunnel`) to the checked address: the proxy resolves no name, so it connects where
+the guard checked. The browser's TLS names the host inside the tunnel.
 """
 
 import asyncio
@@ -175,9 +176,10 @@ class SocksGuard:
 
 
 async def _tunnel(proxy: ProxyEndpoint, target: Target) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-    """A CONNECT tunnel to `target`'s host through `proxy` (`open_tunnel`), its failures as SOCKS5 replies."""
+    """A CONNECT tunnel to `target`'s checked address through `proxy` (`open_tunnel`), its failures as SOCKS5
+    replies."""
     try:
-        return await open_tunnel(proxy, target.host, target.port)
+        return await open_tunnel(proxy, str(target.ip), target.port)
     except OSError as e:
         raise _Refused(_HOST_UNREACHABLE) from e
     except TunnelRefused as e:

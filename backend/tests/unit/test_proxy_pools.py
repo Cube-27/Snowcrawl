@@ -3,9 +3,10 @@ through one of that pool's proxies, in every fetcher, picked in turn or kept per
 left out for a while; a gateway's sticky exit keeps a site on one address, in every fetcher, until it ends; and the SSRF
 guard still checks every host before it is requested, whichever endpoint carries it.
 
-The proxy is a local stub speaking HTTP CONNECT (RFC 9110 §9.3.6). Like a real proxy it resolves names itself: it
-sends every tunnel to a local origin server, whatever host it names. The guard's resolver is a stub, so no test
-touches DNS or the network.
+The proxy is a local stub speaking HTTP CONNECT (RFC 9110 §9.3.6): it records the authority each tunnel names and
+sends every tunnel to a local origin server. Every tunnel names the address the guard checked, never a name the proxy
+would resolve itself; the request inside keeps the host. The guard's resolver is a stub, so no test touches DNS or the
+network.
 """
 
 import asyncio
@@ -38,8 +39,9 @@ from tests.stand_in import IMPERSONATE
 
 _LINKS = "".join(f'<a href="/item/{i}">Item {i}</a>' for i in range(8))
 _PAGE = f"<html><body><h1>Catalogue</h1>{_LINKS}</body></html>".encode()
-# The guard's view of DNS. The public address is never connected to: through a pool, the proxy resolves names.
+# The guard's view of DNS. The public address is never connected to: the stub proxy sends every tunnel to the origin.
 _DNS = {"shop.example.test": "93.184.215.14", "internal.example.test": "10.0.0.1"}
+_CHECKED = "93.184.215.14:80"
 _CREDENTIALS = ("pool user", "p@ss:word")
 _JSON = b'{"items": [{"id": 1, "name": "Synthetic"}]}'
 
@@ -353,7 +355,8 @@ def test_the_pools_credentials_reach_the_proxy_and_never_the_capture(origin: Ori
     result = _fetch("http://shop.example.test/p", _pools(endpoint))
 
     assert _outcome(result) == (200, "ok", None)
-    assert proxy.tunnels == ["shop.example.test:80"]
+    assert proxy.tunnels == [_CHECKED]
+    assert origin.hosts == ["shop.example.test"]
     manifest = result.bundle.manifest
     recorded = manifest.headers.request + manifest.headers.response
     assert all(name.lower() != "proxy-authorization" for name, _ in recorded)
@@ -400,8 +403,7 @@ def test_inv16_every_endpoint_of_a_pool_reaches_only_checked_hosts(
         assert _outcome(refused_json) == (302, "error", "ssrf_rejected: private_address")
 
     tunnels = proxy.tunnels + second_proxy.tunnels
-    assert "internal.example.test:80" not in tunnels
-    assert set(tunnels) == {"shop.example.test:80"}
+    assert set(tunnels) == {_CHECKED}
 
 
 # --- JSON fetch ------------------------------------------------------------------------------------------
@@ -460,5 +462,5 @@ def test_a_browser_fetch_naming_a_pool_goes_through_its_proxy(origin: Origin, pr
 
     assert _outcome(through_pool) == (200, "ok", None)
     assert b"<h1>Catalogue</h1>" in through_pool.bundle.body
-    assert set(proxy.tunnels) == {"shop.example.test:80"}
+    assert set(proxy.tunnels) == {_CHECKED}
     assert _outcome(unknown) == (0, "error", "proxy_pool_unknown")

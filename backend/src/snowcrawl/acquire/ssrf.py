@@ -27,6 +27,10 @@ _PORTS = frozenset({80, 443, 8080, 8443})
 # parsed as an IPv4 address (`2130706433`, `0x7f.1`, `127.1`). Only canonical dotted quads are accepted, so the
 # address checked here is the one any client would connect to. ASCII digits only (`re.ASCII`), as the standard says.
 _ENDS_IN_NUMBER = re.compile(r"(?:^|\.)(?:\d+|0x[0-9a-f]*)\.?$", re.ASCII | re.IGNORECASE)
+# A host that parsers read differently, so the name checked here may not be the one a client connects to: a
+# percent-encoding, which the WHATWG URL Standard (§3.5 host parsing) decodes and RFC 3986 parsers keep, or a dot other
+# than U+002E that IDNA maps to it (UTS #46 §4: U+3002, U+FF0E, U+FF61), splitting the name into other labels.
+_AMBIGUOUS = frozenset("%\u3002\uff0e\uff61")
 # RFC 6052 §2.1: the NAT64 well-known prefix embeds an IPv4 address in its last 32 bits.
 _NAT64 = IPv6Network("64:ff9b::/96")
 
@@ -95,9 +99,12 @@ class SafeConnector:
 
     def check_form(self, url: str) -> tuple[str, int, IPAddress | None]:
         """The host, port and literal address (None for a name) of `url`, checked without DNS: its scheme, host and
-        port (`authority`), a literal address public, a name not read as an IPv4 address and IDNA-encodable (RFC
-        5891). What only resolving the name tells, `dns` and a `private_address` it resolves to, `check` adds."""
+        port (`authority`), a host every parser reads alike, a literal address public, a name not read as an IPv4
+        address and IDNA-encodable (RFC 5891). What only resolving the name tells, `dns` and a `private_address` it
+        resolves to, `check` adds."""
         host, port = authority(url)
+        if not _AMBIGUOUS.isdisjoint(host):
+            raise SsrfRejected("host")
         literal = _literal_ip(host)
         if literal is not None:
             if not is_public(literal):

@@ -108,9 +108,13 @@ def test_ports_outside_the_web_set_are_rejected(url: str) -> None:
 
 # Hosts the WHATWG URL Standard parses as IPv4 although they are not dotted quads.
 _NUMERIC_HOSTS = ["2130706433", "0x7f.1", "127.1", "127.0.0.1.", "017700000001", "www.example.0x7f"]
+# Hosts parsers read differently: a percent-encoding, and dots IDNA maps to U+002E (UTS #46).
+_AMBIGUOUS_HOSTS = ["www%2eexample.com", "127\u30020\u30020\u30021", "www\uff0eexample.com", "www\uff61example.com"]
 
 
-@pytest.mark.parametrize("url", ["http:///p", "http://:80/", *(f"http://{host}/" for host in _NUMERIC_HOSTS)])
+@pytest.mark.parametrize(
+    "url", ["http:///p", "http://:80/", *(f"http://{host}/" for host in (*_NUMERIC_HOSTS, *_AMBIGUOUS_HOSTS))]
+)
 def test_malformed_or_non_canonical_hosts_are_rejected(url: str) -> None:
     resolver = StubResolver({})
     assert _reason(SafeConnector(resolver), url) == "host"
