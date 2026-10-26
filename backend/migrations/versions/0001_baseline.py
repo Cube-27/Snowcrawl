@@ -595,9 +595,14 @@ def upgrade() -> None:
         "task_record",
         sa.Column("url_task_id", sa.Uuid(), nullable=False),
         sa.Column("record_id", sa.Uuid(), nullable=False),
+        sa.Column("extraction_id", sa.Uuid(), nullable=False),
+        sa.Column("position", sa.Integer(), nullable=False),
         sa.Column("delta", sa.Text(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.CheckConstraint("delta IN ('new', 'changed', 'same')", name=op.f("ck_task_record_delta")),
+        sa.ForeignKeyConstraint(
+            ["extraction_id"], ["extraction.id"], name=op.f("fk_task_record_extraction_id_extraction")
+        ),
         sa.ForeignKeyConstraint(
             ["record_id"], ["record.id"], name=op.f("fk_task_record_record_id_record"), ondelete="CASCADE"
         ),
@@ -607,6 +612,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("url_task_id", "record_id", name=op.f("pk_task_record")),
     )
     op.create_index(op.f("ix_task_record_record_id"), "task_record", ["record_id"], unique=False)
+    op.create_index(op.f("ix_task_record_extraction_id"), "task_record", ["extraction_id"], unique=False)
     _create_schedules_and_webhook_events()
     op.bulk_insert(
         sa.table("project", sa.column("id", sa.Uuid()), sa.column("name", sa.Text())),

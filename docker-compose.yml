@@ -69,6 +69,10 @@ services:
 
   api:
     <<: *backend
+    # The api launches Chrome too (captures, recipe tests): an init process as PID 1 reaps the exited ones.
+    init: true
+    # Chrome needs more shared memory than Docker's 64 MB default.
+    shm_size: 1gb
     ports:
       - "127.0.0.1:8000:8000"
     healthcheck:

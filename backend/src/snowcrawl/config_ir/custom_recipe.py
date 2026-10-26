@@ -24,6 +24,7 @@ from snowcrawl.config_ir.model import (
     XPathStep,
 )
 from snowcrawl.config_ir.url_pattern import UrlPattern, parse
+from snowcrawl.core.validation import field_error
 from snowcrawl.db.models import PageKind, SchemaId
 from snowcrawl.schemas.types import Name, SchemaDef, document_digest
 
@@ -168,4 +169,4 @@ def recipe_ir(
     try:
         return recipe.to_ir(schema, at=at, engine_version=engine_version)
     except ValidationError as e:
-        raise InvalidRecipe([(".".join(map(str, error["loc"])), error["msg"]) for error in e.errors()]) from None
+        raise InvalidRecipe([field_error(error) for error in e.errors()]) from None

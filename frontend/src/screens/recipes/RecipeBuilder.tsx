@@ -17,13 +17,12 @@ import {
 } from "../../api/recipes";
 import type { SchemaDef } from "../../api/schemas";
 import { EmptyView, LoadingView, ProblemAlert } from "../../components/molecules/ViewStates";
-import { keyedTexts } from "../../components/lib/keys";
 import { Screen, Section } from "../../components/templates/Screen";
 import { SchemaSelect } from "../../components/molecules/SchemaSelect";
 import type { EditHandlers } from "./CallEditor";
-import { CallList, type SampleNumber } from "./CallList";
+import { CallList, FieldMatches, type SampleNumber } from "./CallList";
 import { applied, fieldSources, NO_EDITS, withEdit, withoutEdit, type Edits } from "./draft";
-import { endpointKey, endpointRef, endpointText, matchLines, ownSiteFirst } from "./endpoints";
+import { endpointKey, endpointRef, endpointText, ownSiteFirst } from "./endpoints";
 import { ExtrasStep } from "./ExtrasStep";
 import { recipePath, recipesPath } from "./paths";
 import { ReviewStep } from "./ReviewStep";
@@ -66,13 +65,7 @@ function MainCall({
       <Typography.Paragraph className="text-code break-all">
         {endpointText(chosen)}
       </Typography.Paragraph>
-      <ul aria-label="Main call fields" className="flex flex-col gap-1 text-code">
-        {keyedTexts(chosen.fields.flatMap((match) => matchLines(match, samples))).map(
-          ({ key, text }) => (
-            <li key={key}>{text}</li>
-          ),
-        )}
-      </ul>
+      <FieldMatches label="Main call fields" matches={chosen.fields} samples={samples} />
       {samples < MIN_SAMPLES ? (
         <Typography.Paragraph size="sm" color="muted">
           Capture a second sample to draft the recipe.

@@ -1,7 +1,8 @@
 import { Button, Card, Chip, Table, Typography } from "@heroui/react";
 import { useState } from "react";
-import type { CallSummary, Endpoint } from "../../api/captures";
+import type { CallSummary, Endpoint, FieldMatch } from "../../api/captures";
 import { keyedTexts } from "../../components/lib/keys";
+import { Collapsible } from "../../components/molecules/Collapsible";
 import { CallDrawer } from "./CallDrawer";
 import { endpointKey, endpointText, isOwnSite, matchLines, sizeText } from "./endpoints";
 
@@ -60,6 +61,33 @@ function CallsTable({
   );
 }
 
+/** Where a group carries each field, a line per path (`matchLines`); the paths read by type beyond the first few of a
+ * field are behind a disclosure. */
+export function FieldMatches({
+  label,
+  matches,
+  samples,
+}: Readonly<{ label: string; matches: readonly FieldMatch[]; samples: number }>) {
+  const { lines, more } = matchLines(matches, samples);
+  const items = (texts: string[], name: string) => (
+    <ul aria-label={name} className="flex flex-col gap-1 text-code">
+      {keyedTexts(texts).map(({ key, text }) => (
+        <li key={key}>{text}</li>
+      ))}
+    </ul>
+  );
+  return (
+    <div className="flex flex-col gap-1">
+      {items(lines, label)}
+      {more.length === 0 ? null : (
+        <Collapsible title={`${String(more.length)} more paths by type`}>
+          {items(more, `More ${label.toLowerCase()}`)}
+        </Collapsible>
+      )}
+    </div>
+  );
+}
+
 /** One endpoint group: its URL shape, on how many samples it was called, where it carries each field, its calls, and
  * the choice of it as the recipe's main call. */
 function EndpointCard({
@@ -80,7 +108,6 @@ function EndpointCard({
   /** Adds the group as an extra call; none before a main call is chosen. */
   onAdd: (() => void) | null;
 }>) {
-  const lines = endpoint.fields.flatMap((match) => matchLines(match, samples));
   const title = endpointText(endpoint);
   return (
     <Card>
@@ -119,14 +146,10 @@ function EndpointCard({
         </Card.Description>
       </Card.Header>
       <Card.Content className="flex flex-col gap-3">
-        {lines.length === 0 ? (
+        {endpoint.fields.length === 0 ? (
           <Typography.Paragraph size="sm">Carries no field of the schema.</Typography.Paragraph>
         ) : (
-          <ul aria-label="Field matches" className="flex flex-col gap-1 text-code">
-            {keyedTexts(lines).map(({ key, text }) => (
-              <li key={key}>{text}</li>
-            ))}
-          </ul>
+          <FieldMatches label="Field matches" matches={endpoint.fields} samples={samples} />
         )}
         <CallsTable calls={endpoint.calls} sampleOf={sampleOf} onOpen={onOpen} />
       </Card.Content>

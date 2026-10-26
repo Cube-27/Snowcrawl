@@ -17,6 +17,7 @@ import re
 from collections.abc import Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from functools import cached_property
+from itertools import count
 from typing import Final, NamedTuple
 from urllib.parse import quote, quote_plus, unquote, urlsplit
 
@@ -37,6 +38,7 @@ from snowcrawl.config_ir.api_recipe.model import (
 )
 from snowcrawl.config_ir.executor import documents
 from snowcrawl.config_ir.portable_regex import PCRE_FLAGS
+from snowcrawl.config_ir.url_pattern import segment_param
 from snowcrawl.content.page import ParsedPage
 from snowcrawl.core import json_text
 from snowcrawl.storage.capture_bundle import HeaderList
@@ -424,12 +426,21 @@ class _Binding:
         if text is None and (varies or token_like(values[0])):
             text = next(self._data_binders(values), None)
         if text is not None:
-            return self.params.setdefault(text, f"p{len(self.params) + 1}")
+            return self.params.setdefault(text, self._name(text))
         if varies and not self.leave_literals:
             raise _Unbound(f"{where} varies between sample pages and no page value binds it")
         if varies:
             self.literal.append(where)
         return None
+
+    def _name(self, text: str) -> str:
+        """A new parameter's name: a path segment's is the one a generalized URL pattern gives that segment
+        (`url_pattern.segment_param`); any other binder's is `v<n>`, a name no pattern generalizes to."""
+        binder = parse_binder(text)
+        if binder.kind == "path":
+            return segment_param(int(binder.arg))
+        taken = set(self.params.values())
+        return next(name for n in count(1) if (name := f"v{n}") not in taken)
 
     def binds(self, values: list[str]) -> bool:
         """Whether a page value binds `values` (one per sample page)."""

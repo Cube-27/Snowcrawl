@@ -292,15 +292,15 @@ function PaginationEditor({
 }: Readonly<{ call: RecipeCall; part: Part; handlers: EditHandlers }>) {
   const at = [...part, "pagination"];
   const shown = JSON.stringify(call.pagination ?? null, null, 2);
-  // The text typed, while the pagination is the engineer's; otherwise the draft's, which a new proposal replaces.
+  // The text as typed while the field has focus, JSON or not yet; leaving the field shows the draft's pagination (what
+  // the last JSON typed applied, text that is not JSON dropped), which a new proposal replaces.
   const [typed, setTyped] = useState<string | null>(null);
   const [isValid, setIsValid] = useState(true);
-  const text = typed !== null && isEdited(handlers.edits, at) ? typed : shown;
   return (
     <div className="flex flex-col gap-2">
       <Lines
         label="Pagination (JSON; null for none)"
-        value={text}
+        value={typed ?? shown}
         onChange={(next) => {
           setTyped(next);
           try {
@@ -309,6 +309,10 @@ function PaginationEditor({
           } catch {
             setIsValid(false);
           }
+        }}
+        onBlur={() => {
+          setTyped(null);
+          setIsValid(true);
         }}
       />
       {isValid ? null : (

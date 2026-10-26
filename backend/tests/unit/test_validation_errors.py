@@ -1,7 +1,7 @@
 """Every validation error the engine reports reads the same way: a dotted path with list indexes in brackets, and
 our own validators' message without pydantic's "Value error, " prefix."""
 
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from snowcrawl.core.validation import field_error
 
@@ -18,7 +18,7 @@ class _Row(BaseModel):
 
 
 class _Table(BaseModel):
-    rows: list[_Row]
+    rows: list[_Row] = Field(min_length=1)
 
 
 def _errors(raw: object) -> list[tuple[str, str]]:
@@ -31,3 +31,7 @@ def _errors(raw: object) -> list[tuple[str, str]]:
 
 def test_an_own_validator_reports_its_message_alone_at_an_indexed_path() -> None:
     assert _errors({"rows": [{"name": "a"}, {"name": " "}]}) == [("rows[1].name", "the name is blank")]
+
+
+def test_too_few_members_says_how_many_are_needed() -> None:
+    assert _errors({"rows": []}) == [("rows", "needs at least 1 member, has 0")]

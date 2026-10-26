@@ -30,7 +30,7 @@ from snowcrawl.config_ir.held_out import load_captures, read_bundle
 from snowcrawl.config_ir.validation import Facts, HeldOutPage
 from snowcrawl.content.page import answer_text
 from snowcrawl.core.errors import Refusal
-from snowcrawl.db.models import Capture, CaptureId, Extraction, Job, Record, SchemaId, UrlTask
+from snowcrawl.db.models import Capture, CaptureId, Extraction, Job, Record, SchemaId, TaskRecord, UrlTask
 from snowcrawl.schemas import registry
 from snowcrawl.schemas.types import SchemaDef
 from snowcrawl.services.captures import CaptureNotFound, bundle_of
@@ -186,13 +186,14 @@ async def load_samples(
 
 
 async def _schemas(conn: AsyncConnection, captures: Sequence[CaptureId]) -> dict[CaptureId, SchemaId]:
-    """Each capture's schema: its latest record's, else that of the job whose page it is (an engineer capture of a
-    page the engine read no record from)."""
+    """Each capture's schema: that of a record its latest extraction stood for, else that of the job whose page it is
+    (an engineer capture of a page the engine read no record from)."""
     recorded = (
         select(Extraction.capture_id, Record.schema_id)
-        .join(Record, Record.extraction_id == Extraction.id)
+        .join(TaskRecord, TaskRecord.extraction_id == Extraction.id)
+        .join(Record, Record.id == TaskRecord.record_id)
         .where(Extraction.capture_id.in_(captures))
-        .order_by(Extraction.capture_id, Record.id.desc())  # ids are UUIDv7: the latest record first
+        .order_by(Extraction.capture_id, Extraction.id.desc())  # ids are UUIDv7: the latest extraction first
     )
     asked = (
         select(UrlTask.capture_id, Job.schema_id)

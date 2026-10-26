@@ -154,8 +154,8 @@ def test_a_post_body_binds_string_and_number_values_in_place() -> None:
 
     assert spec.method == "POST"
     assert spec.body is not None
-    assert spec.body.template == '{"query":"q1","variables":{"slug":"{p1}","n":{p2},"draft":false}}'
-    assert spec.params_from_url == {"p1": "path:1", "p2": "query:n"}
+    assert spec.body.template == '{"query":"q1","variables":{"slug":"{p1}","n":{v1},"draft":false}}'
+    assert spec.params_from_url == {"p1": "path:1", "v1": "query:n"}
 
 
 # --- token-like query values (owner delegation 2026-10-17) ---

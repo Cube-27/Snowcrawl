@@ -90,13 +90,7 @@ class EngineExecutor:
 
     @property
     def field_status(self) -> Mapping[str, FieldStatus]:
-        listed = self.ir.listing.fields if self.ir.listing is not None else {}
-        running: dict[str, FieldStatus] = {
-            name: steps.status
-            for name, steps in (*self.ir.fields.items(), *listed.items())
-            if steps.status != "suspended"
-        }
-        return {**running, **dict.fromkeys(self.ir.absent, "absent")}
+        return {name: status for name, status in self.ir.field_status().items() if status != "suspended"}
 
     @property
     def browser_fields(self) -> frozenset[str]:

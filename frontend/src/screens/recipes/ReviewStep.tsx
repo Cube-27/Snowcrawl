@@ -1,4 +1,5 @@
 import { Chip, Typography } from "@heroui/react";
+import { useState } from "react";
 import type { FieldTypes } from "../../api/field";
 import type { CustomRecipe, Proposal, RecipeTestResult } from "../../api/recipes";
 import { FieldValue } from "../../components/molecules/FieldValue";
@@ -12,13 +13,17 @@ function PatternsEditor({
   patterns,
   handlers,
 }: Readonly<{ patterns: readonly string[]; handlers: EditHandlers }>) {
+  // The text as typed while the field has focus, blank lines and spaces included; the patterns it holds apply at once,
+  // and leaving the field shows them one per line.
+  const [typed, setTyped] = useState<string | null>(null);
   return (
     <div className="flex flex-col gap-2">
       <Lines
         label="URL patterns (one per line)"
-        value={patterns.join("\n")}
+        value={typed ?? patterns.join("\n")}
         placeholder="example.com/item/{id}"
         onChange={(text) => {
+          setTyped(text);
           handlers.onEdit(
             ["patterns"],
             text
@@ -27,12 +32,16 @@ function PatternsEditor({
               .filter((line) => line !== ""),
           );
         }}
+        onBlur={() => {
+          setTyped(null);
+        }}
       />
       <EditedMark
         label="the patterns"
         isEdited={isEdited(handlers.edits, ["patterns"])}
         onReset={() => {
           handlers.onReset(["patterns"]);
+          setTyped(null);
         }}
       />
     </div>

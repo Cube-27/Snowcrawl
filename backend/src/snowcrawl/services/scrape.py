@@ -227,8 +227,8 @@ class ScrapeResult(BaseModel):
 
 
 class ScrapeTimedOut(Refusal):
-    def __init__(self, timeout_s: float) -> None:
-        super().__init__(f"the scrape did not finish within {timeout_s:g} s")
+    def __init__(self, timeout_s: float, what: str = "scrape") -> None:
+        super().__init__(f"the {what} did not finish within {timeout_s:g} s")
 
 
 class RecordsUnavailable(Refusal):

@@ -22,7 +22,7 @@ from sqlalchemy.dialects.postgresql import distinct_on
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncConnection
 
-from snowcrawl.db.models import Job, Record, RecordDelta, RecordId, SiteId, TaskRecord, UrlTaskId
+from snowcrawl.db.models import ExtractionId, Job, Record, RecordDelta, RecordId, SiteId, TaskRecord, UrlTaskId
 from snowcrawl.recurring.record_fp import changed_fields, record_fingerprint
 from snowcrawl.resolve.records import FieldMeta, RecordDraft
 from snowcrawl.resolve.task import RecordSource, StoredRecord
@@ -66,20 +66,33 @@ async def store_records(
     for record, record_id in zip(new, await _insert(conn, schema, digest, source, new), strict=True):
         stored[record.position] = StoredRecord(record_id, record.draft)
     links = [(record.id, delta) for record, delta in zip(stored, deltas, strict=True) if record is not None]
-    await link_records(conn, source.task_id, links)
+    await link_records(conn, source.task_id, source.extraction_id, links)
     return tuple(record for record in stored if record is not None)
 
 
 async def link_records(
-    conn: AsyncConnection, task_id: UrlTaskId, links: Sequence[tuple[RecordId, RecordDelta]]
+    conn: AsyncConnection,
+    task_id: UrlTaskId,
+    extraction_id: ExtractionId,
+    links: Sequence[tuple[RecordId, RecordDelta]],
 ) -> None:
-    """Record that the task's page stands for each record of `links`, with its delta: those it stored, or the latest
-    versions equal to what it extracted. A listing's rows can name one entity twice, so the first link is kept."""
+    """Record that the task's page, read by `extraction_id`, stands for each record of `links` in their order, with its
+    delta: those it stored, or the latest versions equal to what it extracted. A listing's rows can name one entity
+    twice, so the first link is kept."""
     if links:
         firsts: dict[RecordId, RecordDelta] = {}
         for record_id, delta in links:
             firsts.setdefault(record_id, delta)
-        rows = [{"url_task_id": task_id, "record_id": record_id, "delta": delta} for record_id, delta in firsts.items()]
+        rows = [
+            {
+                "url_task_id": task_id,
+                "record_id": record_id,
+                "extraction_id": extraction_id,
+                "position": position,
+                "delta": delta,
+            }
+            for position, (record_id, delta) in enumerate(firsts.items())
+        ]
         await conn.execute(pg_insert(TaskRecord).values(rows).on_conflict_do_nothing())
 
 

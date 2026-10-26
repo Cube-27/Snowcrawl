@@ -152,7 +152,7 @@ async def try_recipe(
                 tested.append(await _test_url(engine, fetching, work, task))
     except TimeoutError as e:
         await _fail(engine, tasks[len(tested) :], "timeout")
-        raise ScrapeTimedOut(request.timeout_s) from e
+        raise ScrapeTimedOut(request.timeout_s, "test") from e
     except Exception:
         await _fail(engine, tasks[len(tested) :], INTERNAL_ERROR)
         raise
