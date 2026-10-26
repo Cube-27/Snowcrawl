@@ -54,13 +54,16 @@ class ActiveConfig:
         reads it, and as the page steps did not run, the page joins no drift window. A config
         without a recipe does not run on it: an earlier config's recipe fetched it (a replay), and page steps read a
         page, not JSON. Any other capture is a page: a custom recipe serves only what its calls fetched, so a page
-        fetched otherwise (for its formats, or after the recipe failed) is its `rest`'s, and the record names what
-        ran."""
+        fetched otherwise (for its formats, or after the recipe failed) is its `rest`'s, outside its drift window, and
+        the record names what ran."""
         if manifest.method != "api" or (
             adapters is not None and adapters.reader(manifest.url, manifest.final_url) is not None
         ):
             if self.custom:
-                return None if self.rest is None else self.rest.for_capture(manifest, adapters)
+                # The page was fetched by the recipe's plan, not the learned config's (its calls, its render): what the
+                # learned config misses on it says nothing of its drift.
+                rest = None if self.rest is None else self.rest.for_capture(manifest, adapters)
+                return None if rest is None else replace(rest, drifts=False)
             return self
         return None if self.api is None else replace(self, executor=self.api, api=None, drifts=False)
 

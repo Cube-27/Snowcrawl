@@ -25,16 +25,13 @@ function published(run: TestRun): Set<string> {
   );
 }
 
-/** The fields normal extraction published that the recipe left unfilled, on each URL of the last test where the recipe
- * filled fewer fields than normal extraction, in name order. */
+/** The fields normal extraction published that the recipe left unfilled on a URL of the last test, in name order. */
 function fewerFields(tested: RecipeTestResult | undefined): string[] {
   const missing = new Set<string>();
   for (const { recipe, normal } of tested?.urls ?? []) {
     const byRecipe = published(recipe);
     const byNormal = published(normal);
-    if (byRecipe.size < byNormal.size) {
-      for (const name of byNormal) if (!byRecipe.has(name)) missing.add(name);
-    }
+    for (const name of byNormal) if (!byRecipe.has(name)) missing.add(name);
   }
   return [...missing].sort((a, b) => a.localeCompare(b));
 }
@@ -54,7 +51,7 @@ function FewerFields({
     <Alert status="warning">
       <Alert.Indicator />
       <Alert.Content>
-        <Alert.Title>The recipe fills fewer fields than normal extraction</Alert.Title>
+        <Alert.Title>The recipe leaves fields unfilled that normal extraction filled</Alert.Title>
         <Alert.Description>
           On the last test, normal extraction filled {fields.join(", ")}, which the recipe leaves
           unfilled on the URLs it serves.
