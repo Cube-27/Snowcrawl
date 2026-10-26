@@ -54,14 +54,21 @@ export function Lines({
   value,
   placeholder = "",
   onChange,
+  onBlur,
 }: Readonly<{
   label: string;
   value: string;
   placeholder?: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
 }>) {
   return (
-    <TextField className="flex min-w-0 flex-col gap-1" value={value} onChange={onChange}>
+    <TextField
+      className="flex min-w-0 flex-col gap-1"
+      value={value}
+      onChange={onChange}
+      {...(onBlur === undefined ? {} : { onBlur })}
+    >
       <Label>{label}</Label>
       <TextArea rows={4} spellCheck={false} placeholder={placeholder} className="text-code" />
     </TextField>

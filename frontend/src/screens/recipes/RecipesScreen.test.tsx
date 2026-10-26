@@ -415,6 +415,17 @@ describe("recipes screen", () => {
     // The draft, with what it left out; every value editable.
     expect(await screen.findByText("Header left out: x-token")).toBeInTheDocument();
     expect(textbox("URL patterns (one per line)")).toHaveValue(`${HOST}/item/{id}`);
+    // Text stays as typed while it is edited: a new line, and JSON not yet whole.
+    await userEvent.type(textbox("URL patterns (one per line)"), "{Enter}");
+    expect(textbox("URL patterns (one per line)")).toHaveValue(`${HOST}/item/{id}\n`);
+    await userEvent.click(screen.getByRole("button", { name: "Reset the patterns" }));
+    await userEvent.clear(textbox("Pagination (JSON; null for none)"));
+    await userEvent.type(textbox("Pagination (JSON; null for none)"), "{{");
+    expect(textbox("Pagination (JSON; null for none)")).toHaveValue("{");
+    expect(screen.getByText("Not JSON: the pagination is left as it was.")).toBeInTheDocument();
+    await userEvent.clear(textbox("Pagination (JSON; null for none)"));
+    await userEvent.type(textbox("Pagination (JSON; null for none)"), "null");
+    await userEvent.click(screen.getByRole("button", { name: "Reset the pagination" }));
     await userEvent.clear(textbox("Path of price"));
     await userEvent.type(textbox("Path of price"), "$.data.amount");
     expect(screen.getByRole("button", { name: "Reset the path of price" })).toBeInTheDocument();
