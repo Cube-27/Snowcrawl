@@ -1,6 +1,7 @@
 """`/v1/sites/{host}/configs`, `/v1/configs/{id}`, `/v1/configs/{id}/recipe`, `/v1/configs/{id}/approve`,
-`/v1/configs/{id}/reject`, `/v1/configs/{id}/export` and `/v1/sites/{host}/learn`: a site's configs,
-operator corrections (C5), custom recipes, approval and refusal of learned configs, exports and forced learning. The
+`/v1/configs/{id}/reject`, `/v1/configs/{id}/retire`, `/v1/configs/{id}/export` and `/v1/sites/{host}/learn`: a site's
+configs, operator corrections (C5), custom recipes and their retirement, approval and refusal of learned configs,
+exports and forced learning. The
 rules are the configs service's; this router translates HTTP to it and its errors to problems."""
 
 from collections.abc import AsyncIterator
@@ -79,6 +80,15 @@ async def edit_recipe(config_id: ExtractionConfigId, body: CustomRecipe, request
     serves a pattern of a new shape."""
     async with _transaction(request) as conn:
         return await configs.edit_recipe(conn, config_id, body)
+
+
+@router.post("/configs/{config_id}/retire", responses=_CHANGES)
+async def retire_recipe(config_id: ExtractionConfigId, request: Request) -> ConfigDetail:
+    """Retires a custom recipe: its active version is `suspended`, with any repair of it waiting for approval, and the
+    URLs its patterns match are served by the site's learned config again. 409 when `config_id` is not an active
+    custom recipe."""
+    async with _transaction(request) as conn:
+        return await configs.retire_recipe(conn, config_id)
 
 
 @router.get("/configs/{config_id}", responses=_NOT_FOUND)

@@ -7,7 +7,8 @@ held-out pages and active when validation keeps it, else a `draft` whose report 
 
 A custom recipe (`config_ir.custom_recipe`) is saved as its scope's next version, active at once beside the learned
 config, which stays active; an edit is the next version replacing the recipe, made from its shape's active version.
-Saving needs no validation, approval or audit: the engineer tested the recipe.
+Saving needs no validation, approval or audit: the engineer tested the recipe. Retiring one suspends it, and the
+learned config serves its URLs again.
 
 An export carries the release check run on the pages the config was validated on
 (`provenance.validated_on`) that are still stored; a field with no engine value left on any of them is `manual`.
@@ -32,6 +33,7 @@ from snowcrawl.config_ir.activation import (
     ShapeTaken,
     approve,
     reject,
+    retire,
     store_correction,
     store_recipe,
 )
@@ -276,6 +278,18 @@ async def _save_recipe(
         config_id = await store_recipe(conn, key, ir, replaces=replaces)
     except (ShapeTaken, NotActive) as e:
         raise ConfigConflict(str(e)) from e
+    return await get(conn, config_id)
+
+
+async def retire_recipe(conn: AsyncConnection, config_id: ExtractionConfigId) -> ConfigDetail:
+    """Retire the custom recipe `config_id`: it is `suspended`, with any repair of it waiting for approval, and the
+    learned config serves its URLs again; `ConfigConflict` when it is not an active custom recipe."""
+    row = await _row(conn, config_id)
+    try:
+        await retire(conn, StateKey(row["site_id"], row["schema_id"], row["page_kind"]), config_id)
+    except NotActive as e:
+        detail = f"config {config_id} is {row['status']} version {row['version']}, not an active custom recipe"
+        raise ConfigConflict(detail) from e
     return await get(conn, config_id)
 
 

@@ -1,8 +1,14 @@
 import { Button, Link, Table, Typography } from "@heroui/react";
 import { useParams } from "react-router";
 import { configVersionLabel, type ConfigDetail } from "../../api/configs";
-import { useApproveConfig, useConfig, useRejectConfig } from "../../api/hooks/configs";
+import {
+  useApproveConfig,
+  useConfig,
+  useRejectConfig,
+  useRetireRecipe,
+} from "../../api/hooks/configs";
 import { problemOf } from "../../api/hooks/query";
+import { ConfirmDialog } from "../../components/molecules/ConfirmDialog";
 import { ConfigStatusLabel } from "../../components/molecules/StatusLabels";
 import { LoadingView, ProblemAlert, QueryView } from "../../components/molecules/ViewStates";
 import { Screen, Section } from "../../components/templates/Screen";
@@ -116,13 +122,38 @@ function RecipeFacts({ recipe }: Readonly<{ recipe: ConfigDetail }>) {
   );
 }
 
+/** Retires the recipe after a confirmation: the learned config serves its URLs again. */
+function RetireAction({ id }: Readonly<{ id: string }>) {
+  const retire = useRetireRecipe(id);
+  return (
+    <>
+      <ConfirmDialog
+        trigger={
+          <Button variant="danger-soft" isPending={retire.isPending}>
+            Retire
+          </Button>
+        }
+        title="Retire this recipe?"
+        confirmLabel="Retire"
+        onConfirm={() => {
+          retire.mutate();
+        }}
+      >
+        It stops serving: the site's learned config extracts the URLs its patterns match. A repair
+        waiting for review is refused with it. Its versions stay listed.
+      </ConfirmDialog>
+      <ProblemAlert problem={problemOf(retire.error)} />
+    </>
+  );
+}
+
 function recipeTitle(recipe: ConfigDetail): string {
   const { site } = recipe;
   return `Recipe of ${site}, ${configVersionLabel(recipe)}`;
 }
 
 /** One custom recipe: what it serves, its main call and its fields, and a repair waiting for review with what it
- * changes; "Edit" opens it in the builder, and the config screen exports it. */
+ * changes; "Edit" opens it in the builder, "Retire" stops it serving, and the config screen exports it. */
 export function RecipeScreen() {
   const { id = "" } = useParams();
   const recipe = useConfig(id);
@@ -137,7 +168,10 @@ export function RecipeScreen() {
               <Link href={recipesPath(data.site)}>All recipes</Link>
               <Link href={configPath(data.id)}>Open as a config</Link>
               {data.status === "active" && data.recipe !== null ? (
-                <Link href={editRecipePath(data.id)}>Edit</Link>
+                <>
+                  <Link href={editRecipePath(data.id)}>Edit</Link>
+                  <RetireAction id={data.id} />
+                </>
               ) : null}
             </>
           }

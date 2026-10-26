@@ -86,12 +86,13 @@ drift (`activation.py`, `drift.py`), operator corrections (`corrections.py`), AP
 values. Learn jobs: `learn_job.py` (the job's lifecycle around the pipeline) and `worker/learn.py`.
 
 Custom recipes (`custom_recipe.py`) are `operator` configs an engineer saves through `POST /v1/sites/{host}/configs`
-(edits: `PUT /v1/configs/{id}/recipe`): a main call, extra calls, an optional warm-up and page fields, serving the URLs
+(edits: `PUT /v1/configs/{id}/recipe`; `POST /v1/configs/{id}/retire` suspends one): a main call, extra calls, an optional warm-up and page fields, serving the URLs
 their patterns match (`url_pattern.py`: host and path template, `{name}`, `*`, trailing `**`, `?key={name}`). A scope
 (site, schema, page kind) holds one active learned config and any number of active recipes, one per pattern shape
 (`extraction_config.pattern_shape`, `''` for the learned one); saving a recipe changes no other row, and the
 progressive state names the learned config only. Selection (`active.py`): the recipe whose pattern matches the URL
-most specifically, else the learned config; a job pins every active config of a host and picks per URL.
+most specifically, else the learned config, which also extracts a page the recipe did not fetch itself
+(`ActiveConfig.rest`); a job pins every active config of a host and picks per URL.
 
 Learning leaves recipes alone: a learning run samples only the pages no active recipe's pattern matches
 (`held_out.load_pages(keep=)`) and only ever replaces the learned config. A recipe's drift (`drift.py`) suspends the
@@ -123,7 +124,8 @@ SDKs in `sdk/python`, `sdk/typescript` (`tools/dev.py sdk`); web UI in `frontend
 helpers), screens in `frontend/src/screens/`, every visual value in `frontend/src/app/theme.css`. The Recipes screen
 (`frontend/src/screens/recipes/`, a site's recipes) builds a custom recipe from samples, their calls and the server's
 draft, which the engineer's edits lie over (`draft.ts`), tests it, saves it, edits a saved one (`GET /v1/configs/{id}`
-answers a custom recipe also as the `CustomRecipe` it is edited as) and approves or rejects its pending repair.
+answers a custom recipe also as the `CustomRecipe` it is edited as), approves or rejects its pending repair and retires
+it.
 
 ## Pinned data
 

@@ -12504,6 +12504,120 @@
         ]
       }
     },
+    "/v1/configs/{config_id}/retire": {
+      "post": {
+        "description": "Retires a custom recipe: its active version is `suspended`, with any repair of it waiting for approval, and the\nURLs its patterns match are served by the site's learned config again. 409 when `config_id` is not an active\ncustom recipe.",
+        "operationId": "retire_recipe_v1_configs__config_id__retire_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "config_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Config Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConfigDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              },
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retire Recipe",
+        "tags": [
+          "configs"
+        ]
+      }
+    },
     "/v1/crawl": {
       "post": {
         "description": "Queue a job that crawls from `url`: its sitemaps and the links of each page, within `include` and `exclude`,\n`max_depth` and `limit`, on its host (and the subdomains an `include` names). A page a `page_kind_rules` pattern\nmatches is extracted; with rules, any other page is fetched for its links only. `strategy` orders the visits: `bfs`\n(default), `dfs`, or `best_first`, which fetches the links that best match `query` and `keywords` first (anchor\ntext and URL path against the query, the holding page's relevance, sitemap priority, shallower first);\n`allow_subdomains` and `allow_external` widen the host scope. Pages the `limit` leaves unfetched end `cancelled`.\nA target the API may not fetch, in `url` or `webhook_url`, is a 422 and nothing is queued.",

@@ -445,6 +445,27 @@ async def test_a_page_its_recipe_did_not_fetch_is_the_learned_configs(client: ht
     assert (on_page.id, on_page.custom) == (learned, False)
 
 
+async def test_a_retired_recipe_gives_its_urls_back_to_the_learned_config(
+    client: httpx.AsyncClient, world: World
+) -> None:
+    learned = await world.active_config(H2)
+    recipe = (await client.post(f"/v1/sites/{world.host}/configs", json=_recipe(world, "item"))).json()["id"]
+
+    retired = await client.post(f"/v1/configs/{recipe}/retire")
+    again = await client.post(f"/v1/configs/{recipe}/retire")
+    not_a_recipe = await client.post(f"/v1/configs/{learned}/retire")
+    async with world.engine.connect() as conn:
+        url = f"{world.origin}/item/b"
+        serving = await active_config(conn, world.site_id, world.schema, world.data.vocabulary, url)
+
+    assert retired.status_code == 200, retired.text
+    assert (retired.json()["status"], retired.json()["custom"]) == ("suspended", True)
+    assert [again.status_code, not_a_recipe.status_code] == [409, 409]
+    assert serving is not None
+    assert serving.id == learned
+    assert await world.configs() == [(1, "active", "induced"), (2, "suspended", "operator")]
+
+
 # Learning.
 
 

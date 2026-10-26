@@ -13,7 +13,9 @@ holds one active config per pattern shape (`url_pattern.patterns_shape`), the le
 correcting the learned config suspends only the learned config before it; saving a recipe suspends only the recipe it
 replaces, and the progressive state goes on naming the learned config. A learning run only ever replaces the learned
 config. A recipe's repair run stores the recipe's next version `pending_approval` against its shape
-(`store_pending(shape=)`), and approving it suspends only the version of that shape it repairs.
+(`store_pending(shape=)`), and approving it suspends only the version of that shape it repairs. Retiring a recipe
+(`retire`) suspends its active version and any repair of it waiting for approval, so the learned config serves its
+URLs again.
 
 Only a `Validated` with a config activates: nothing activates without validation. Everything runs on the
 caller's connection, in its transaction, so a run that cannot end (`NotLearning`) stores nothing.
@@ -105,6 +107,20 @@ async def store_pending(
     config_id = await _store(conn, key, ir, validated.report, "pending_approval")
     await learning_awaits_approval(conn, key)
     return config_id
+
+
+async def retire(conn: AsyncConnection, key: StateKey, config_id: ExtractionConfigId) -> None:
+    """Retire the custom recipe `config_id` of `key`: its active version and a repair of it waiting for approval are
+    `suspended`, and the learned config serves the URLs its patterns match. Raises `NotActive` when it is not an active
+    custom recipe (an edit replaced it, it was retired already, or it is the learned config)."""
+    await lock_state(conn, key)
+    configs = ExtractionConfig
+    active = (configs.id == config_id, *key.config_scope(), configs.status == "active", configs.pattern_shape != "")
+    retired = update(configs).where(*active).values(status="suspended").returning(configs.pattern_shape)
+    pattern_shape = (await conn.execute(retired)).scalar_one_or_none()
+    if pattern_shape is None:
+        raise NotActive(f"config {config_id} is not an active custom recipe")
+    await _suspend_waiting(conn, key, pattern_shape)
 
 
 class NotPending(ValueError):
