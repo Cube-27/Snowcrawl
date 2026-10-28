@@ -112,3 +112,8 @@ def test_a_rating_on_a_stated_scale_maps_linearly_onto_five_points(best_above_wo
 )
 def test_a_rating_is_rescaled_only_by_the_scale_the_page_states(raw: dict[str, JsonValue], value: str) -> None:
     assert number.normalize(raw, NUMBER, CTX) == Ok(value)
+
+
+def test_a_scale_is_read_by_the_page_s_number_symbols_and_a_bound_that_is_no_number_states_none() -> None:
+    assert number.normalize({"ratingValue": "8,0", "bestRating": "10,0", "worstRating": "0"}, NUMBER, DE) == Ok("4")
+    assert number.normalize({"ratingValue": "8", "bestRating": "NaN"}, NUMBER, CTX) == Ok("8")

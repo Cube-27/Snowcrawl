@@ -67,7 +67,14 @@ def _rating(raw: Mapping[str, JsonValue], spec: FieldSpec, ctx: Context) -> Norm
     result = normalize(raw[_RATING_VALUE], spec, ctx)
     if not isinstance(result, Ok) or not raw.keys() & {_BEST, _WORST}:
         return result
-    return _on_five_points(result, _count(raw.get(_BEST, _DEFAULT_BEST)), _count(raw.get(_WORST, _DEFAULT_WORST)))
+    best = _bound(raw.get(_BEST, _DEFAULT_BEST), spec, ctx)
+    return _on_five_points(result, best, _bound(raw.get(_WORST, _DEFAULT_WORST), spec, ctx))
+
+
+def _bound(raw: JsonValue, spec: FieldSpec, ctx: Context) -> Decimal | None:
+    """A scale bound read as the rating value is (the page's number symbols), `None` when it is no one finite number."""
+    result = normalize(raw, spec, ctx)
+    return Decimal(str(result.value)) if isinstance(result, Ok) else None
 
 
 def _on_five_points(rating: Ok, best: Decimal | None, worst: Decimal | None) -> Ok:
