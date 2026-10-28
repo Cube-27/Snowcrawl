@@ -87,9 +87,8 @@ def test_a_documented_answer_joins_only_for_its_product_and_reads_in_major_units
     assert row["variants.availability"] == Ok("OutOfStock")
     # The product's every image, the featured one first, and its HTML body read as text.
     files: list[JsonValue] = [f"https://cdn.example.test/files/{key}-{n}.jpg" for n in (1, 2)]
-    # Each publishes as the answer writes it, scheme-relative.
-    written: list[JsonValue] = [f"//cdn.example.test/files/{key}-{n}.jpg" for n in (1, 2)]
-    assert [c.normalized for c in read.candidates if c.field == "additional_images"] == [Ok(files, stated=written)]
+    # The answer writes them scheme-relative; they publish resolved, their canonical form.
+    assert [c.normalized for c in read.candidates if c.field == "additional_images"] == [Ok(files)]
     assert [c.normalized for c in read.candidates if c.field == "description"] == [Ok("A mug.")]
     if other != key:
         # Another product's answer (an endpoint that ignores its key) never joins, and says why.
@@ -186,4 +185,4 @@ def test_a_variant_s_page_reads_its_own_images_and_the_product_s() -> None:
 
     lists = [c.normalized for c in read.candidates if c.field == "additional_images"]
     kept: list[JsonValue] = ["https://cdn.example.test/2.jpg", "https://cdn.example.test/both.jpg"]
-    assert lists == [Ok(kept, stated=[images[2], images[0]])]
+    assert lists == [Ok(kept)]
