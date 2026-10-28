@@ -19,8 +19,9 @@ handler of the job kind (`worker/handlers/`); `scheduler/loop.py` enqueues sched
 
 1. **Acquire** (`acquire/`). `rungs.py` picks the rung: HTTP first (`http.py`, `curl_client.py`, TLS profile in
    `impersonate.py`), the Patchright Chrome browser (`browser.py`, `shared_browser.py`, `browser_profiles.py`) when blocked,
-   a JS shell (on a detail page read for an Offer, one whose structured data states no offer too: `classify.lacks_offer`,
-   the render kept only when it states one, `rungs._kept`), or `render.mode` asks. The browser is headless by default, with the client-hint override and a per-profile
+   a JS shell (on a detail page read for an Offer, one stating no offer too: no structured offer, `classify.offerless`,
+   and none its extraction publishes, `resolve.pipeline.states_offer`, read by `rungs._offerless`; the render kept only
+   when it states one, `rungs._kept`), or `render.mode` asks. The browser is headless by default, with the client-hint override and a per-profile
    screen (`browser_session.py`, `desktop_screen.py`), or headful per the Patchright README
    (`SNOWCRAWL_BROWSER_HEADLESS=false`; Xvfb on Linux without a display, `display.py`). `classify.py`/`challenge.py` set the block class (`ok|blocked|shell|not_found|error`).
    The browser's identity (its naming headers and client hints, which the HTTP and JSON rungs send too) and the

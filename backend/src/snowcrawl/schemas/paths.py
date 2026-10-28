@@ -82,6 +82,18 @@ def target_types(schema: SchemaContent) -> tuple[str, ...]:
     return _roots(schema, grouped | {name for name, spec in schema.fields.items() if spec.required})
 
 
+def rooted_at(schema: SchemaContent, root: str) -> tuple[str, ...]:
+    """The schema's row fields every alternative of whose `schema_org` path starts at type `root`, sorted: for
+    `Offer`, the fields an item's schema.org Offer states (its price, its availability)."""
+    return tuple(
+        sorted(
+            name
+            for name, spec in schema.fields.items()
+            if spec.schema_org and spec.scope == "row" and all(p.root == root for p in parse_paths(spec.schema_org))
+        )
+    )
+
+
 def _roots(schema: SchemaContent, names: set[str]) -> tuple[str, ...]:
     return tuple(
         sorted(

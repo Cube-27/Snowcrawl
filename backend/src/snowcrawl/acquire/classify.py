@@ -23,11 +23,10 @@ A 2xx document whose structured data states an item of a type the task reads the
 `target_types`: a JSON-LD node or a microdata item typed so, or an OGP product price for a Product or Offer) is the
 page, however little it shows or links: the reader reads that data (`_describes`). Fetched as a detail page while its
 body carries its content unrendered (`carries_unrendered`, below), it is still a shell for the browser to render: the
-rest of the item is only in the rendered page (`_script_state`); without a browser outcome it is kept as it is. So is
-one fetched as a detail page for an Offer (the task's schema reads fields from one, so `Offer` is among its types)
-whose structured data states no offer at all (`lacks_offer`): no schema.org `offers`, no node typed Offer or stating
-an `itemOffered`, no OGP price. A product page whose server markup holds a stub of its item while a script states the
-item with its offer is told by it; one stating an offer without a price (a product out of stock) is not.
+rest of the item is only in the rendered page (`_script_state`); without a browser outcome it is kept as it is.
+Whether a document's structured data states an offer at all, for a task whose schema reads fields from one (`Offer`
+among its types), is `offerless`: no schema.org `offers`, no node typed Offer or stating an `itemOffered`, no OGP
+price. The ladder reads it with what the page's collectors publish (`rungs._offerless`); classification does not.
 
 A page fetched for content formats alone (`content_only`) is read for its rendered text, so it is a shell when that text
 is near-empty while its scripts and concealed subtrees carry an order of magnitude more (`carries_unrendered`): the
@@ -247,7 +246,7 @@ def _document_class(
     if redirect is not None and redirect.kind is not None:
         moved = _moved(redirect, described=described, lists=lambda: structured or lists_items(text, base))
     # After the redirect rules: a detail page that a redirect led elsewhere is not the page, however it renders.
-    return moved or (_script_state(tree, documents, page_kind, types) if described else None) or "ok"
+    return moved or (_script_state(tree, page_kind) if described else None) or "ok"
 
 
 def _states_not_found(tree: LexborHTMLParser) -> bool:
@@ -288,25 +287,18 @@ def _page_shell(tree: LexborHTMLParser, *, content_only: bool) -> BlockClass | N
     return _no_site_page(tree)
 
 
-def _script_state(
-    tree: LexborHTMLParser, documents: list[object], page_kind: PageKind | None, types: tuple[str, ...]
-) -> BlockClass | None:
+def _script_state(tree: LexborHTMLParser, page_kind: PageKind | None) -> BlockClass | None:
     """A detail page whose structured data describes its item but whose body carries the rest of it unrendered
-    (`carries_unrendered`), or that states no offer for a task reading one (`_lacks_offer`), is a shell: what the
-    structured data leaves out (an apply link, a full location list, the item's offer) exists only once the browser
-    runs the scripts. Without a browser outcome, the page is kept for what its data states (`rungs._as_last_page`,
-    which passes no page kind)."""
-    if page_kind != "detail":
-        return None
-    return "shell" if _carries_unrendered(tree) or _lacks_offer(tree, documents, types) else None
+    (`carries_unrendered`) is a shell: what the structured data leaves out (an apply link, a full location list)
+    exists only once the browser runs the scripts. Without a browser outcome, the page is kept for what its data
+    states (`rungs._as_last_page`, which passes no page kind)."""
+    return "shell" if page_kind == "detail" and _carries_unrendered(tree) else None
 
 
-def lacks_offer(text: str, types: tuple[str, ...]) -> bool:
-    """Whether a decoded HTML document's structured data describes an item of one of `types` and, `types` naming an
-    Offer, states no offer (`_lacks_offer`)."""
+def offerless(text: str, types: tuple[str, ...]) -> bool:
+    """Whether `types` name an Offer and a decoded HTML document's structured data states none (`_lacks_offer`)."""
     tree = LexborHTMLParser(text)
-    documents = _json_ld(tree)
-    return _describes(tree, documents, types) and _lacks_offer(tree, documents, types)
+    return _lacks_offer(tree, _json_ld(tree), types)
 
 
 def _lacks_offer(tree: LexborHTMLParser, documents: list[object], types: tuple[str, ...]) -> bool:

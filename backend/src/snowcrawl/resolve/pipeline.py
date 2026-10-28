@@ -51,7 +51,7 @@ from snowcrawl.resolve.evidence import Calibration, assess, assess_fields, load_
 from snowcrawl.resolve.intent import AmbiguousTarget, primary_types, select_target, sole_primary
 from snowcrawl.resolve.listing import listing_rows, row_lists
 from snowcrawl.resolve.main_image import without_main_image
-from snowcrawl.resolve.ownership import EntityGraph
+from snowcrawl.resolve.ownership import OFFER, EntityGraph
 from snowcrawl.resolve.page_state import out_of_stock, render_bound, was_rendered
 from snowcrawl.resolve.pagination import next_page_candidate, next_page_links
 from snowcrawl.resolve.preference import (
@@ -68,6 +68,7 @@ from snowcrawl.resolve.row_keys import keyed_rows
 from snowcrawl.resolve.rows import RowField, resolve_rows, with_variants
 from snowcrawl.resolve.score import PRECEDENCE_FILE, load_precedence
 from snowcrawl.resolve.types import ExtractionResult, FieldSet, LLMCallRecord, Outcome, Probability
+from snowcrawl.schemas.paths import rooted_at
 from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef, Scope
 from snowcrawl.storage.capture_bundle import CaptureBundle
 
@@ -486,6 +487,20 @@ class _Page:
 def _read_and_resolve(source: _Source) -> tuple[_Page, FieldSet]:
     page = _Page.read(source)
     return page, page.resolve(page.candidates)
+
+
+def states_offer(bundle: CaptureBundle, schema: SchemaDef, config: ConfigExecutor | None, *, data: EngineData) -> bool:
+    """Whether the detail page in `bundle`, read by every collector and `config` and resolved for its target as
+    `extract_page` resolves it before role C, publishes a field the schema reads from the item's schema.org Offer (its
+    price, its availability: `paths.rooted_at`). A page whose resolution raises states one: it is no evidence that a
+    render would. CPU work."""
+    offer = rooted_at(schema, OFFER)
+    try:
+        _, fields = _read_and_resolve(_Source(bundle, schema, data, None, config))
+    except Exception:  # resolution failing is the extraction's to report (`extract_page`), not the fetch's
+        log.exception(_FAILED)
+        return True
+    return any(_published(fields, name) for name in offer)
 
 
 # Why a listing gave no rows, as `no_rows: <cause>`:

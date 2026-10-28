@@ -2,7 +2,7 @@
 
 import pytest
 
-from snowcrawl.acquire.classify import Redirect, classify, interstitial
+from snowcrawl.acquire.classify import Redirect, classify, interstitial, offerless
 from snowcrawl.acquire.types import BlockClass
 from snowcrawl.db.models import PageKind
 
@@ -164,33 +164,19 @@ _STUB = '{"@context": "https://schema.org", "@type": "WebPage", "mainEntity": {"
 
 
 @pytest.mark.parametrize(
-    ("body", "types", "kind", "expected"),
+    ("body", "types", "expected"),
     [
-        # A Product stub with no offer, fetched as a detail page for an Offer: the browser renders it once.
-        pytest.param(_product(_STUB), _PRODUCT_TYPES, "detail", "shell", id="stub"),
-        pytest.param(_product(_STUB), _PRODUCT_TYPES, None, "ok", id="no-page-kind"),
-        pytest.param(_product(_STUB), ("Product",), "detail", "ok", id="no-offer-read"),
+        # A Product stub with no offer, or a page stating no structured data, read for an Offer: none stated.
+        pytest.param(_product(_STUB), _PRODUCT_TYPES, True, id="stub"),
+        pytest.param(_page(400, 20, '<meta property="og:title" content="Kettle">'), _PRODUCT_TYPES, True, id="og-only"),
+        pytest.param(_product(_STUB), ("Product",), False, id="no-offer-read"),
         # An offer stated untyped, as an IRI member, as an Offer stating its item, in microdata, or as an OGP price.
+        pytest.param(_product('{"@type": "Product", "name": "K", "offers": {"price": "9"}}'), _PRODUCT_TYPES, False),
         pytest.param(
-            _product('{"@type": "Product", "name": "K", "offers": {"price": "9"}}'),
-            _PRODUCT_TYPES,
-            "detail",
-            "ok",
-            id="offers",
+            _product('{"@type": "Product", "http://schema.org/offers": {"price": "9"}}'), _PRODUCT_TYPES, False
         ),
         pytest.param(
-            _product('{"@type": "Product", "http://schema.org/offers": {"price": "9"}}'),
-            _PRODUCT_TYPES,
-            "detail",
-            "ok",
-            id="offers-iri",
-        ),
-        pytest.param(
-            _product('{"@type": "Offer", "itemOffered": {"@type": "Product", "name": "K"}}'),
-            _PRODUCT_TYPES,
-            "detail",
-            "ok",
-            id="item-offered",
+            _product('{"@type": "Offer", "itemOffered": {"@type": "Product", "name": "K"}}'), _PRODUCT_TYPES, False
         ),
         pytest.param(
             _page(
@@ -201,46 +187,40 @@ _STUB = '{"@context": "https://schema.org", "@type": "WebPage", "mainEntity": {"
                 "</div>",
             ),
             _PRODUCT_TYPES,
-            "detail",
-            "ok",
+            False,
             id="microdata",
         ),
         pytest.param(
             _product(_STUB).replace("<head>", '<head><meta property="product:price:amount" content="9">'),
             _PRODUCT_TYPES,
-            "detail",
-            "ok",
+            False,
             id="ogp-price",
         ),
-        # Out of stock: an offer with its availability and no price is an offer stated; no render.
+        # Out of stock: an offer with its availability and no price is an offer stated.
         pytest.param(
             _product('{"@type": "Product", "name": "K", "offers": {"availability": "https://schema.org/OutOfStock"}}'),
             _PRODUCT_TYPES,
-            "detail",
-            "ok",
+            False,
             id="out-of-stock",
         ),
         pytest.param(
-            _product('{"@type": "Product", "name": "K", "offers": []}'),
-            _PRODUCT_TYPES,
-            "detail",
-            "shell",
-            id="empty-offers",
+            _product('{"@type": "Product", "name": "K", "offers": []}'), _PRODUCT_TYPES, True, id="empty-offers"
         ),
         # A context defining the `offers` term states no offer.
         pytest.param(
             _product('{"@context": {"offers": "https://schema.org/offers"}, "@type": "Product", "name": "K"}'),
             _PRODUCT_TYPES,
-            "detail",
-            "shell",
+            True,
             id="context-term",
         ),
     ],
 )
-def test_a_detail_page_read_for_an_offer_that_states_none_is_a_shell(
-    body: str, types: tuple[str, ...], kind: PageKind | None, expected: BlockClass
+def test_a_document_read_for_an_offer_is_offerless_when_its_structured_data_states_none(
+    body: str, types: tuple[str, ...], expected: bool
 ) -> None:
-    assert classify(200, _HTML, body, kind, types=types) == expected
+    assert offerless(body, types) is expected
+    # Classification renders no `ok` page for it: the ladder reads it with the page's extraction (`rungs._offerless`).
+    assert classify(200, _HTML, body, "detail", types=types) == "ok"
 
 
 _ITEMS = '<script type="application/ld+json">{"@type": "ItemList", "itemListElement": [{"@type": "ListItem"}]}</script>'

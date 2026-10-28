@@ -22,7 +22,7 @@ from snowcrawl.acquire.api import JsonFetcher, JsonRequest
 from snowcrawl.acquire.browser_tab import Tab
 from snowcrawl.acquire.cookies import shared
 from snowcrawl.acquire.politeness import Admit, HostLimiter
-from snowcrawl.acquire.rungs import NO_PLAN, FetchPlan, Rung, Rungs, acquire
+from snowcrawl.acquire.rungs import NO_PLAN, FetchPlan, Offered, Rung, Rungs, acquire
 from snowcrawl.acquire.ssrf import SSRF_REJECTED, SafeConnector, SsrfRejected
 from snowcrawl.acquire.types import (
     ActionsReport,
@@ -457,6 +457,9 @@ class PagePlan:
     custom: Custom | None = None
     # A recipe test's fetch (`services.recipe_trial`): the site keeps nothing of it, no adapter decline, no memory.
     trial: bool = False
+    # Whether a detail page's capture states the item's offer as its records read it (`Records.offered`); without it no
+    # page is rendered for stating none (`acquire.rungs`).
+    offered: Offered | None = None
 
 
 def page_fetch(
@@ -494,6 +497,7 @@ def page_fetch(
             send=send,
             deadline=page.deadline,
             plan=page.fetch,
+            offered=page.offered,
         )
         page.attempts.extend(result.attempts)
         return result

@@ -31,7 +31,7 @@ from urllib.parse import urlsplit, urlunsplit
 from snowcrawl.acquire.api import JsonFetcher, JsonRequest, site_relation
 from snowcrawl.acquire.browser_tab import ListingRung
 from snowcrawl.acquire.challenge import block_class_of
-from snowcrawl.acquire.classify import carries_unrendered, interstitial, lacks_offer
+from snowcrawl.acquire.classify import carries_unrendered, interstitial, offerless
 from snowcrawl.acquire.fingerprint import platform_shown
 from snowcrawl.acquire.identity import identified, joined, with_call
 from snowcrawl.acquire.memory import Remembered
@@ -49,6 +49,7 @@ from snowcrawl.acquire.types import (
 from snowcrawl.adapters.base import ADAPTER_CALL
 from snowcrawl.adapters.platforms import ProductJson, product_json
 from snowcrawl.adapters.registry import Registry, platform_adapters
+from snowcrawl.storage.capture_bundle import CaptureBundle
 
 Rung = Callable[[str, FetchPolicy], Awaitable[FetchResult]]
 # A custom recipe's call sent from its site's warm page (`acquire.browser_send.send_in_page`), the page opened at the
@@ -57,6 +58,10 @@ InPage = Callable[[JsonRequest, FetchPolicy, str], Awaitable[FetchResult]]
 # The eager fragments a document at a URL declares, as (id, absolute URL) pairs (`content.fragments.eager_frames`,
 # which sits above `acquire`, so the process hands it in).
 FramePlan = Callable[[str, str], Sequence[tuple[str, str]]]
+# Whether a detail page's capture publishes a field the task's schema reads from the item's schema.org Offer (its price,
+# its availability), as its extraction reads it (`resolve.pipeline.states_offer`, which sits above `acquire`, so
+# the task hands it in).
+Offered = Callable[[CaptureBundle], bool]
 
 log = logging.getLogger(__name__)
 
@@ -160,6 +165,7 @@ async def acquire(
     send: JsonFetcher | None = None,
     deadline: float | None = None,
     plan: FetchPlan = NO_PLAN,
+    offered: Offered | None = None,
 ) -> FetchResult:
     """Fetch `url` through `custom`, the custom recipe whose URL pattern it matches bound to its fetch, when there is
     one: its result is kept when it is `ok` or asks for fewer requests, or when `admit_next` admits no further
@@ -169,7 +175,16 @@ async def acquire(
     if first is not None and (first.block_class == "ok" or slow_down(first) or not await _admitted(admit_next)):
         return first
     result = await _ladder(
-        url, policy, remembered, rungs, recipe=recipe, admit_next=admit_next, send=send, deadline=deadline, plan=plan
+        url,
+        policy,
+        remembered,
+        rungs,
+        recipe=recipe,
+        admit_next=admit_next,
+        send=send,
+        deadline=deadline,
+        plan=plan,
+        offered=offered,
     )
     if first is None:
         return result
@@ -187,6 +202,7 @@ async def _ladder(
     send: JsonFetcher | None,
     deadline: float | None,
     plan: FetchPlan,
+    offered: Offered | None,
 ) -> FetchResult:
     """Fetch `url` through the active adapter that detects it, if any, requesting its API with `send` (no adapter runs
         without it); a page an adapter does not serve skips the recipe. Otherwise through `recipe`, the
@@ -198,7 +214,8 @@ async def _ladder(
         network
         error is fetched again in the browser, and the browser's outcome is kept only if it is `ok` (or a shell no
         challenge
-        names: the last rung's page, `_as_last_page`); an HTTP `ok` page never is. Each request after the first (the
+        names: the last rung's page, `_as_last_page`); an HTTP `ok` page never is, but a detail page stating no offer
+        (`_offerless`, read with `offered`) is a shell. Each request after the first (the
         page
         after an
         adapter or a recipe, the browser retry, the companion call) waits for `admit_next` to admit it at the site's
@@ -231,7 +248,8 @@ async def _ladder(
     refer = (
         None if send is None or not (served is None or by_recipe) else _Referral(url, policy, rungs, send, admit_next)
     )
-    page = await _page(url, ready, planned, rungs, _Retry(admit_next, deadline, refer, remembered=not plan.browser))
+    retry = _Retry(admit_next, deadline, refer, remembered=not plan.browser, offered=offered)
+    page = await _page(url, ready, planned, rungs, retry)
     if refer is not None:
         page = await refer(page)
     page = await _joined(policy, page, admit_next, send)
@@ -343,6 +361,9 @@ class _Retry:
     refer: _Referral | None = None
     # Whether a browser start is memory's (`_remembered_browser`), not a field source's (`FetchPlan.browser`).
     remembered: bool = False
+    # Whether a detail page's capture states the item's offer as its extraction reads it (`_offerless`); without it no
+    # page is rendered for stating none.
+    offered: Offered | None = None
 
     def in_budget(self) -> bool:
         return self.deadline is None or self.deadline - time.monotonic() >= BROWSER_MIN_S
@@ -358,7 +379,7 @@ async def _page(url: str, policy: FetchPolicy, remembered: Remembered, rungs: Ru
     if method == "browser" and policy.method_hint == "auto" and retry.remembered:
         return await _remembered_browser(url, policy, rungs, retry)
     if method == "http":
-        result = await rungs.http(url, policy)
+        result = await _offerless(await rungs.http(url, policy), policy, retry.offered)
     else:
         result = await rungs.browser(url, policy)
     retried = policy.method_hint == "auto" and method == "http" and await _browser_may_help(result)
@@ -373,7 +394,8 @@ async def _page(url: str, policy: FetchPolicy, remembered: Remembered, rungs: Ru
         log.info("browser retry not sent: %s (http %s)", unsent, result.bundle.manifest.status_code)
         return await _as_last_page(result, policy, last=True), attempts, duration_ms
     rendered = await _browser_retry(url, policy, rungs, result)
-    return await _kept(result, rendered, policy), attempts + rendered.attempts, duration_ms + rendered.duration_ms
+    kept = await _kept(result, rendered, policy, retry.offered)
+    return kept, attempts + rendered.attempts, duration_ms + rendered.duration_ms
 
 
 async def _unsent(retry: _Retry, pause: timedelta) -> str | None:
@@ -386,11 +408,13 @@ async def _unsent(retry: _Retry, pause: timedelta) -> str | None:
     return None if retry.in_budget() else NO_BUDGET
 
 
-async def _kept(result: FetchResult, rendered: FetchResult, policy: FetchPolicy) -> FetchResult:
+async def _kept(
+    result: FetchResult, rendered: FetchResult, policy: FetchPolicy, offered: Offered | None
+) -> FetchResult:
     """The page kept after the browser's attempt `rendered` at the HTTP `result`: the browser's `ok` unless it is no
     better (`_no_better`), else the HTTP page when it is `ok` as a page kept with no browser outcome (`_as_last_page`,
     not the last rung's), else the browser's page when the last rung's rule makes it `ok`, else the HTTP page."""
-    if rendered.block_class == "ok" and not await asyncio.to_thread(_no_better, result, rendered, policy):
+    if rendered.block_class == "ok" and not await asyncio.to_thread(_no_better, result, rendered, policy, offered):
         return rendered
     http = await _as_last_page(result, policy, last=False)
     if http.block_class == "ok":
@@ -399,15 +423,41 @@ async def _kept(result: FetchResult, rendered: FetchResult, policy: FetchPolicy)
     return shown if shown.block_class == "ok" else http
 
 
-def _no_better(result: FetchResult, rendered: FetchResult, policy: FetchPolicy) -> bool:
-    """Whether the render of an HTTP detail page that was a shell only for stating no offer (`classify.lacks_offer`)
-    states none either: the HTTP page is kept, and the fetch teaches no browser start
-    (`memory.lesson`). Parses both documents: CPU work."""
-    if policy.page_kind != "detail" or result.block_class != "shell" or result.method != "http":
+def _no_better(result: FetchResult, rendered: FetchResult, policy: FetchPolicy, offered: Offered | None) -> bool:
+    """Whether the render of an HTTP detail page that was a shell for stating no offer (`_offerless`) states none
+    either (`_states_offer`): the HTTP page is kept when it is `ok` but for that (`_kept`), and the fetch teaches no
+    browser start (`memory.lesson`). A shell whose body carries its item unrendered (`classify.carries_unrendered`) is
+    one for that, and its render is kept. Parses both documents and extracts the render when it states no structured
+    offer: CPU work."""
+    if offered is None or policy.page_kind != "detail" or result.block_class != "shell" or result.method != "http":
         return False
     http = result.bundle.text
-    only_offer = lacks_offer(http, policy.target_types) and not carries_unrendered(http)
-    return only_offer and lacks_offer(rendered.bundle.text, policy.target_types)
+    if carries_unrendered(http) or not offerless(http, policy.target_types):
+        return False
+    return not _states_offer(rendered.bundle, policy, offered)
+
+
+async def _offerless(result: FetchResult, policy: FetchPolicy, offered: Offered | None) -> FetchResult:
+    """The HTTP `result` as a `shell`, which the ladder renders once, when it is an `ok` page fetched in `auto` as a
+    detail page for a task that reads the item's offer and it states none (`_states_offer`): a product page whose price
+    a script adds. One stating an offer without a price (an item out of stock or sold) states one. Its attempt is
+    classed `shell` too: a render that states the offer teaches the site's browser start (`memory.lesson`)."""
+    if offered is None or policy.method_hint != "auto" or policy.page_kind != "detail" or result.block_class != "ok":
+        return result
+    if await asyncio.to_thread(_states_offer, result.bundle, policy, offered):
+        return result
+    manifest = result.bundle.manifest
+    bundle = result.bundle.model_copy(update={"manifest": manifest.model_copy(update={"block_class": "shell"})})
+    attempts = (*result.attempts[:-1], result.attempts[-1].model_copy(update={"block_class": "shell"}))
+    return result.model_copy(update={"bundle": bundle, "attempts": attempts})
+
+
+def _states_offer(bundle: CaptureBundle, policy: FetchPolicy, offered: Offered) -> bool:
+    """Whether a page states the item's offer for a task that reads one: in its structured data (`classify.offerless`:
+    a schema.org Offer, `offers` or `itemOffered`, or an OGP `product:price:amount`), else in what its extraction
+    publishes from its DOM or script state (`offered`). A task reading no Offer finds every page stating one. Parses the
+    document, and extracts it only when its structured data states none: CPU work."""
+    return not offerless(bundle.text, policy.target_types) or offered(bundle)
 
 
 async def _joined(policy: FetchPolicy, page: Fetched, admit_next: Admit | None, send: JsonFetcher | None) -> Fetched:

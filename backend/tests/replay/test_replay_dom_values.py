@@ -11,7 +11,7 @@ from pathlib import Path
 from snowcrawl.collect.vocabulary import Vocabulary
 from snowcrawl.core.ids import uuid7
 from snowcrawl.db.models import SchemaId, SourceKind
-from snowcrawl.resolve.pipeline import EngineData, extract_page
+from snowcrawl.resolve.pipeline import EngineData, extract_page, states_offer
 from snowcrawl.resolve.preference import PRECEDENCE_TYPES
 from snowcrawl.resolve.types import FieldOutcome
 from snowcrawl.schemas.registry import load_presets
@@ -66,3 +66,18 @@ def test_a_structured_amount_the_page_shows_struck_is_the_was_price_and_the_show
         price = _fields(_jsonld(offers={"@type": "Offer", "price": "70.00", "priceCurrency": "USD"}), body)["price"]
 
         assert (price.value, price.source_kind) == ({"amount": "54.97", "currency": "USD"}, "dom")
+
+
+def test_a_page_states_an_offer_when_its_extraction_publishes_a_price_or_an_availability() -> None:
+    # What the ladder reads before rendering a detail page for its offer (`acquire.rungs._offerless`): the price or the
+    # availability the page shows (schema.org Offer `price`, `availability`), the DOM's as well as structured data's.
+    og = '<meta property="og:title" content="Synthetic Widget">'
+    pages = {
+        "<main><h1>Synthetic Widget</h1><p>$54.97</p></main>": True,
+        BODY: True,  # "In stock", no price
+        "<main><h1>Synthetic Widget</h1><p>A widget.</p></main>": False,
+    }
+    for body, offered in pages.items():
+        raw = f"<html><head>{og}</head><body>{body}</body></html>".encode()
+
+        assert states_offer(capture(raw), SCHEMA, None, data=DATA) is offered, body
