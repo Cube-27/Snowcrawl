@@ -561,9 +561,13 @@ def _row_fields(schema: SchemaDef, fields: FieldSet) -> list[_Rows]:
 
 
 def _same_property(sub_spec: FieldSpec, spec: FieldSpec) -> bool:
-    """Whether a row sub-field states the top-level field's property: one type, and a `schema_org` path in common
-    other than the item's name."""
-    if sub_spec.type is not spec.type or sub_spec.schema_org is None or spec.schema_org is None:
+    """Whether a row sub-field states the top-level field's property: one type and scheme, and a `schema_org`
+    path in common other than the item's name."""
+    if (
+        (sub_spec.type, sub_spec.scheme) != (spec.type, spec.scheme)
+        or sub_spec.schema_org is None
+        or spec.schema_org is None
+    ):
         return False
     return bool(_unranked(sub_spec.schema_org) & _unranked(spec.schema_org))
 
@@ -606,12 +610,17 @@ def _selected(items: Sequence[RowOutcome], sub_fields: Mapping[str, FieldSpec], 
     itself names a row whose own URL it is (schema.org `url` of a `hasVariant` member or of its Offer: the page showing
     that variant). None when no part names a row, or the parts leave more or fewer than one; a part that only contains
     a row's value names nothing. Parts are matched by value, never by the parameter's name."""
-    stating = {sub: spec for sub, spec in sub_fields.items() if spec.type in _SELECTING}
+    stating = {sub: spec for sub, spec in sub_fields.items() if spec.type in _SELECTING and _names_a_value(spec)}
     urls = {sub: spec for sub, spec in sub_fields.items() if spec.type is FieldType.URL}
     named = [{i for i, row in enumerate(items) if _states(row, stating, part)} for part in _url_parts(request_url)]
     named.append({i for i, row in enumerate(items) if _states(row, urls, request_url)})
     common = set.intersection(*(rows for rows in named if rows)) if any(named) else set()
     return items[common.pop()] if len(common) == 1 else None
+
+
+def _names_a_value(spec: FieldSpec) -> bool:
+    """Whether a sub-field states an identifier or option value, not only the item's name (`_ITEM_NAME`)."""
+    return spec.schema_org is not None and bool(_unranked(spec.schema_org))
 
 
 def _url_parts(url: str) -> list[str]:
