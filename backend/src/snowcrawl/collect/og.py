@@ -14,6 +14,8 @@ site is read without them, and a title that holds, after words of its own, the w
 heading or of a slug in the page URL's path is read as those words: the heading and the slug name the item, the words
 around them are the site's wording ("Buy ... Online"). An `og:description` naming the site (its `og:site_name`, else
 the title's site segments) where the item's name does not is the site's summary, not the item's description.
+A candidate of another source stating such a summary's text (a JSON-LD `description` copied from the same default) is
+that summary too, unless the page renders the text in its body (`site_summaries`).
 """
 
 import re
@@ -29,7 +31,7 @@ from snowcrawl.collect.site_names import SiteNames
 from snowcrawl.content.page import ParsedPage
 from snowcrawl.normalize.base import Context, Ok
 from snowcrawl.normalize.dispatch import normalize
-from snowcrawl.normalize.strings import collapse, fold, fold_words
+from snowcrawl.normalize.strings import collapse, fold, fold_words, solid
 from snowcrawl.schemas.paths import NAME, MappedPath, PriceRole, parse_paths, price_role
 from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
 
@@ -114,6 +116,10 @@ class _Value:
     reading: JsonValue  # what is normalized: `raw`, or a title without its site segments
 
 
+# A field and a text it states, white space aside (`strings.solid`).
+SiteSummary = tuple[str, str]
+
+
 class OpenGraphCollector:
     def collect(self, page: ParsedPage, schema: SchemaDef, ctx: Context) -> CollectResult:
         metas = _metas(page)
@@ -123,6 +129,36 @@ class OpenGraphCollector:
         candidates = tuple(_candidates(metas, schema, ctx))
         entity = Entity(id=PAGE, types=(PAGE,), urls=_urls(metas, ctx), parent=None)
         return CollectResult(entities=(entity,), candidates=candidates, diagnostics=diagnostics)
+
+
+def site_summaries(page: ParsedPage, schema: SchemaDef, ctx: Context) -> frozenset[SiteSummary]:
+    """Each field and text an `og:description` the collector does not read would give it (a site default's or a
+    summary naming the site, `_without_site_values`), normalized as the field reads it, white space aside, unless the
+    page renders the text: the summary is the site's head metadata (HTML Standard §4.2.5 `meta`), while text the body
+    shows is the page's own statement of it (`ParsedPage.cleaned_text`)."""
+    metas = _metas(page)
+    kept = {id(m) for m in _without_site_values(metas, ctx, _heading(page))[0]}
+    dropped = [m for m in metas if m.property == _DESCRIPTION and id(m) not in kept]
+    if not dropped:
+        return frozenset()
+    shown = solid(page.cleaned_text.text)
+    return frozenset(
+        (c.field, text)
+        for c in _candidates(dropped, schema, ctx)
+        if (text := _solid_text(c)) is not None and text not in shown
+    )
+
+
+def restates_site_summary(candidate: Candidate, summaries: frozenset[SiteSummary]) -> bool:
+    """Whether the candidate states, white space aside, a text `site_summaries` found the site's summary of its field:
+    another source's copy of the summary (structured data stating the same default) is no more the item's."""
+    text = _solid_text(candidate) if summaries else None
+    return text is not None and (candidate.field, text) in summaries
+
+
+def _solid_text(candidate: Candidate) -> str | None:
+    value = candidate.normalized.value if isinstance(candidate.normalized, Ok) else None
+    return solid(value) or None if isinstance(value, str) else None
 
 
 def price_currencies(page: ParsedPage) -> list[str]:

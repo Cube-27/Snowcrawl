@@ -32,7 +32,7 @@ from snowcrawl.collect.js_state import JsStateCollector, state_documents
 from snowcrawl.collect.jsonld import JsonLdCollector
 from snowcrawl.collect.microdata import MicrodataCollector
 from snowcrawl.collect.network_match import LearnedCalls
-from snowcrawl.collect.og import OpenGraphCollector
+from snowcrawl.collect.og import OpenGraphCollector, restates_site_summary, site_summaries
 from snowcrawl.collect.platform_json import PlatformJsonCollector
 from snowcrawl.collect.product_scope import product_apart
 from snowcrawl.collect.row_sources import RowSources
@@ -48,6 +48,7 @@ from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
 from snowcrawl.storage.capture_bundle import CaptureManifest
 
 log = logging.getLogger(__name__)
+_SITE_SUMMARY = "collect: a candidate states the site's summary an og:description gives, so it is not read"
 
 # The adapters a pipeline reads `api` captures with: only the active ones answer (`Registry`).
 Adapters = Registry
@@ -112,10 +113,16 @@ def collect_page(
     calls = tuple(row for result in admitted for row in result.rows)
     sources = RowSources.read(calls, items, partial(_state_rows, page, schema, ctx, diagnostics))
     state = sources.state
-    candidates = (
-        *others,
-        *(candidate for group in items[1:] for candidate in group.candidates),
-        *(candidate for result in admitted for candidate in result.candidates),
+    candidates = _without_site_summaries(
+        page,
+        schema,
+        ctx,
+        (
+            *others,
+            *(candidate for group in items[1:] for candidate in group.candidates),
+            *(candidate for result in admitted for candidate in result.candidates),
+        ),
+        diagnostics,
     )
     return Collected(
         entities=(*entities, *(entity for result in admitted for entity in result.entities), *state.rows),
@@ -132,6 +139,17 @@ def collect_page(
         variant_params=_variant_params(page, manifest) if schema.page_kind == "detail" else (),
         outside=dom.outside,
     )
+
+
+def _without_site_summaries(
+    page: ParsedPage, schema: SchemaDef, ctx: Context, candidates: tuple[Candidate, ...], diagnostics: list[str]
+) -> tuple[Candidate, ...]:
+    """The candidates without those that restate the site's summary (`site_summaries` of the og collector)."""
+    summaries = _isolated(site_summaries, partial(site_summaries, page, schema, ctx), diagnostics) or frozenset()
+    kept = tuple(c for c in candidates if not restates_site_summary(c, summaries))
+    if len(kept) < len(candidates):
+        diagnostics.append(_SITE_SUMMARY)
+    return kept
 
 
 def _state_rows(page: ParsedPage, schema: SchemaDef, ctx: Context, diagnostics: list[str]) -> StateRows:

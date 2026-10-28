@@ -66,6 +66,17 @@ def test_site_wide_og_values_on_a_client_rendered_page_do_not_publish() -> None:
     }
 
 
+def test_structured_data_copying_the_sites_og_summary_is_no_description() -> None:
+    # The og block's description names the site, so it is the site's summary; the JSON-LD copy of it is the same
+    # summary, unless the page shows the text in its body.
+    summary = "Shop kettles online at Synthetic Tools."
+    head = _og(("og:site_name", "Synthetic Tools"), ("og:title", "Steel Kettle"), ("og:description", summary))
+    head += _jsonld(_product(name="Steel Kettle", description=summary))
+
+    assert _outcomes(_extract(head), "description")["description"][2] is None
+    assert _outcomes(_extract(head, f"<p>{summary}</p>"), "description")["description"][2] == summary
+
+
 def _product(**properties: Any) -> dict[str, Any]:
     return {"@context": "https://schema.org", "@type": "Product", **properties}
 
