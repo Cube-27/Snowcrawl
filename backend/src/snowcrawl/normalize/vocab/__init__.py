@@ -6,6 +6,11 @@ Two kinds, each a directory with a `JUSTIFICATION.md` that names its source:
 - `type/<name>/<language>.json`: a language-tagged type vocabulary, a JSON object from code to its phrases. Each
   phrase is stored in token form (`tokens`), so the file reads as what is matched.
 
+A type vocabulary may instead be pinned data (`backend/data/manifest.json` names its source):
+`data/vocab/<name>/<language>.json`, a JSON object from code to its terms as a page writes them. A term matches in its
+token form, and, when it holds an apostrophe, also with the apostrophe dropped ("men's" as "mens"): case and the
+possessive's apostrophe do not tell two writings of one term apart.
+
 Everything is read once, at import, so a normalizer that uses it stays a pure function.
 """
 
@@ -17,6 +22,7 @@ from functools import cache
 from importlib.resources import files
 from importlib.resources.abc import Traversable
 
+from snowcrawl.core.engine_version import engine_data_dir
 from snowcrawl.normalize.strings import fold_words
 
 Tokens = tuple[str, ...]
@@ -199,10 +205,38 @@ def _load_type(directory: Traversable) -> dict[str, dict[str, Entries]]:
     }
 
 
+def _load_data_type() -> dict[str, dict[str, Entries]]:
+    """The type vocabularies pinned under the engine data's `vocab/` (module docstring); none without engine data."""
+    data = engine_data_dir()
+    root = None if data is None else data / "vocab"
+    if root is None or not root.is_dir():
+        return {}
+    return {
+        vocabulary.name: {
+            e.stem: Entries.of(_token_forms(json.loads(e.read_text(encoding="utf-8"))))
+            for e in sorted(vocabulary.glob("*" + _JSON))
+        }
+        for vocabulary in sorted(root.iterdir())
+        if vocabulary.is_dir()
+    }
+
+
+# The apostrophes a possessive is written with, those UAX #29 keeps within a word (`_WORD_APOSTROPHES`).
+_APOSTROPHES = str.maketrans("", "", "".join(_WORD_APOSTROPHES))
+
+
+def _token_forms(terms: Mapping[str, Iterable[str]]) -> dict[str, list[str]]:
+    """Each code's terms in token form, with the form of each term without its apostrophes."""
+    return {
+        code: sorted({" ".join(tokens(form)) for term in listed for form in (term, term.translate(_APOSTROPHES))})
+        for code, listed in terms.items()
+    }
+
+
 def _json_files(directory: Traversable) -> Iterable[Traversable]:
     return sorted((e for e in directory.iterdir() if e.name.endswith(_JSON)), key=lambda e: e.name)
 
 
 _ROOT = files(__name__)
 _SCHEMA = _load_schema(_ROOT / "schema")
-_TYPE = _load_type(_ROOT / "type")
+_TYPE = _load_type(_ROOT / "type") | _load_data_type()

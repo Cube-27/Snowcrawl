@@ -127,10 +127,17 @@ def test_a_schema_org_gender_iri_states_its_code(raw: object, code: str) -> None
 
 
 @pytest.mark.parametrize(
-    "raw",
-    ["Men's", "Women", "toddler", "https://example.test/male", "https://schema.org/Male/Other", "female and more"],
+    ("raw", "code"),
+    [(f"Men{chr(0x2019)}s", "male"), ("MENS", "male"), ("womens", "female"), ("Ladies", "female"), ("Girl's", "kids")],
 )
-def test_a_word_the_gender_sources_do_not_list_states_no_code(raw: str) -> None:
+def test_a_listed_page_term_states_its_code_whatever_its_case_or_apostrophe(raw: str, code: str) -> None:
+    assert enum.normalize(raw, GENDER, Context(captured_at=CTX.captured_at, html_lang="en")) == Ok(code)
+
+
+@pytest.mark.parametrize(
+    "raw", ["Boy", "Women's shoes", "https://example.test/male", "https://schema.org/Male/Other", "female and more"]
+)
+def test_a_term_the_gender_vocabulary_does_not_list_states_no_code(raw: str) -> None:
     assert enum.normalize(raw, GENDER, CTX) == Invalid("no_match")
 
 
