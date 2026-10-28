@@ -41,7 +41,10 @@ Reasoning for a single change goes in its PR body.
 
 ## Acquisition
 
-- **HTTP first.** The browser only when blocked, on a JS shell, or when `render.mode` asks; a missing field never triggers a render.
+- **HTTP first.** The browser only when blocked, on a JS shell, or when `render.mode` asks. One structural exception
+  (owner 2026-10-28): a detail page read for an Offer whose HTTP structured data states its item but no offer at all
+  (schema.org `offers`) gets one render, kept only when it states an offer; otherwise the HTTP page is kept. Why: a
+  server-side Product stub whose real offer a script injects. No other missing field triggers a render.
   Shell pages (no text, no links, no challenge) go to the browser once; `shell` if still empty.
 - **robots.txt off by default.** `respect_robots: true` opts in. Why: owner call on coverage; politeness pacing stays.
 - **One coherent fingerprint per request.** curl_cffi impersonates its Chrome profile nearest the browser rung's Chrome

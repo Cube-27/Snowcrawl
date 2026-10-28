@@ -23,7 +23,11 @@ A 2xx document whose structured data states an item of a type the task reads the
 `target_types`: a JSON-LD node or a microdata item typed so, or an OGP product price for a Product or Offer) is the
 page, however little it shows or links: the reader reads that data (`_describes`). Fetched as a detail page while its
 body carries its content unrendered (`carries_unrendered`, below), it is still a shell for the browser to render: the
-rest of the item is only in the rendered page (`_script_state`); without a browser outcome it is kept as it is.
+rest of the item is only in the rendered page (`_script_state`); without a browser outcome it is kept as it is. So is
+one fetched as a detail page for an Offer (the task's schema reads fields from one, so `Offer` is among its types)
+whose structured data states no offer at all (`lacks_offer`): no schema.org `offers`, no node typed Offer or stating
+an `itemOffered`, no OGP price. A product page whose server markup holds a stub of its item while a script states the
+item with its offer is told by it; one stating an offer without a price (a product out of stock) is not.
 
 A page fetched for content formats alone (`content_only`) is read for its rendered text, so it is a shell when that text
 is near-empty while its scripts and concealed subtrees carry an order of magnitude more (`carries_unrendered`): the
@@ -128,6 +132,13 @@ _MICRODATA_TYPED = "[itemscope][itemtype]"
 # states the price of the page's one product, a schema.org Product's Offer.
 _OGP_PRICE_AMOUNT = "product:price:amount"
 _OGP_PRICED = frozenset({"Product", "Offer"})
+# schema.org: an Offer, the type a schema's offer fields (price, availability) are read from; `offers`, "an offer to
+# provide this item", whose value is an Offer typed or not (schema.org's range; `collect.jsonld` types an untyped one);
+# `itemOffered`, "the item being offered", stated by an Offer. A JSON-LD member may name either as a schema.org IRI.
+_OFFER = "Offer"
+_OFFER_MEMBERS = frozenset({"offers", "itemOffered"})
+# HTML Standard §5.2.2: a microdata property's `itemprop`, a set of space-separated names.
+_ITEMPROP = "[itemprop]"
 # BCP 47 (RFC 5646 §2.1): a language subtag of 2 or 3 letters, with a region subtag of 2 letters (ISO 3166-1) or none,
 # as a path segment names a site's edition (`en`, `en-us`, `de_DE`).
 _BREAKS = r"/\-_."
@@ -235,7 +246,7 @@ def _document_class(
     if redirect is not None and redirect.kind is not None:
         moved = _moved(redirect, described=described, lists=lambda: structured or lists_items(text, base))
     # After the redirect rules: a detail page that a redirect led elsewhere is not the page, however it renders.
-    return moved or (_script_state(tree, page_kind) if described else None) or "ok"
+    return moved or (_script_state(tree, documents, page_kind, types) if described else None) or "ok"
 
 
 def _states_not_found(tree: LexborHTMLParser) -> bool:
@@ -276,12 +287,54 @@ def _page_shell(tree: LexborHTMLParser, *, content_only: bool) -> BlockClass | N
     return _no_site_page(tree)
 
 
-def _script_state(tree: LexborHTMLParser, page_kind: PageKind | None) -> BlockClass | None:
+def _script_state(
+    tree: LexborHTMLParser, documents: list[object], page_kind: PageKind | None, types: tuple[str, ...]
+) -> BlockClass | None:
     """A detail page whose structured data describes its item but whose body carries the rest of it unrendered
-    (`carries_unrendered`) is a shell: what the structured data leaves out (an apply link, a full location list) exists
-    only once the browser runs the scripts. Without a browser outcome, the page is kept for what its data states
-    (`rungs._as_last_page`, which passes no page kind)."""
-    return "shell" if page_kind == "detail" and _carries_unrendered(tree) else None
+    (`carries_unrendered`), or that states no offer for a task reading one (`_lacks_offer`), is a shell: what the
+    structured data leaves out (an apply link, a full location list, the item's offer) exists only once the browser
+    runs the scripts. Without a browser outcome, the page is kept for what its data states (`rungs._as_last_page`,
+    which passes no page kind)."""
+    if page_kind != "detail":
+        return None
+    return "shell" if _carries_unrendered(tree) or _lacks_offer(tree, documents, types) else None
+
+
+def lacks_offer(text: str, types: tuple[str, ...]) -> bool:
+    """Whether a decoded HTML document's structured data describes an item of one of `types` and, `types` naming an
+    Offer, states no offer (`_lacks_offer`)."""
+    tree = LexborHTMLParser(text)
+    documents = _json_ld(tree)
+    return _describes(tree, documents, types) and _lacks_offer(tree, documents, types)
+
+
+def _lacks_offer(tree: LexborHTMLParser, documents: list[object], types: tuple[str, ...]) -> bool:
+    """Whether the task reads an Offer (`_OFFER` among `types`) and the document's structured data states none: no
+    JSON-LD node typed Offer or holding an `offers` or `itemOffered` value, no microdata item typed Offer or property
+    named so, and no OGP product price (module docstring)."""
+    if _OFFER not in types or any(_typed(documents, frozenset({_OFFER}))):
+        return False
+    if any(_OFFER in _item_types(item) for item in tree.css(_MICRODATA_TYPED)):
+        return False
+    named = (set((node.attributes.get("itemprop") or "").split()) for node in tree.css(_ITEMPROP))
+    if any(not _OFFER_MEMBERS.isdisjoint(names) for names in named):
+        return False
+    return not _offer_member(documents) and not _ogp_priced(tree)
+
+
+def _offer_member(documents: list[object]) -> bool:
+    """Whether a JSON-LD object at any depth holds a value under `offers` or `itemOffered` (`_OFFER_MEMBERS`), named
+    as a term or a schema.org IRI (walked with a stack, not recursion)."""
+    stack: list[object] = list(documents)
+    while stack:
+        value = stack.pop()
+        if isinstance(value, dict):
+            if any(_SCHEMA_ORG.sub("", str(k)) in _OFFER_MEMBERS and v not in (None, [], {}) for k, v in value.items()):
+                return True
+            stack.extend(value.values())
+        elif isinstance(value, list):
+            stack.extend(value)
+    return False
 
 
 def usable_content(text: str, page_kind: PageKind | None = None, types: tuple[str, ...] = ()) -> bool:
@@ -304,7 +357,12 @@ def _describes(tree: LexborHTMLParser, documents: list[object], types: tuple[str
         return True
     if any(not wanted.isdisjoint(_item_types(item)) for item in tree.css(_MICRODATA_TYPED)):
         return True
-    return not wanted.isdisjoint(_OGP_PRICED) and any(
+    return not wanted.isdisjoint(_OGP_PRICED) and _ogp_priced(tree)
+
+
+def _ogp_priced(tree: LexborHTMLParser) -> bool:
+    """Whether the document states an OGP product price (`_OGP_PRICE_AMOUNT`) with content."""
+    return any(
         (meta.attributes.get("property") or meta.attributes.get("name")) == _OGP_PRICE_AMOUNT
         and meta.attributes.get("content")
         for meta in tree.css("meta")

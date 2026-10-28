@@ -31,7 +31,7 @@ from urllib.parse import urlsplit, urlunsplit
 from snowcrawl.acquire.api import JsonFetcher, JsonRequest, site_relation
 from snowcrawl.acquire.browser_tab import ListingRung
 from snowcrawl.acquire.challenge import block_class_of
-from snowcrawl.acquire.classify import interstitial
+from snowcrawl.acquire.classify import carries_unrendered, interstitial, lacks_offer
 from snowcrawl.acquire.fingerprint import platform_shown
 from snowcrawl.acquire.identity import identified, joined, with_call
 from snowcrawl.acquire.memory import Remembered
@@ -387,16 +387,27 @@ async def _unsent(retry: _Retry, pause: timedelta) -> str | None:
 
 
 async def _kept(result: FetchResult, rendered: FetchResult, policy: FetchPolicy) -> FetchResult:
-    """The page kept after the browser's attempt `rendered` at the HTTP `result`: the browser's `ok`, else the HTTP page
-    when it is `ok` as a page kept with no browser outcome (`_as_last_page`, not the last rung's), else the browser's
-    page when the last rung's rule makes it `ok`, else the HTTP page."""
-    if rendered.block_class == "ok":
+    """The page kept after the browser's attempt `rendered` at the HTTP `result`: the browser's `ok` unless it is no
+    better (`_no_better`), else the HTTP page when it is `ok` as a page kept with no browser outcome (`_as_last_page`,
+    not the last rung's), else the browser's page when the last rung's rule makes it `ok`, else the HTTP page."""
+    if rendered.block_class == "ok" and not await asyncio.to_thread(_no_better, result, rendered, policy):
         return rendered
     http = await _as_last_page(result, policy, last=False)
     if http.block_class == "ok":
         return http
     shown = await _as_last_page(rendered, policy, last=True)
     return shown if shown.block_class == "ok" else http
+
+
+def _no_better(result: FetchResult, rendered: FetchResult, policy: FetchPolicy) -> bool:
+    """Whether the render of an HTTP detail page that was a shell only for stating no offer (`classify.lacks_offer`)
+    states none either: the HTTP page is kept, and the fetch teaches no browser start
+    (`memory.lesson`). Parses both documents: CPU work."""
+    if policy.page_kind != "detail" or result.block_class != "shell" or result.method != "http":
+        return False
+    http = result.bundle.text
+    only_offer = lacks_offer(http, policy.target_types) and not carries_unrendered(http)
+    return only_offer and lacks_offer(rendered.bundle.text, policy.target_types)
 
 
 async def _joined(policy: FetchPolicy, page: Fetched, admit_next: Admit | None, send: JsonFetcher | None) -> Fetched:
