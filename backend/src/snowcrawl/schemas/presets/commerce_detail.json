@@ -103,8 +103,8 @@
     },
     "rating": {
       "type": "number",
-      "description": "Average rating of the product as the page states it, on the page's own scale",
-      "schema_org": "Product.aggregateRating.ratingValue+reviewCount"
+      "description": "Average rating of the product on a 0 to 5 scale when the page states its scale (bestRating, worstRating), else as the page states it",
+      "schema_org": "Product.aggregateRating.ratingValue+reviewCount+bestRating+worstRating"
     },
     "review_count": {
       "type": "count",

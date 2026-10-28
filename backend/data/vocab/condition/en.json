@@ -1,0 +1,6 @@
+{
+  "DamagedCondition": ["damaged"],
+  "NewCondition": ["new", "brand new"],
+  "RefurbishedCondition": ["refurbished", "renewed", "reconditioned", "certified refurbished"],
+  "UsedCondition": ["used", "pre-owned", "preowned", "second-hand", "secondhand", "vintage"]
+}

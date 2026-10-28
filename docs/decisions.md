@@ -13,6 +13,10 @@ Reasoning for a single change goes in its PR body.
   never executed. Why: accuracy and auditability.
 - **Every crawl extracts fresh.** Learning keeps selectors and cookies, never values.
 - **Numbers as JSON numbers.** Money and ratings are numbers; decimals may be rounded; the meaning of page data is never rewritten.
+- **Ratings on five points when the page states its scale.** A rating with a stated schema.org `bestRating` or
+  `worstRating` (defaults 5 and 1) maps linearly from [worst, best] onto [0, 5]; a scale whose best is 5 keeps the value
+  as stated, and so does a rating with no stated scale (an 8.6 stays 8.6, never guessed out of 10). Why: owner
+  2026-10-28.
 - **Published URLs are absolute.** A url or image_url publishes in the page's spelling, resolved against the document
   base (RFC 3986 §5.2). Why: a relative or protocol-relative reference (`//cdn…`, `/media/…`) is unusable off the page.
 - **Price is never skipped.** An unclear currency never drops a price: page evidence, else the URL locale/subdomain/ccTLD
@@ -22,8 +26,20 @@ Reasoning for a single change goes in its PR body.
 - **Gender is one of `male`, `female`, `unisex`, `kids`** (`type:gender`): the codes from schema.org `suggestedGender`
   and Google Merchant Center `gender`/`age_group`, and the page terms the owner maps to them ("Men's", "Womens",
   "Ladies", "Boys", ...) in `backend/data/vocab/gender/en.json`, pinned in the manifest. Terms match whatever their case
-  or possessive apostrophe; a term the file doesn't list stays unpublished. Why: owner 2026-10-28, normalize gender to
-  one value per meaning; the term list is the owner's C4 approval.
+  or possessive apostrophe. Why: owner 2026-10-28, normalize gender to one value per meaning; the term list is the
+  owner's C4 approval.
+- **Availability and condition are schema.org codes.** `ItemAvailability` and `OfferItemCondition` members by IRI, name
+  or the name's words ("In stock", "Pre-order"), and the page stock and condition wording the owner maps to them
+  ("Sold" and "Unavailable" to `OutOfStock`, "Available" to `InStock`, "Pre-owned" and "Vintage" to `UsedCondition`,
+  ...) in `backend/data/vocab/availability/en.json` and `backend/data/vocab/condition/en.json`, pinned in the manifest.
+  A member's own name keeps its member ("Sold out" is `SoldOut`, "Discontinued" `Discontinued`). Why: owner 2026-10-28;
+  the term lists are the owner's C4 approval.
+- **Mapped words become codes; unmapped values publish as stated.** For every enum field (gender, availability,
+  condition), top level and in `variants` rows, a value the tables or schema.org names map publishes as the code; any
+  other value from the field's own source (JSON-LD, microdata, Open Graph, a labelled pair) publishes as the page states
+  it, white space collapsed. Neither a table term nor an unmapped value is evidence by itself (`Ok.checked`): a script
+  string or menu word that merely equals one ("New", "Sold", "Kids") is not taken without such a source. Why: owner
+  2026-10-28, the tables may miss words and the page's data is not dropped for that.
 - **The main image is not repeated in the image list.** A list of images that reads the same schema.org property as
   the record's main image field (`additional_images` beside `image_url`) leaves out that file and its renditions
   (`images.same_file`). Why: owner 2026-10-28, the list is the other images.

@@ -3,6 +3,7 @@ name, language-tagged type vocabularies by token sequence (never substring order
 members, and empty input."""
 
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 import pytest
@@ -11,16 +12,19 @@ from hypothesis import strategies as st
 
 from snowcrawl.normalize import dispatch, enum, vocab
 from snowcrawl.normalize.base import Ambiguous, Context, Invalid, Ok
+from snowcrawl.schemas.registry import load_presets
 from snowcrawl.schemas.types import FieldSpec, FieldType
 
 CTX = Context(captured_at=datetime(2026, 1, 1, tzinfo=UTC))
 SCHEMA = FieldSpec(type=FieldType.ENUM, vocab="schema:ItemAvailability")
 TYPE = FieldSpec(type=FieldType.ENUM, vocab="type:availability")
+GENDER = FieldSpec(type=FieldType.ENUM, vocab="type:gender")
+CONDITION = FieldSpec(type=FieldType.ENUM, vocab="schema:OfferItemCondition")
 MEMBERS = ("BackOrder", "InStock", "LimitedAvailability", "OutOfStock", "PreOrder", "SoldOut")
 
 _members = st.sampled_from(MEMBERS)
 _whitespace = st.text(alphabet=st.characters(categories=["Zs", "Cc"]).filter(str.isspace), max_size=8)
-_rest = st.sampled_from(["", ".", " (5 available)", "\nShips today", ": 3", "!"])
+_rest = st.sampled_from(["", ".", " (5 left)", "\nShips today", ": 3", "!"])
 
 
 def _phrase(member: str) -> str:
@@ -39,18 +43,22 @@ def test_a_schema_member_matches_by_iri_or_name_or_node_reference(member: str, f
 
 
 @pytest.mark.parametrize(
-    "raw",
+    ("raw", "spec", "stated"),
     [
-        "https://schema.org/Product",
-        "https://example.test/InStock",
-        "https://schema.org/In\tStock",
-        "red",
-        "Not in stock",
-        "5 in stock",
+        ("https://schema.org/Product", SCHEMA, "https://schema.org/Product"),
+        ("https://example.test/InStock", SCHEMA, "https://example.test/InStock"),
+        ({"@id": "https://example.test/InStock"}, SCHEMA, "https://example.test/InStock"),
+        ("  Not in   stock ", SCHEMA, "Not in stock"),
+        ("5 in stock", SCHEMA, "5 in stock"),
+        ("Sold to a happy customer", SCHEMA, "Sold to a happy customer"),
+        ("Like New", CONDITION, "Like New"),
+        ("Women's shoes", GENDER, "Women's shoes"),
+        ("https://schema.org/Male/Other", GENDER, "https://schema.org/Male/Other"),
     ],
 )
-def test_a_name_or_phrase_that_is_no_member_is_invalid(raw: str) -> None:
-    assert enum.normalize(raw, SCHEMA, CTX) == Invalid("not_a_member")
+def test_a_value_no_vocabulary_maps_publishes_as_stated_unchecked(raw: object, spec: FieldSpec, stated: str) -> None:
+    # The tables may lack a page's word; the value stays as the page states it, but is no evidence of the field.
+    assert enum.normalize(raw, spec, CTX) == Ok(stated, checked=False)  # type: ignore[arg-type]
 
 
 @given(_members, _whitespace, _rest)
@@ -59,18 +67,73 @@ def test_text_opening_with_a_member_phrase_matches_through_the_type_vocabulary(
 ) -> None:
     # The phrase is the text's whole first clause; what follows punctuation, a digit or a line break is not read.
     assert enum.normalize(f"{pad}{_phrase(member).title()}{rest}", SCHEMA, CTX) == Ok(member)
-    assert enum.normalize(f"{_phrase(member).upper()}{rest}", TYPE, CTX) == Ok(member)
+    if member in ("InStock", "OutOfStock"):  # the codes `type:availability` lists
+        assert enum.normalize(f"{_phrase(member).upper()}{rest}", TYPE, CTX) == Ok(member)
+
+
+_IN_STOCK = ["available", "available now", "ready to ship", "in stock now"]
+_OUT_OF_STOCK = ["sold", "unavailable", "not available", "currently unavailable", "no longer available"]
+_spacing = st.sampled_from([" ", "  ", "\u00a0", "\u2009"])
+
+
+@given(
+    st.sampled_from([*((t, "InStock") for t in _IN_STOCK), *((t, "OutOfStock") for t in _OUT_OF_STOCK)]),
+    st.sampled_from([str.upper, str.lower, str.title]),
+    _spacing,
+    _rest,
+)
+def test_a_listed_stock_term_states_its_member_whatever_its_case_or_spacing(
+    term: tuple[str, str], case: Callable[[str], str], space: str, rest: str
+) -> None:
+    written = case(term[0]).replace(" ", space)
+
+    assert enum.normalize(written + rest, SCHEMA, CTX) == Ok(term[1], checked=False)
+    assert enum.normalize(written, TYPE, Context(captured_at=CTX.captured_at, html_lang="en")) == Ok(term[1])
 
 
 @pytest.mark.parametrize(
     ("raw", "member"),
-    [("New", "NewCondition"), ("used", "UsedCondition"), ("Refurbished condition", "RefurbishedCondition")],
+    [
+        ("out-of-stock", "OutOfStock"),
+        ("IN-STOCK", "InStock"),
+        ("Instock", "InStock"),
+        ("Sold out", "SoldOut"),
+        ("Pre-order", "PreOrder"),
+    ],
 )
-def test_a_condition_phrase_names_its_offer_item_condition(raw: str, member: str) -> None:
-    condition = FieldSpec(type=FieldType.ENUM, vocab="schema:OfferItemCondition")
+def test_a_member_name_in_words_is_checked_beside_the_stock_terms(raw: str, member: str) -> None:
+    # A member's own words state it as evidence; "sold" inside "sold out" yields to the longer phrase.
+    assert enum.normalize(raw, SCHEMA, CTX) == Ok(member)
 
-    assert enum.normalize(raw, condition, CTX) == Ok(member)
-    assert enum.normalize("Like new", condition, CTX) == Invalid("not_a_member")
+
+def test_a_rival_stock_term_later_in_the_text_is_ambiguous() -> None:
+    result = enum.normalize("Out of stock. Available in store", SCHEMA, CTX)
+
+    assert result == Ambiguous("several_members", ("InStock", "OutOfStock"))
+
+
+@given(
+    st.sampled_from(
+        [
+            ("New", "NewCondition"),
+            ("Brand new", "NewCondition"),
+            ("PRE-OWNED", "UsedCondition"),
+            ("second hand", "UsedCondition"),
+            ("Vintage", "UsedCondition"),
+            ("Certified refurbished", "RefurbishedCondition"),
+            ("renewed", "RefurbishedCondition"),
+            ("Damaged", "DamagedCondition"),
+        ]
+    ),
+    _rest,
+)
+def test_a_listed_condition_term_states_its_member_unchecked(term: tuple[str, str], rest: str) -> None:
+    assert enum.normalize(term[0] + rest, CONDITION, CTX) == Ok(term[1], checked=False)
+
+
+@pytest.mark.parametrize(("raw", "member"), [("Used condition", "UsedCondition"), ("newcondition", "NewCondition")])
+def test_a_condition_member_name_in_words_is_checked(raw: str, member: str) -> None:
+    assert enum.normalize(raw, CONDITION, CTX) == Ok(member)
 
 
 @given(_members, _members)
@@ -108,7 +171,6 @@ def test_a_malformed_vocabulary_is_refused(codes: dict[str, list[str]], error: s
         vocab.Entries.of(codes)
 
 
-GENDER = FieldSpec(type=FieldType.ENUM, vocab="type:gender")
 _codes = st.sampled_from(["male", "female", "unisex", "kids"])
 _languages = st.sampled_from([None, "en", "de", "ja"])
 
@@ -134,14 +196,24 @@ def test_a_listed_page_term_states_its_code_whatever_its_case_or_apostrophe(raw:
     assert enum.normalize(raw, GENDER, Context(captured_at=CTX.captured_at, html_lang="en")) == Ok(code)
 
 
-@pytest.mark.parametrize(
-    "raw", ["Boy", "Women's shoes", "https://example.test/male", "https://schema.org/Male/Other", "female and more"]
-)
-def test_a_term_the_gender_vocabulary_does_not_list_states_no_code(raw: str) -> None:
-    assert enum.normalize(raw, GENDER, CTX) == Invalid("no_match")
-
-
 def test_only_a_schema_org_enumeration_is_evidence_by_its_syntax() -> None:
     # A type vocabulary's codes are common words (a navigation's "Kids"), admitted by equality only.
     assert dispatch.checkable("InStock", SCHEMA)
     assert not dispatch.checkable("kids", GENDER)
+    # A pinned stock term ("Sold") normalizes but shows no checked syntax: a navigation link writes the same word.
+    assert enum.normalize("Sold", SCHEMA, CTX) == Ok("OutOfStock", checked=False)
+
+
+_DETAIL = next(p for p in load_presets() if p.name == "commerce_detail").fields
+
+
+@pytest.mark.parametrize(
+    ("stated", "member"),
+    [("Sold", "OutOfStock"), ("Sold out", "SoldOut"), ("In stock", "InStock"), ("Ask us", "Ask us")],
+)
+def test_a_variant_rows_availability_reads_as_the_top_level_field_does(stated: str, member: str) -> None:
+    rows = dispatch.normalize([{"availability": stated}], _DETAIL["variants"], CTX)
+
+    assert isinstance(rows, Ok)
+    assert rows.value == [{"availability": member}]
+    assert rows.value[0] == {"availability": dispatch.normalize(stated, _DETAIL["availability"], CTX).value}  # type: ignore[union-attr]

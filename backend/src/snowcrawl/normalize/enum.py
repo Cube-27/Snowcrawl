@@ -13,7 +13,9 @@
   (`snowcrawl.normalize.vocab`) or the code itself in any case and any page language, and no other code's phrase
   appears later in it. "Not in stock" states nothing.
 
-No match is `Invalid`; two members in one input are `Ambiguous`.
+A string or node reference that names no member or code is the value as stated, its white space collapsed and its case
+kept, and not checked (`Ok.checked`): the vocabularies may lack a page's word, and the page states it (owner decision
+2026-10-28). Two members in one input are `Ambiguous`; anything else (empty, not a string) is `Invalid`.
 """
 
 import re
@@ -42,9 +44,22 @@ def normalize(raw: Raw, spec: FieldSpec, ctx: Context) -> NormalizeResult:
     if spec.type is not FieldType.ENUM or spec.vocab is None:
         raise TypeError(f"the enum normalizer does not handle type {spec.type} without a vocab")
     kind, name = spec.vocab.split(":", 1)
-    if kind == "schema":
-        return _schema_member(raw, name, ctx)
-    return _type_code(raw, name, ctx)
+    result = _schema_member(raw, name, ctx) if kind == "schema" else _type_code(raw, name, ctx)
+    if isinstance(result, Invalid) and result.reason in _UNMAPPED:
+        return _as_stated(raw)
+    return result
+
+
+# The reasons a string names no member or code (rather than being no value): such a string publishes as stated.
+_UNMAPPED = frozenset({"not_a_member", "no_match"})
+
+
+def _as_stated(raw: Raw) -> NormalizeResult:
+    """The string `raw` states (a node reference's `@id`), white space collapsed, unchecked."""
+    text = raw["@id"] if isinstance(raw, dict) else raw
+    if not isinstance(text, str) or has_surrogate(text):
+        return Invalid("surrogate")
+    return Ok(" ".join(text.split()), checked=False)
 
 
 def _schema_member(raw: Raw, enumeration: str, ctx: Context) -> NormalizeResult:
@@ -98,9 +113,18 @@ def _named_member(term: str, members: frozenset[str]) -> NormalizeResult:
 def _stated_member(text: str, members: frozenset[str], ctx: Context) -> NormalizeResult:
     """The member that `text` states through the type vocabularies whose codes are all `members` (their phrases name
     members of this enumeration and nothing else, the structural property the match rests on), or by a member name
-    in any case: `instock`, as Open Graph `product:availability` writes it."""
-    entries = [e for v in vocab.type_vocabularies_within(members) for e in _page_entries(v, ctx)]
-    return _one_code(vocab.stated_codes(text, [*entries, vocab.name_entries(members)]), "not_a_member")
+    in any case: `instock`, as Open Graph `product:availability` writes it.
+
+    A member that only pinned page terms state ("Sold", `vocab.Entries.pinned`) is not checked (`Ok.checked`):
+    a navigation writes the same words, so the text is a value of the field only where a source places it there."""
+    entries = [
+        *(e for v in vocab.type_vocabularies_within(members) for e in _page_entries(v, ctx)),
+        vocab.name_entries(members),
+    ]
+    result = _one_code(vocab.stated_codes(text, entries), "not_a_member")
+    if isinstance(result, Ok) and vocab.stated_codes(text, [e for e in entries if not e.pinned]) != {result.value}:
+        return Ok(result.value, checked=False)
+    return result
 
 
 def _type_code(raw: Raw, name: str, ctx: Context) -> NormalizeResult:

@@ -109,9 +109,9 @@ def test_what_is_not_a_shown_label_value_pair_of_a_field_gives_nothing(body: str
 
 
 def test_a_value_that_does_not_normalize_is_still_a_candidate() -> None:
-    found = _collect("<table><tr><th>Availability</th><td>Ask us</td></tr></table>")
+    found = _collect("<table><tr><th>Review count</th><td>Ask us</td></tr></table>")
 
-    assert found == {"availability": [(Invalid("not_a_member"), "dom:/html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[1]")]}
+    assert found == {"review_count": [(Invalid("no_number"), "dom:/html[1]/body[1]/table[1]/tbody[1]/tr[1]/td[1]")]}
 
 
 def test_a_listing_schema_gets_no_page_level_pairs_or_image() -> None:

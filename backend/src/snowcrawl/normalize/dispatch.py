@@ -213,7 +213,8 @@ def checkable(raw: Raw, spec: FieldSpec) -> bool:
     with a check digit, a url only when `raw` is absolute (a relative reference resolves from any word), an enum only
     over a schema.org enumeration, whose member names and phrases state its one property (an `ItemAvailability` member
     is an availability), not over a type vocabulary, whose codes are common words (`kids`) a page's navigation also
-    writes, and a list as its item does."""
+    writes, and a list as its item does. An enum value read through a pinned page term ("Sold") or stated unmapped
+    normalizes unchecked (`Ok.checked`), so it too is evidence only where the field's own source places it."""
     if spec.type is FieldType.LIST:
         return checkable(raw, _item(spec))
     if spec.type is FieldType.IDENTIFIER:

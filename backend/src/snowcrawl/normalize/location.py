@@ -142,7 +142,7 @@ def mentions_remote(text: str, ctx: Context) -> bool:
     """Whether a `type:remote` phrase is anywhere in `text`, as a run of its words, whatever else its clause says: the
     text speaks of remote work, which is not to say it states the job is remote (`_says_remote`)."""
     words = vocab.tokens(text)
-    return any(entries.find(words) for entries in _remote_entries(ctx))
+    return any(entries.matches(words) for entries in _remote_entries(ctx))
 
 
 def _remote_entries(ctx: Context) -> list[vocab.Entries]:
