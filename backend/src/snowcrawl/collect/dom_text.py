@@ -24,27 +24,30 @@ reviews, related items and the blocks outside the product container (`collect.pr
   §5.2.2), so they are its text; a template that marks only a description's first section is read whole. An element
   that is the last of its wrappers goes on with the siblings of the outermost wrapper holding nothing after it, inside
   the element that opens the item (`itemscope`, RDFa `typeof`).
-- **Main text.** For a description that only an Open Graph summary states (or nothing does), the longest prose block,
-  when it holds at least two sentences (UAX #29 sentence boundaries, approximated): one line is a control's caption or a
-  notice, not running text.
+- **Main text.** For a description that only a summary states (the Open Graph description, or a value of another kind
+  stating its text: the page's summary restated as the item's description), or that nothing does, the longest prose
+  block, when it holds at least two sentences (UAX #29 sentence boundaries, approximated): one line is a control's
+  caption or a notice, not running text; nor is a block of notes, every line opening with a superscript marker (¹, ²).
   A summary is shorter than what it summarizes and restates it, so the block must be longer than the summary and hold
   most of the summary's words other than the title's (the page's `h1`), unless the summary holds fewer words of its
   own than of the title, a line that only names the item ("Buy <title> at <site>"); and it must not be the buy box: a
   block holding
   the page's title heading (an `h1`, or an ARIA heading of level 1) or a price the structural pass read is not text.
 
-Prose is a block that holds no table, form control, control group caption (`legend`), button, image, media, frame or
-other element that is not running text (HTML Standard §3.2.5: flow and phrasing content). In the extension,
-labelled-section and item-continuation paths an image (`img`, `picture`) is phrasing content (HTML Standard §3.2.5.2.5),
-as rich text places one among its paragraphs; the main text, which nothing stated names, holds none. A block's text is
-the cleaned text of its element (`content.text`): visible text, one block box per line. Reviews and related items are
-the elements whose `itemprop` is one of schema.org's `review`, `isRelatedTo` or `isSimilarTo`, and Review items
-(`itemtype`). Several distinct blocks that neither contain one another's text nor continue it are ambiguous: nothing is
-read.
+Prose is a block that holds no table, description list (`dl`), form control, control group caption (`legend`), button,
+image, media, frame or other element that is not running text (HTML Standard §3.2.5: flow and phrasing content). In
+the extension, labelled-section and item-continuation paths an image (`img`, `picture`) is phrasing content (HTML
+Standard §3.2.5.2.5), as rich text places one among its paragraphs; the main text, which nothing stated names, holds
+none. A block's text is the cleaned text of its element (`content.text`): visible text, one block box per line,
+without the lines at its ends that are only a link (a "more details" or "shop all" control,
+`CleanedText.without_edge_links`). Reviews and related items are the elements whose `itemprop` is one of
+schema.org's `review`, `isRelatedTo` or `isSimilarTo`, and Review items (`itemtype`). Several distinct blocks that
+neither contain one another's text nor continue it are ambiguous: nothing is read.
 
 Every candidate is the page's, independent, with a `dom:` locator naming the element it came from.
 """
 
+import unicodedata
 from collections.abc import Iterator, Sequence
 from typing import NamedTuple
 
@@ -65,9 +68,11 @@ from snowcrawl.normalize.strings import collapse, is_cut_of, sentences, solid
 from snowcrawl.schemas.types import FieldType, SchemaDef
 
 # HTML Standard §4.8 (embedded content), §4.10 (forms: interactive controls; §4.10.16 `legend`, the caption of a
-# fieldset's group of controls), §4.9 (tabular data), §4.12 (scripting): elements that are no running text.
+# fieldset's group of controls), §4.9 (tabular data), §4.4.9 (`dl`: name-value groups, label-value pairs as a table's
+# rows are), §4.12 (scripting): elements that are no running text.
 _NOT_PROSE = (
     "table",
+    "dl",
     "form",
     "legend",
     "button",
@@ -105,6 +110,7 @@ _ELEMENT_VALUED = "microdata"  # the collector of microdata and RDFa: a value st
 _RUNNING_TEXT = 2
 _OPEN_GRAPH = "og"  # the protocol defines og:description as a one-to-two sentence summary
 _DESCRIPTION = "description"  # schema.org `Thing.description`
+_SUPERSCRIPT = "<super>"  # UAX #44: the compatibility decomposition tag of a superscript form
 
 
 class _Block(NamedTuple):
@@ -119,7 +125,7 @@ class _Blocks:
     def __init__(self, page: ParsedPage, region: LexborNode, outside: frozenset[int], *, images: bool = False) -> None:
         """`images`: whether an image is phrasing content (module docstring)."""
         self.page, self.region = page, region
-        spans, text = page.text_spans, page.cleaned_text.text
+        spans, cleaned = page.text_spans, page.cleaned_text
         selector = ",".join(
             (
                 *_APART,
@@ -143,7 +149,9 @@ class _Blocks:
             if node.mem_id in skipped:
                 continue
             span = spans.get(node_xpath(node))
-            raw = text[span[0] : span[1]].strip() if span else ""
+            # A line at the block's edge that is only a link is a control beside its text (`without_edge_links`).
+            start, end = cleaned.without_edge_links(*span) if span else (0, 0)
+            raw = cleaned.text[start:end].strip()
             if raw:
                 self.blocks[node.mem_id] = _untitled(_Block(node, raw, collapse(raw)))
 
@@ -309,8 +317,8 @@ def _section_items(blocks: _Blocks, heading: LexborNode) -> tuple[_Block, JsonVa
 
 
 class _MainText:
-    """The main text of a region (module docstring), for a description that only an Open Graph summary (or nothing)
-    states. Its blocks, in which an image is no prose, are read only when it is asked for."""
+    """The main text of a region (module docstring), for a description that only a summary (or nothing) states. Its
+    blocks, in which an image is no prose, are read only when it is asked for."""
 
     def __init__(
         self,
@@ -331,7 +339,7 @@ class _MainText:
         ]
 
     def read(self, name: str, stated: Sequence[tuple[str, str]]) -> _Block | None:
-        if _DESCRIPTION not in properties(self.schema.fields[name]) or any(kind != _OPEN_GRAPH for kind, _ in stated):
+        if _DESCRIPTION not in properties(self.schema.fields[name]) or _full(stated):
             return None
         block = _largest(_Blocks(self.page, self.region, self.outside))
         if block is None or self._buy_box(block):
@@ -504,7 +512,7 @@ def _largest(blocks: _Blocks) -> _Block | None:
     notice, not a text. A block of mostly links is no text; a heading that opens a block names it, it is not its
     text."""
     maximal = [b for b in blocks.blocks.values() if b.node.parent is None or blocks.prose(b.node.parent) is None]
-    ranked = sorted((b for b in maximal if not _linked(b)), key=lambda b: len(b.form), reverse=True)[:2]
+    ranked = sorted((b for b in maximal if not (_linked(b) or _notes(b))), key=lambda b: len(b.form), reverse=True)[:2]
     if not ranked or (len(ranked) == 2 and len(ranked[0].form) == len(ranked[1].form)):
         return None
     return ranked[0] if len(sentences(ranked[0].form)) >= _RUNNING_TEXT else None
@@ -514,6 +522,14 @@ def _linked(block: _Block) -> bool:
     """Whether most of the block's text is link text: a list of links is navigation or related items, not prose."""
     links = sum(len(collapse(a.text(deep=True, separator=" "))) for a in block.node.css("a[href]"))
     return 2 * links > len(block.form)
+
+
+def _notes(block: _Block) -> bool:
+    """Whether every line of the block opens with a superscript (a character whose Unicode compatibility decomposition
+    is `<super>`, UAX #44): each is a note marked as notes are referenced (¹, ²), so the block is the page's notes
+    (financing terms, disclaimers), not its main text."""
+    lines = [line.strip() for line in block.raw.splitlines()]
+    return all(unicodedata.decomposition(line[0]).startswith(_SUPERSCRIPT) for line in lines if line)
 
 
 def _untitled(block: _Block) -> _Block:

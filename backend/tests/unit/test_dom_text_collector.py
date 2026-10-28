@@ -104,6 +104,29 @@ def test_main_text_stands_for_a_description_only_an_og_summary_states() -> None:
     named = body.replace("<h1>Kettle</h1>", "<h1>Acme Steel Kettle 2L</h1>")
     found = _read(named, _stated("og", "Buy Acme Steel Kettle 2L at Example."))
     assert found["description"] == f"{FIRST}\n{SECOND}"
+    # A value of another kind restating the summary is that summary, not a description of its own.
+    summary = "A sturdy kettle that boils fast."
+    found = _read(body, _stated("og", summary), _stated("jsonld", summary))
+    assert found["description"] == f"{FIRST}\n{SECOND}"
+
+
+def test_a_block_of_notes_is_no_main_text() -> None:
+    # Each line opens with a superscript marker (Unicode `<super>`): the page's notes, however long.
+    notes = "".join(f"<p>{mark}Pay monthly at 0% APR over twelve months, subject to approval.</p>" for mark in "¹²³")
+    body = f"<main><h1>Kettle</h1><div><p>{FIRST}</p></div><div>{notes}</div></main>"
+    assert _read(body, _stated("og", "A sturdy kettle that boils fast.")) == {"description": FIRST}
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        '<div><a href="#details">More details</a></div>',  # a link line after the text
+        "<dl><dt>Article no</dt><dd>K-100</dd></dl>",  # HTML Standard §4.4.9: name-value groups, not prose
+    ],
+)
+def test_a_link_line_or_a_description_list_beside_the_text_is_not_the_description(extra: str) -> None:
+    body = f"<main><h1>Kettle</h1><div><p>{FIRST}</p>{extra}</div><p>Note.</p></main>"
+    assert _read(body, _stated("og", SUMMARY)) == {"description": FIRST}
 
 
 def test_a_legend_is_no_main_text() -> None:
