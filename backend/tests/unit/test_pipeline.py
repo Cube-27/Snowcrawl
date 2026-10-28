@@ -562,12 +562,13 @@ def test_a_price_that_differs_between_variants_is_the_shown_variant_s_and_no_def
 
 
 def test_only_a_sku_the_target_publishes_selects_the_shown_variant() -> None:
-    # A sku that publishes below the request's min_confidence, or only the request URL carries, is no sku
-    # the target shows.
+    # A sku that publishes below the request's min_confidence is no sku the target shows; a sku the request URL
+    # carries is not the target's either, but it selects the one variant row stating it (owner, 2026-10-28).
     below = Calibration(git_sha="0" * 40, buckets={"identifier|structured": Bucket(n=40, precision=0.5)})
     doubted = replace(DATA, calibration=below, min_confidence=0.9)
     unconfident = _extract(_bundle(_html(_offered(sku="W-2"))), WITH_VARIANTS, data=doubted)
     from_url = _extract(_bundle(_html(_offered(sku="W-2")), url=f"{PAGE_URL}?sku=W-2"), WITH_VARIANTS)
 
     assert _statuses(unconfident)["availability"] == ("conflict", "offers_disagree")
-    assert _statuses(from_url)["availability"] == ("conflict", "offers_disagree")
+    assert from_url.entity is not None
+    assert (from_url.entity["sku"].status, from_url.entity["availability"].value) == ("missing", "InStock")

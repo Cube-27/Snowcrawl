@@ -271,7 +271,7 @@ def test_the_variant_the_request_url_selects_states_the_top_level_values(
 
     values = (outcomes["sku"][2], outcomes["color"][2], outcomes["price"][2], outcomes["availability"][2])
     if selected is None:
-        assert values[0] is None and values[1] is None
+        assert values[:2] == (None, None)
     else:
         sku, color, amount, availability = selected
         assert values == (sku, color, {"amount": amount, "currency": "EUR"}, availability)
