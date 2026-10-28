@@ -352,14 +352,16 @@ def _addressing(row_field: RowField) -> str | None:
 def _without_group_urls(
     values: dict[str, dict[str, list[JsonValue]]], shared: frozenset[str], url_subs: frozenset[str]
 ) -> dict[str, _Keys]:
-    """Drops a URL the target and its Offers both carry from the url key sub-fields when more than one row carries
-    it: one row's URL is that variant's key (the one-Offer-per-variant shape); a URL many rows repeat names the
-    group, and as a key it would join every row into one variant. Only url sub-fields are screened (`_key_value`)."""
-    carriers: dict[str, set[str]] = {}
+    """Drops a URL the target and its Offers both carry from the url key sub-fields when more than one row of one
+    source (`source_of`) carries it: one row's URL is that variant's key (the one-Offer-per-variant shape); a URL many
+    rows of one source repeat names the group, and as a key it would join every row into one variant. Rows of two
+    sources stating one URL are each source's statement of that one variant. Only url sub-fields are screened
+    (`_key_value`)."""
+    carriers: dict[str, list[str]] = {}
     for row, keys in values.items():
         for url in _urls_in(keys, shared, url_subs):
-            carriers.setdefault(url, set()).add(row)
-    group = frozenset(url for url, rows in carriers.items() if len(rows) > 1)
+            carriers.setdefault(url, []).append(source_of(row))
+    group = frozenset(url for url, sources in carriers.items() if len(set(sources)) < len(sources))
     return {row: _without(keys, group, url_subs) for row, keys in values.items()} if group else values
 
 

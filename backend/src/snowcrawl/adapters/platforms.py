@@ -22,7 +22,8 @@ declaration (`collect.currencies`).
 
 Shopify's product answer states one Offer per variant, each with the variant's own identifiers and price, as a page's
 per-variant Offers do: resolution weighs them as it weighs those (price), and they fill the `variants`
-rows when the page states none. Of them, the page shows one variant (Liquid
+rows when the page states none. Each Offer's `url` is the variant's page (Liquid `variant.url`), so the request URL
+that selects a variant names its row (`resolve.rows.with_variants`). Of them, the page shows one variant (Liquid
 `product.selected_or_first_available_variant`), whose `sku` and `barcode` are read as the product's own, so resolution
 reads its Offer as the variant the page shows; held from the variant's node, they stay that variant's,
 and publish for the product only where the page states none of its own (Variant fill). An image a variant
@@ -36,7 +37,7 @@ override).
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final
 from urllib.parse import parse_qs, quote, urljoin, urlsplit
 
@@ -240,9 +241,12 @@ _SHOPIFY_IMAGES: Final[Members] = ("images", ALL)
 _NO_FILE: Final = ("", "")
 
 
-def _shopify_product(own: dict[str, Members], images: tuple[Members, ...] = (_SHOPIFY_IMAGES,)) -> Shape:
-    """The product's node, with `own`, the members of the shown variant's identifiers (`_shown_variant`), and
-    `images`, the members of the images its page shows (`_shown_images`)."""
+def _shopify_product(
+    own: dict[str, Members], images: tuple[Members, ...] = (_SHOPIFY_IMAGES,), variant: Shape = _SHOPIFY_VARIANT
+) -> Shape:
+    """The product's node, with `own`, the members of the shown variant's identifiers (`_shown_variant`),
+    `images`, the members of the images its page shows (`_shown_images`), and `variant`, its variants' Offers
+    (`_addressed`)."""
     properties = {**_SHOPIFY_PRODUCT_MEMBERS, **own}
     if images:
         properties["image"] = images[0]
@@ -250,8 +254,28 @@ def _shopify_product(own: dict[str, Members], images: tuple[Members, ...] = (_SH
         type="Product",
         properties=properties,
         also={"image": images[1:]},
-        nodes={"offers": (_SHOPIFY_VARIANT, _SHOPIFY_RANGE)},
+        nodes={"offers": (variant, _SHOPIFY_RANGE)},
         fallbacks=frozenset({"brand"}),
+    )
+
+
+def _addressed(answer: dict[str, JsonValue], page_url: str | None) -> Shape:
+    """The variants' Offers, each with its `url` (schema.org `Offer.url`), the page that shows the variant: shopify.dev
+    Liquid `variant.url`, the product's URL (the answer's `url`, resolved against the page's) with `?variant=` and the
+    variant's `id`, the query by which the platform selects it (`_SHOPIFY_VARIANT_PARAM`). Without an absolute product
+    URL, the Offers state none."""
+    route = answer.get("url")
+    try:
+        parts = urlsplit(urljoin(page_url or "", route)) if isinstance(route, str) else None
+    except ValueError:  # RFC 3986 §3.2.2: an authority no URL has (an unclosed IPv6 bracket) names no page
+        parts = None
+    if parts is None or not (parts.scheme and parts.netloc):
+        return _SHOPIFY_VARIANT
+    page = parts._replace(query="", fragment="").geturl()
+    return replace(
+        _SHOPIFY_VARIANT,
+        properties={**_SHOPIFY_VARIANT.properties, "url": ("id",)},
+        prefixes={"url": f"{page}?{_SHOPIFY_VARIANT_PARAM}="},
     )
 
 
@@ -334,7 +358,7 @@ def answer_shape(platform: str, answer: JsonValue, page_url: str | None) -> Shap
         if shown is None:
             return _shopify_product({})
         own: dict[str, Members] = {"sku": ("variants", shown, "sku"), "gtin": ("variants", shown, "barcode")}
-        return _shopify_product(own, _shown_images(answer, shown, page_url))
+        return _shopify_product(own, _shown_images(answer, shown, page_url), _addressed(answer, page_url))
     if platform == "woocommerce" and isinstance(answer, list) and len(answer) == 1 and isinstance(answer[0], dict):
         prices = answer[0].get("prices")
         varies = not isinstance(prices, dict) or prices.get("price_range") is not None
