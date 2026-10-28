@@ -65,7 +65,7 @@ def test_each_optional_product_property_the_page_states_publishes_by_its_path() 
         "material": "Cotton",
         "gender": "unisex",
     }
-    assert published.get("additional_images") == IMAGES
+    assert published.get("additional_images") == IMAGES[1:]  # the main image is image_url alone
     assert published.get("condition") == "RefurbishedCondition"
     assert published.get("product_id") == "isbn-less-42"
     assert published.get("mpn") == "MPN-77"

@@ -50,6 +50,7 @@ from snowcrawl.resolve.derive import Derived, fill, is_application_field, is_pag
 from snowcrawl.resolve.evidence import Calibration, assess, assess_fields, load_calibration
 from snowcrawl.resolve.intent import AmbiguousTarget, primary_types, select_target, sole_primary
 from snowcrawl.resolve.listing import listing_rows, row_lists
+from snowcrawl.resolve.main_image import without_main_image
 from snowcrawl.resolve.ownership import EntityGraph
 from snowcrawl.resolve.page_state import out_of_stock, render_bound, was_rendered
 from snowcrawl.resolve.pagination import next_page_candidate, next_page_links
@@ -64,7 +65,7 @@ from snowcrawl.resolve.preference import (
 )
 from snowcrawl.resolve.records import is_complete, record_confidence
 from snowcrawl.resolve.row_keys import keyed_rows
-from snowcrawl.resolve.rows import RowField, resolve_rows
+from snowcrawl.resolve.rows import RowField, resolve_rows, with_variants
 from snowcrawl.resolve.score import PRECEDENCE_FILE, load_precedence
 from snowcrawl.resolve.types import ExtractionResult, FieldSet, LLMCallRecord, Outcome, Probability
 from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef, Scope
@@ -405,7 +406,8 @@ class _Page:
     ) -> FieldSet:
         """Preference for `target`, derivations, then evidence and confidence. `page_values`: whether
         page-level candidates are the target's (`EntityGraph.owned_by`); `detail`: whether `target` is a detail page's,
-        with the variant it shows, its variant fill and row-mapped fields."""
+        with the variant it shows, its variant fill and row-mapped fields, its top-level fields checked against the
+        variant rows (`resolve.rows.with_variants`)."""
         schema = self.schema
         decisions: dict[str, Preference | Derived]
         rows: FieldSet = {}
@@ -435,6 +437,7 @@ class _Page:
             }
             if detail:
                 rows = self._rows(target, candidates)
+                return with_variants(schema, self._assess(decisions) | rows)
         return self._assess(decisions) | rows
 
     def _confident(self, name: str, spec: FieldSpec, chosen: Chosen) -> bool:
@@ -714,10 +717,12 @@ def _finish(
     asked: tuple[str, ...] = (),
 ) -> FieldSet:
     """The one stage after resolution, run on a detail page's fields, a listing's page fields and each listing row:
-    every unpublished field's reason, in order role C's (`_unanswered`, with `reply`, the call that asked `asked`), the
-    config's (`_absent`), then the page's own evidence (`_unpublished_reasons`). Role C's reasons are never a row's:
-    a listing's reply names the page fields' failure and unverified fields only (`ListingGapReply`), so rows pass no
-    `reply`. A reason stage added here applies to all three."""
+    the main image left out of its list of images (`main_image`), then every unpublished field's reason, in order role
+    C's (`_unanswered`, with `reply`, the call that asked `asked`), the config's (`_absent`), then the page's own
+    evidence (`_unpublished_reasons`). Role C's reasons are never a row's: a listing's reply names the page fields'
+    failure and unverified fields only (`ListingGapReply`), so rows pass no `reply`. A stage added here applies to all
+    three."""
+    fields = without_main_image(source.schema, fields)
     if reply is not None:
         if reply.failure is not None:
             fields = _unanswered(fields, asked, reply.failure)

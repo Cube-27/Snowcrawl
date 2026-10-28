@@ -10,8 +10,9 @@ from datetime import UTC, datetime, timedelta
 from typing import get_args
 
 from snowcrawl.acquire.api import JsonRequest
-from snowcrawl.acquire.memory import Remembered
+from snowcrawl.acquire.memory import Lesson, Remembered, lesson
 from snowcrawl.acquire.rungs import BROWSER_MIN_S, FetchPlan, Rungs, acquire
+from snowcrawl.acquire.session import ENGINE
 from snowcrawl.acquire.types import FetchPolicy, FetchResult
 from snowcrawl.adapters.base import AdapterMatch, PageRefs, Shape
 from snowcrawl.adapters.registry import Registry
@@ -146,6 +147,27 @@ def test_the_browser_is_tried_exactly_for_the_block_classes_of_the_table() -> No
             # The `ok` page states no JSON-LD, Open Graph tag or price (`PAGE`): still no render.
             stubs.acquire(FetchPolicy(page_kind=kind))
             assert bool(stubs.browser.calls) is retried, (block_class, error, kind)
+
+
+_LD = '<script type="application/ld+json">{}</script>'
+# A detail page whose server markup states its product without an offer, and its render, whose script states one.
+STUB = ("<html><body>" + _LD.format('{"@type": "Product", "name": "Kettle"}') + "</body></html>").encode()
+OFFERED = (
+    "<html><body>" + _LD.format('{"@type": "Product", "name": "Kettle", "offers": {"price": "9"}}') + "</body></html>"
+).encode()
+
+
+def test_a_detail_page_stating_no_offer_is_rendered_once_and_the_render_kept_only_when_it_states_one() -> None:
+    policy = FetchPolicy(page_kind="detail", target_types=("Offer", "Product"))
+    for rendered, kept in ((OFFERED, "browser"), (STUB, "http")):
+        stubs = Web(ScriptedRung("http", "shell", body=STUB), ScriptedRung("browser", "ok", body=rendered))
+
+        result = stubs.acquire(policy)
+
+        assert (result.method, result.block_class, len(stubs.browser.calls)) == (kept, "ok", 1)
+        assert _attempts(result) == [("http", "shell"), ("browser", "ok")]
+        # Memory learns the browser start only from a render that did better.
+        assert lesson(result) == (Lesson("browser", engine=ENGINE) if kept == "browser" else Lesson("http"))
 
 
 def test_no_browser_retry_starts_too_close_to_the_deadline() -> None:

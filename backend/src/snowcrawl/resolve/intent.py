@@ -1,6 +1,7 @@
 """Intent: the one entity a detail page is about, or `intent_ambiguous`.
 
-The candidates are the entities of the schema's primary types, without those inside a list, inside another
+The candidates are the entities of the schema's primary types that are not the main entity of another page
+(`collect.scope.main_entity_elsewhere`), without those inside a list, inside another
 primary entity's relation properties, a primary entity's variants, the group it is a variant of, or the item a primary
 entity's review or rating names as reviewed (`itemReviewed`, the entity itself). One candidate is
 the target. Of several, the one whose URLs name the request, final or canonical URL is. Failing that, the page's own
@@ -15,7 +16,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from snowcrawl.collect.base import Entity
-from snowcrawl.collect.scope import LISTS, RELATIONS, leads_elsewhere, page_documents
+from snowcrawl.collect.scope import LISTS, RELATIONS, leads_elsewhere, main_entity_elsewhere, page_documents
 from snowcrawl.collect.vocabulary import Vocabulary
 from snowcrawl.resolve.identity import VARIANT, repeated
 from snowcrawl.resolve.ownership import OFFER, EntityGraph, names_any
@@ -55,14 +56,19 @@ def select_target(
     graph: EntityGraph,
     primary: frozenset[str],
 ) -> Entity | AmbiguousTarget:
-    primaries = [e for e in graph.entities.values() if is_primary(graph, e, primary)]
+    # The graph's page URLs add the page's alternates by language (`collect.run`'s `page_urls`).
+    page_urls = list(dict.fromkeys((*(u for u in (request_url, final_url, canonical_url) if u), *graph.page_urls)))
+    documents = page_documents(page_urls)
+    primaries = [
+        e
+        for e in graph.entities.values()
+        if is_primary(graph, e, primary) and not main_entity_elsewhere(e, graph.entities, documents)
+    ]
     if not primaries:
         return graph.page
     candidates = [e for e in primaries if not _excluded(graph, e, primary)]
     if len(candidates) == 1:
         return candidates[0]
-    # The graph's page URLs add the page's alternates by language (`collect.run`'s `page_urls`).
-    page_urls = list(dict.fromkeys((*(u for u in (request_url, final_url, canonical_url) if u), *graph.page_urls)))
     named = [e for e in candidates if names_any(e, page_urls)]
     for settled in _tie_breaks(graph, candidates, named, page_urls):
         if len(settled) == 1:
