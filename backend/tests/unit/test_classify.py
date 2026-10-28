@@ -227,6 +227,14 @@ _STUB = '{"@context": "https://schema.org", "@type": "WebPage", "mainEntity": {"
             "shell",
             id="empty-offers",
         ),
+        # A context defining the `offers` term states no offer.
+        pytest.param(
+            _product('{"@context": {"offers": "https://schema.org/offers"}, "@type": "Product", "name": "K"}'),
+            _PRODUCT_TYPES,
+            "detail",
+            "shell",
+            id="context-term",
+        ),
     ],
 )
 def test_a_detail_page_read_for_an_offer_that_states_none_is_a_shell(

@@ -137,6 +137,7 @@ _OGP_PRICED = frozenset({"Product", "Offer"})
 # `itemOffered`, "the item being offered", stated by an Offer. A JSON-LD member may name either as a schema.org IRI.
 _OFFER = "Offer"
 _OFFER_MEMBERS = frozenset({"offers", "itemOffered"})
+_CONTEXT = "@context"  # JSON-LD 1.1 §3.1: a node's context, which defines terms
 # HTML Standard §5.2.2: a microdata property's `itemprop`, a set of space-separated names.
 _ITEMPROP = "[itemprop]"
 # BCP 47 (RFC 5646 §2.1): a language subtag of 2 or 3 letters, with a region subtag of 2 letters (ISO 3166-1) or none,
@@ -324,14 +325,18 @@ def _lacks_offer(tree: LexborHTMLParser, documents: list[object], types: tuple[s
 
 def _offer_member(documents: list[object]) -> bool:
     """Whether a JSON-LD object at any depth holds a value under `offers` or `itemOffered` (`_OFFER_MEMBERS`), named
-    as a term or a schema.org IRI (walked with a stack, not recursion)."""
+    as a term or a schema.org IRI (walked with a stack, not recursion). A `@context` defines terms and states no data
+    (JSON-LD 1.1 §3.1), so it is not walked."""
     stack: list[object] = list(documents)
     while stack:
         value = stack.pop()
         if isinstance(value, dict):
-            if any(_SCHEMA_ORG.sub("", str(k)) in _OFFER_MEMBERS and v not in (None, [], {}) for k, v in value.items()):
+            members = {k: v for k, v in value.items() if k != _CONTEXT}
+            if any(
+                _SCHEMA_ORG.sub("", str(k)) in _OFFER_MEMBERS and v not in (None, [], {}) for k, v in members.items()
+            ):
                 return True
-            stack.extend(value.values())
+            stack.extend(members.values())
         elif isinstance(value, list):
             stack.extend(value)
     return False
