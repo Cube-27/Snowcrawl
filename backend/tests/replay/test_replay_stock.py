@@ -60,8 +60,8 @@ def test_an_offer_s_availability_and_inventory_level_publish_as_two_fields(
 
 
 @pytest.mark.parametrize("written", ["Not in stock"])
-def test_availability_text_that_qualifies_or_negates_a_member_never_publishes_one(written: str) -> None:
-    assert _fields({"availability": written})["availability"] == ("missing", "invalid", None)
+def test_availability_text_that_qualifies_or_negates_a_member_publishes_as_stated_never_as_one(written: str) -> None:
+    assert _fields({"availability": written})["availability"] == ("published", None, written)
 
 
 def test_each_source_s_one_offer_is_the_item_s_offer() -> None:

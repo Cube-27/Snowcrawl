@@ -82,6 +82,24 @@
       "sha256": "c92ca049432580d6888dbb4616623197ac3112fade73ee020ae75e5946960692",
       "license": "Project data (owner decision 2026-10-28); the codes are schema.org suggestedGender values (CC BY-SA 3.0, attribution in NOTICE) and Merchant Center product data gender and age_group values (facts)",
       "justification": "The gender field's type vocabulary (`type:gender`, `normalize.vocab`): each code (male, female, unisex from schema.org 30.1 suggestedGender and Merchant Center `gender`; kids from Merchant Center `age_group`) with the page terms the owner maps to it (owner decision 2026-10-28). Terms match by token form, case and apostrophes aside."
+    },
+    {
+      "path": "vocab/availability/en.json",
+      "url": "https://github.com/Cube-27/Snowcrawl/pull/528",
+      "version": "owner decision 2026-10-28",
+      "retrieved": "2026-10-28",
+      "sha256": "df96483b1f1a84d2c4aafe8218da04bd7645e1c15f4012fc4d1a0ab864be3636",
+      "license": "Project data (owner decision 2026-10-28); the codes are schema.org ItemAvailability members (CC BY-SA 3.0, attribution in NOTICE)",
+      "justification": "The availability type vocabulary (`type:availability`, `normalize.vocab`, read for `schema:ItemAvailability` fields): the page stock wording the owner maps to the schema.org ItemAvailability members InStock and OutOfStock (owner decision 2026-10-28). Terms match by token form, case, hyphens and spacing aside. A member's own name, and its words written apart, state that member without this file. A term from this file is not evidence of availability by itself (`Ok.checked`)."
+    },
+    {
+      "path": "vocab/condition/en.json",
+      "url": "https://github.com/Cube-27/Snowcrawl/pull/528",
+      "version": "owner decision 2026-10-28",
+      "retrieved": "2026-10-28",
+      "sha256": "c50a3b3d718e77d7403f5b5f91bbc9f1c60ea51eb32054fce4ee29d8c04a7b70",
+      "license": "Project data (owner decision 2026-10-28); the codes are schema.org OfferItemCondition members (CC BY-SA 3.0, attribution in NOTICE)",
+      "justification": "The condition type vocabulary (`type:condition`, `normalize.vocab`, read for `schema:OfferItemCondition` fields): the page condition wording the owner maps to the schema.org OfferItemCondition members (owner decision 2026-10-28). Terms match by token form, case, hyphens and spacing aside. A member's own name, and its words written apart, state that member without this file. A term from this file is not evidence of condition by itself (`Ok.checked`)."
     }
   ],
   "packaged": [

@@ -9,12 +9,14 @@ Two kinds, each a directory with a `JUSTIFICATION.md` that names its source:
 A type vocabulary may instead be pinned data (`backend/data/manifest.json` names its source):
 `data/vocab/<name>/<language>.json`, a JSON object from code to its terms as a page writes them. A term matches in its
 token form, and, when it holds an apostrophe, also with the apostrophe dropped ("men's" as "mens"): case and the
-possessive's apostrophe do not tell two writings of one term apart.
+possessive's apostrophe do not tell two writings of one term apart. Such terms are page terms (`Entries.pinned`):
+words a page's navigation also writes ("Sold", "Available"), so a code they state is not evidence by itself.
 
 Everything is read once, at import, so a normalizer that uses it stays a pure function.
 """
 
 import json
+import re
 import unicodedata
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
@@ -37,12 +39,14 @@ def tokens(text: str) -> Tokens:
 
 @dataclass(frozen=True, slots=True)
 class Entries:
-    """One language's phrases of one type vocabulary, each with its code."""
+    """One language's phrases of one type vocabulary, each with its code; `pinned` when they are pinned page terms
+    (module docstring)."""
 
     phrases: Mapping[str, str]
+    pinned: bool = False
 
     @classmethod
-    def of(cls, codes: Mapping[str, Iterable[str]]) -> "Entries":
+    def of(cls, codes: Mapping[str, Iterable[str]], *, pinned: bool = False) -> "Entries":
         """Entries from code → phrases, the file form. A phrase must be in token form, so it matches exactly as
         written, and belongs to one code: a phrase under two codes would make every input that holds it ambiguous."""
         phrases: dict[str, str] = {}
@@ -52,25 +56,30 @@ class Entries:
                     raise ValueError(f"vocabulary phrase {phrase!r} is not in token form")
                 if phrases.setdefault(phrase, code) != code:
                     raise ValueError(f"vocabulary phrase {phrase!r} is listed under two codes")
-        return cls(phrases)
+        return cls(phrases, pinned)
 
-    def find(self, words: Tokens) -> frozenset[str]:
-        """The codes whose phrase is a contiguous run of `words` (token sequences, never
-        substrings).
-
-        Where one match lies inside a longer one, the longer wins ("longest match"); matches at separate places all
-        count, so two members in one input both show.
-        """
-        matches: list[tuple[int, int, str]] = []
+    def matches(self, words: Tokens) -> list[tuple[int, int, str]]:
+        """Each run of `words` that is a phrase (token sequences, never substrings), as its start, end and code."""
+        found: list[tuple[int, int, str]] = []
         for phrase, code in self.phrases.items():
             needle = tuple(phrase.split(" "))
             n = len(needle)
-            matches.extend((i, i + n, code) for i in range(len(words) - n + 1) if words[i : i + n] == needle)
-        return frozenset(
-            code
-            for start, end, code in matches
-            if not any(s <= start and end <= e and e - s > end - start for s, e, _ in matches)
-        )
+            found.extend((i, i + n, code) for i in range(len(words) - n + 1) if words[i : i + n] == needle)
+        return found
+
+
+def _found(words: Tokens, entries: Iterable[Entries]) -> frozenset[str]:
+    """The codes whose phrase, in any of `entries`, is a contiguous run of `words`.
+
+    Where one match lies inside a longer one, in the same entries or others, the longer wins ("longest match": "sold"
+    inside "sold out"); matches at separate places all count, so two members in one input both show.
+    """
+    matches = [match for e in entries for match in e.matches(words)]
+    return frozenset(
+        code
+        for start, end, code in matches
+        if not any(s <= start and end <= e and e - s > end - start for s, e, _ in matches)
+    )
 
 
 def schema_members(enumeration: str) -> frozenset[str] | None:
@@ -95,7 +104,7 @@ def type_vocabularies_within(members: frozenset[str]) -> tuple[Mapping[str, Entr
 
 def stated_codes(text: str, entries: Iterable[Entries]) -> frozenset[str]:
     """The codes `text` states: the code whose phrase is the text's whole first clause, with every
-    code a phrase names anywhere else in the text (`Entries.find`), so a different code later makes it ambiguous.
+    code a phrase names anywhere else in the text (`_found`), so a different code later makes it ambiguous.
 
     A phrase with other words in its clause ("not in stock", "in stock soon") states nothing: a word before or after
     it may negate or qualify it, and no standard lists which words do (C4, C7: decline rather than guess).
@@ -106,7 +115,7 @@ def stated_codes(text: str, entries: Iterable[Entries]) -> frozenset[str]:
     if not opening:
         return frozenset()
     words = tokens(text)
-    return frozenset(opening).union(*(e.find(words) for e in entries))
+    return frozenset(opening) | _found(words, entries)
 
 
 def clause_codes(text: str, entries: Iterable[Entries]) -> frozenset[str]:
@@ -171,8 +180,20 @@ def _is_letter(char: str) -> bool:
 @cache
 def name_entries(members: frozenset[str]) -> Entries:
     """Each schema.org member name as a phrase of its own, in token form (`InStock` is "instock", as Open Graph
-    `product:availability` writes it): a member name in any case states the member."""
-    return Entries.of({member: [" ".join(tokens(member))] for member in members})
+    `product:availability` writes it), and its words written apart ("in stock", "pre order"): a member name in any
+    case states the member. schema.org names an enumeration member in UpperCamelCase, its words joined (schema.org,
+    "Data model"), so the words are the name; a name in capitals (`HOUR`) is one word."""
+    return Entries.of(
+        {member: sorted({" ".join(tokens(f)) for f in (member, _words_apart(member))}) for member in members}
+    )
+
+
+# A lower-case letter followed by a capital: where an UpperCamelCase name joins two words.
+_CAMEL_JOIN = re.compile(r"(?<=[a-z])(?=[A-Z])")
+
+
+def _words_apart(name: str) -> str:
+    return _CAMEL_JOIN.sub(" ", name)
 
 
 def code_entries(by_language: Mapping[str, Entries]) -> Entries:
@@ -213,7 +234,7 @@ def _load_data_type() -> dict[str, dict[str, Entries]]:
         return {}
     return {
         vocabulary.name: {
-            e.stem: Entries.of(_token_forms(json.loads(e.read_text(encoding="utf-8"))))
+            e.stem: Entries.of(_token_forms(json.loads(e.read_text(encoding="utf-8"))), pinned=True)
             for e in sorted(vocabulary.glob("*" + _JSON))
         }
         for vocabulary in sorted(root.iterdir())

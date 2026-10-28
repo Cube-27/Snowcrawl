@@ -85,3 +85,35 @@ def test_a_number_only_one_convention_reads_ignores_the_declared_locale() -> Non
 )
 def test_what_states_no_single_number_declines(raw: JsonValue, reason: str) -> None:
     assert number.normalize(raw, NUMBER, EN) == Invalid(reason)
+
+
+@given(st.integers(min_value=1, max_value=100), st.integers(min_value=0, max_value=100))
+def test_a_rating_on_a_stated_scale_maps_linearly_onto_five_points(best_above_worst: int, at: int) -> None:
+    worst = 0
+    best = 5 + best_above_worst  # schema.org Rating: a scale whose best is 5 is the five-point one already
+    value = Decimal(min(at, best))
+    raw: dict[str, JsonValue] = {"ratingValue": str(value), "bestRating": best, "worstRating": worst}
+
+    result = number.normalize(raw, NUMBER, CTX)
+
+    assert isinstance(result, Ok)
+    assert abs(Decimal(str(result.value)) - value * 5 / best) <= Decimal("0.005")
+
+
+@pytest.mark.parametrize(
+    ("raw", "value"),
+    [
+        ({"ratingValue": "8.6"}, "8.6"),  # no stated scale: as stated, never rescaled
+        ({"ratingValue": "4.5", "bestRating": "5", "worstRating": "1"}, "4.5"),
+        ({"ratingValue": "8", "bestRating": "10"}, "3.89"),  # worstRating defaults to 1
+        ({"ratingValue": "12", "bestRating": "10", "worstRating": "0"}, "12"),  # off its stated scale
+        ({"ratingValue": "90", "bestRating": "100", "worstRating": "0", "reviewCount": 3}, "4.5"),
+    ],
+)
+def test_a_rating_is_rescaled_only_by_the_scale_the_page_states(raw: dict[str, JsonValue], value: str) -> None:
+    assert number.normalize(raw, NUMBER, CTX) == Ok(value)
+
+
+def test_a_scale_is_read_by_the_page_s_number_symbols_and_a_bound_that_is_no_number_states_none() -> None:
+    assert number.normalize({"ratingValue": "8,0", "bestRating": "10,0", "worstRating": "0"}, NUMBER, DE) == Ok("4")
+    assert number.normalize({"ratingValue": "8", "bestRating": "NaN"}, NUMBER, CTX) == Ok("8")
