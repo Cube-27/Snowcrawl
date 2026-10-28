@@ -127,9 +127,8 @@ bug, vulnerability or security hotspot (`pr_ready.sh`); code smells are batched:
 - After every 20 merged PRs, or at the end of a plan, whichever comes first (`pr_ready.sh` says when one is due),
   start one builder on `chore(sonar): ...`: fix the open issues on `main` that are real, in code
   (`https://sonarcloud.io/api/issues/search?componentKeys=Cube-27_Snowcrawl&branch=main&resolved=false`).
-- A false positive is listed in that PR's body for the owner to mark in SonarCloud; a recurring one gets a narrow
-  ignore (rule key and path) in `.sonarcloud.properties` with the evidence in the PR. Never `NOSONAR`, never an ignore
-  for a bug, security or complexity rule.
+- A false positive is listed in that PR's body for the owner to mark in the SonarCloud UI. Automatic analysis does not
+  apply `sonar.issue.ignore.*` from `.sonarcloud.properties`, so no ignore goes there. Never `NOSONAR`.
 
 ## Review
 
