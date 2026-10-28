@@ -65,7 +65,7 @@ from snowcrawl.resolve.preference import (
 )
 from snowcrawl.resolve.records import is_complete, record_confidence
 from snowcrawl.resolve.row_keys import keyed_rows
-from snowcrawl.resolve.rows import RowField, resolve_rows
+from snowcrawl.resolve.rows import RowField, resolve_rows, with_variants
 from snowcrawl.resolve.score import PRECEDENCE_FILE, load_precedence
 from snowcrawl.resolve.types import ExtractionResult, FieldSet, LLMCallRecord, Outcome, Probability
 from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef, Scope
@@ -406,7 +406,8 @@ class _Page:
     ) -> FieldSet:
         """Preference for `target`, derivations, then evidence and confidence. `page_values`: whether
         page-level candidates are the target's (`EntityGraph.owned_by`); `detail`: whether `target` is a detail page's,
-        with the variant it shows, its variant fill and row-mapped fields."""
+        with the variant it shows, its variant fill and row-mapped fields, its top-level fields checked against the
+        variant rows (`resolve.rows.with_variants`)."""
         schema = self.schema
         decisions: dict[str, Preference | Derived]
         rows: FieldSet = {}
@@ -436,6 +437,7 @@ class _Page:
             }
             if detail:
                 rows = self._rows(target, candidates)
+                return with_variants(schema, self._assess(decisions) | rows)
         return self._assess(decisions) | rows
 
     def _confident(self, name: str, spec: FieldSpec, chosen: Chosen) -> bool:

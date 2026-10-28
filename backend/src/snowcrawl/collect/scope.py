@@ -8,12 +8,15 @@ the page (`normalize.url_key.document_key`: scheme, authority and path; a query 
 item of its kind (one of their types is the other's or a subtype of it) names the page: an item described here and
 sold elsewhere, as recommendations and bundles are. A root of another kind naming the page (its WebPage, a breadcrumb)
 says nothing of which product is the page's, and where no root of its kind names the page, an item is not set apart
-by its URLs (the page's own may state only a URL the request did not use). Collection reads it
+by its URLs (the page's own may state only a URL the request did not use). A thing that is the `mainEntity` of a
+page node (schema.org `mainEntity`: "the primary entity described in some page") whose own URLs all name another
+document than the page is that document's subject, not this page's, unless it names the page itself
+(`main_entity_elsewhere`). Collection reads it
 to know the page product's stated prices (`collect.product_scope.product_apart`); resolution's ownership and intent
 apply the same relations.
 """
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from typing import Final
 
 from snowcrawl.collect.base import Entity
@@ -24,6 +27,8 @@ from snowcrawl.normalize.url_key import DocumentKey, document_key
 RELATIONS: Final = frozenset({"isRelatedTo", "isSimilarTo"})
 # schema.org: an ItemList (with its ListItems) lists things, so a thing in it is one of many, not the page's own.
 LISTS: Final = ("ItemList", "ListItem")
+# schema.org CreativeWork.mainEntity: "Indicates the primary entity described in some page or other CreativeWork".
+MAIN_ENTITY: Final = "mainEntity"
 
 
 def other_items(entities: Sequence[Entity], vocabulary: Vocabulary, page_urls: Iterable[str]) -> frozenset[str]:
@@ -32,7 +37,10 @@ def other_items(entities: Sequence[Entity], vocabulary: Vocabulary, page_urls: I
     documents = page_documents(page_urls)
     namers = [e for e in entities if e.parent is None and not documents.isdisjoint(map(document_key, _own_urls(e)))]
     return frozenset(
-        e.id for e in entities if any(_another(n, vocabulary, documents, namers) for n in _chain(e, by_id))
+        e.id
+        for e in entities
+        if main_entity_elsewhere(e, by_id, documents)
+        or any(_another(n, vocabulary, documents, namers) for n in _chain(e, by_id))
     )
 
 
@@ -51,11 +59,27 @@ def leads_elsewhere(entity: Entity, documents: Documents) -> bool:
     return bool(urls) and documents.isdisjoint(map(document_key, urls))
 
 
+def main_entity_elsewhere(entity: Entity, by_id: Mapping[str, Entity], documents: Documents) -> bool:
+    """Whether the entity, or a thing holding it, is the `mainEntity` of a node whose own URLs all name another
+    document than the page's `documents` (`leads_elsewhere`), and states no URL naming the page itself: the primary
+    entity of that other page (schema.org `mainEntity`; `url`: "URL of the item")."""
+    for node in _chain(entity, by_id):
+        holder = by_id.get(node.parent) if node.parent is not None else None
+        if (
+            holder is not None
+            and node.via == MAIN_ENTITY
+            and leads_elsewhere(holder, documents)
+            and documents.isdisjoint(map(document_key, _own_urls(node)))
+        ):
+            return True
+    return False
+
+
 def _own_urls(entity: Entity) -> tuple[str, ...]:
     return entity.item_urls or entity.urls
 
 
-def _chain(entity: Entity, by_id: dict[str, Entity]) -> Iterable[Entity]:
+def _chain(entity: Entity, by_id: Mapping[str, Entity]) -> Iterable[Entity]:
     """The entity and its ancestors, up to the root (`CollectResult` keeps entities a tree)."""
     node: Entity | None = entity
     while node is not None:

@@ -70,3 +70,21 @@ def test_a_product_card_beside_the_main_content_is_left_out_too() -> None:
     (call,) = client.requests
     read = call.user.partition("<page_text>")[2].partition("</page_text>")[0]
     assert read.strip() == "Widget One\nSolid widget"
+
+
+def test_sibling_offer_cards_each_with_its_price_and_button_are_left_out_without_a_stated_price() -> None:
+    # The product states no price (out of stock); beside it, two add-on offers, each with its own price and button.
+    offers = (
+        "<div><div><p>Plan A</p><p>10.00 EUR</p><button>Add - 10.00 EUR</button></div>"
+        "<div><p>Plan B</p><p>75.00 EUR</p><button>Add - 75.00 EUR</button></div></div>"
+    )
+    page = _html(_product(price=None), body=f"<p>Out of stock</p>{offers}")
+    client = ScriptedClient({"fields": {"price": claim("10.00 EUR", 0), "released": claim("x", 0)}})
+
+    result = _extract(_bundle(page), SCHEMA, role_c=role_c(client, job_id=JobId(uuid7())))
+
+    (request,) = client.requests
+    read = request.user.partition("<page_text>")[2].partition("</page_text>")[0]
+    assert read.strip() == "Widget One\nOut of stock"
+    assert result.entity is not None
+    assert (result.entity["price"].status, result.entity["price"].reason) == ("missing", UNVERIFIED)
