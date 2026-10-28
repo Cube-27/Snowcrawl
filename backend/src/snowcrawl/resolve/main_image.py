@@ -3,14 +3,16 @@
 A schema can read one schema.org property into two fields: a scalar `image_url` field, the property's main value, and
 a list of `image_url` items, its values. When both read the same `schema_org` path, the list holds the property's other
 values: an item naming a file the scalar field publishes (`images.same_file`: the file or a rendition of it) is left
-out. A list left with no item is unpublished (`MAIN_IMAGE_ONLY`): the page states no other image.
+out. Both name one file, so the scalar field publishes it at the largest of their renditions
+(`images.preferred_rendition`), the list's copy of it when that is larger: leaving the item out never drops the larger
+copy. A list left with no item is unpublished (`MAIN_IMAGE_ONLY`): the page states no other image.
 """
 
 from typing import Final
 
 from pydantic import JsonValue
 
-from snowcrawl.normalize.images import same_file
+from snowcrawl.normalize.images import preferred_rendition, same_file
 from snowcrawl.resolve.types import FieldOutcome, FieldSet
 from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
 
@@ -19,21 +21,43 @@ MAIN_IMAGE_ONLY: Final = "main_image_only"
 
 
 def without_main_image(schema: SchemaDef, fields: FieldSet) -> FieldSet:
-    """`fields` with each published list of images holding none of the files its scalar image fields publish."""
+    """`fields` with each published list of images holding none of the files its scalar image fields publish, and
+    each of those at the largest rendition the list also states."""
     out = dict(fields)
     for name, spec in schema.fields.items():
         outcome = fields.get(name)
         if outcome is None or outcome.status != "published" or not _image_list(spec):
             continue
-        main = [
-            o.value
-            for n, s in schema.fields.items()
-            if s.type is FieldType.IMAGE_URL and s.schema_org == spec.schema_org
-            if (o := fields.get(n)) is not None and o.status == "published"
-        ]
+        main = _main_fields(schema, spec, out)
+        for n in main:
+            out[n] = _at_largest(out[n], outcome)
         if main:
-            out[name] = _apart(outcome, main)
+            out[name] = _apart(outcome, [out[n].value for n in main])
     return out
+
+
+def _main_fields(schema: SchemaDef, spec: FieldSpec, fields: FieldSet) -> list[str]:
+    """The published scalar image fields reading the list's schema.org path."""
+    return [
+        n
+        for n, s in schema.fields.items()
+        if s.type is FieldType.IMAGE_URL and s.schema_org == spec.schema_org
+        if (o := fields.get(n)) is not None and o.status == "published"
+    ]
+
+
+def _at_largest(main: FieldOutcome, listing: FieldOutcome) -> FieldOutcome:
+    """The main image at the largest rendition of its file among it and the list's copies of it (`same_file`)."""
+    items = listing.value
+    if not isinstance(main.value, str) or not isinstance(items, list):
+        return main
+    copies = {i: item for i, item in enumerate(items) if isinstance(item, str) and same_file(item, main.value)}
+    best = preferred_rendition([main.value, *copies.values()])
+    if best == main.value:
+        return main
+    place = next(i for i, item in copies.items() if item == best)
+    written = listing.stated[place] if isinstance(listing.stated, list) and len(listing.stated) == len(items) else None
+    return main.model_copy(update={"value": best, "stated": None if written == best else written})
 
 
 def _image_list(spec: FieldSpec) -> bool:

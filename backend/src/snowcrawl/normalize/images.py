@@ -166,23 +166,27 @@ def largest_rendition(values: Sequence[str]) -> int:
     A rendition states its size in what `resource_key` sets aside: the path's dimension segments, size suffix and
     options, and query parameters (RFC 3986 §3.4) every rendition states with a decimal value that differ between them
     (a parameter equal in all, such as a version stamp, says nothing of size, and one only some state, such as a scale
-    factor, compares with no other). When every rendition states as many sizes, read alike (the path's in order, the
-    query's by name), the largest is one at least as large in each as every other: a rendition larger in one size and
-    smaller in another (`1200x630` beside `1000x1000`) is another crop of the file, such as the card an Open Graph
-    `og:image` is cut to (Open Graph protocol, "Structured Properties": `og:image:width`, `og:image:height`), not a
-    larger copy, so none is largest then. Else a rendition's size is the largest number it states. Of equal sizes the
-    first wins. A rendition stating none may be the unresized file or a default one, so nothing is ranked then."""
+    factor, compares with no other). The largest is one at least as large as every other in each size they share: a
+    rendition larger in one size and smaller in another (`1200x630` beside `1000x1000`) is another crop of the file,
+    such as the card an Open Graph `og:image` is cut to (Open Graph protocol, "Structured Properties":
+    `og:image:width`, `og:image:height`), not a larger copy, so none is largest then. Of equal sizes the first wins. A
+    rendition stating none may be the unresized file or a default one, so nothing is ranked then."""
     sizes = [_stated_size(value, values) for value in values]
     if not sizes or not all(sizes):
         return 0
-    if len({len(size) for size in sizes}) > 1:
-        longest = [max(size) for size in sizes]
-        return longest.index(max(longest))
     return next((i for i, size in enumerate(sizes) if all(_covers(size, other) for other in sizes)), 0)
 
 
 def _covers(size: tuple[int, ...], other: tuple[int, ...]) -> bool:
-    return all(mine >= theirs for mine, theirs in zip(size, other, strict=True))
+    """Whether a rendition stating `size` is at least as large as one stating `other` in each size they share.
+    Renditions stating as many sizes read them alike (the path's in order, the query's by name). Else which of one's
+    sizes is which of the other's is not stated, so it is at least as large under every pairing (its smallest size is
+    at least the other's largest), and a rendition stating sizes the other does not (a crop, `1200x630` before a
+    `500` resize) must be larger: on a tie only those sizes would rank it, and they compare with nothing the other
+    states."""
+    if len(size) == len(other):
+        return all(mine >= theirs for mine, theirs in zip(size, other, strict=True))
+    return min(size) > max(other) if len(size) > len(other) else min(size) >= max(other)
 
 
 def _stated_size(value: str, renditions: Sequence[str]) -> tuple[int, ...]:
