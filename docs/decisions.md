@@ -17,8 +17,10 @@ Reasoning for a single change goes in its PR body.
   base (RFC 3986 §5.2). Why: a relative or protocol-relative reference (`//cdn…`, `/media/…`) is unusable off the page.
 - **Price is never skipped.** An unclear currency never drops a price: page evidence, else the URL locale/subdomain/ccTLD
   (flagged), else the symbol's CLDR primary currency (`$` = USD, flagged), else null. Contested amounts are conflicts.
-- **Variants.** Values that vary publish only in `variants` rows (2 or more variants); a top-level field publishes only a
-  value every variant shares; no URL-named default variant.
+- **Variants.** Values that vary publish only in `variants` rows (2 or more variants). When the request URL selects one
+  variant (a query value or path segment equal to one row's stated identifier or option value, or the row's own URL),
+  the top-level fields state that variant's values; otherwise a top-level field publishes only a value every variant
+  shares. Why: owner 2026-10-28.
 - **Gender is one of `male`, `female`, `unisex`, `kids`** (`type:gender`): the codes from schema.org `suggestedGender`
   and Google Merchant Center `gender`/`age_group`, and the page terms the owner maps to them ("Men's", "Womens",
   "Ladies", "Boys", ...) in `backend/data/vocab/gender/en.json`, pinned in the manifest. Terms match whatever their case
