@@ -11,7 +11,7 @@ Each variant resolves its sub-fields with the resolver's own rules, its scope st
 from collections.abc import Callable, Hashable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final, TypeGuard
-from urllib.parse import parse_qsl, urlsplit
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 from pydantic import JsonValue
 
@@ -25,8 +25,8 @@ from snowcrawl.resolve.check_digits import CHECK_DIGIT_CHANCE, chance_passes
 from snowcrawl.resolve.evidence import BELOW_MIN_CONFIDENCE, Calibration, assess
 from snowcrawl.resolve.identity import VARIANT
 from snowcrawl.resolve.offers import source_of
-from snowcrawl.resolve.ownership import AGGREGATE_OFFER, EntityGraph
-from snowcrawl.resolve.preference import Orders, PageFacts, Resolver
+from snowcrawl.resolve.ownership import AGGREGATE_OFFER, EntityGraph, names_item
+from snowcrawl.resolve.preference import URL_PARAM, Orders, PageFacts, Resolver
 from snowcrawl.resolve.types import DroppedRow, Evidence, FieldOutcome, FieldSet, FieldStatus, RowOutcome
 from snowcrawl.schemas.paths import MappedPath, parse_paths
 from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
@@ -328,14 +328,25 @@ def _key_value(candidate: Candidate, excluded: frozenset[str]) -> JsonValue:
 
 
 def _not_keys(row_field: RowField) -> tuple[frozenset[str], frozenset[str]]:
-    """URLs that name the page or the target, not one variant: the page URLs and the target's own URLs; and
-    the target's URLs that one of its Offers repeats. `Entity.urls` includes the Offers' URLs, so a URL both declare
-    is either the target's or an Offer's: `_without_group_urls` decides by how many rows carry it."""
+    """URLs that name the page or the target, not one variant: the page URLs but one addressing a variant
+    (`_addressing`) and the target's own URLs; and the target's URLs that one of its Offers repeats. `Entity.urls`
+    includes the Offers' URLs, so a URL both declare is either the target's or an Offer's: `_without_group_urls` decides
+    by how many rows carry it."""
     graph, target = row_field.graph, row_field.target
     # An AggregateOffer is no offer of one item: a URL it repeats is not one row's.
     offers = {u for e in graph.offers(target) for u in e.urls}
     own = [u for u in target.urls if u not in offers]
-    return frozenset((*row_field.page_urls, *own)), frozenset(u for u in target.urls if u in offers)
+    addressing = _addressing(row_field)
+    pages = [u for u in row_field.page_urls if addressing is None or not equal(u, addressing, _URL)]
+    return frozenset((*pages, *own)), frozenset(u for u in target.urls if u in offers)
+
+
+def _addressing(row_field: RowField) -> str | None:
+    """The request URL when it addresses one variant of the target: it has a query (RFC 3986 §3.4: the query may
+    select a variant of the resource its path names) and is no URL of the item itself. A row stating it as its own URL
+    (schema.org `url` of a variant or its Offer) is that variant, the one the page shows, so it keys that row."""
+    url = row_field.page.request_url
+    return url if urlsplit(url).query and not names_item(row_field.target, url) else None
 
 
 def _without_group_urls(
@@ -501,33 +512,143 @@ def _published(
     )
 
 
-def with_variants(schema: SchemaDef, fields: FieldSet) -> FieldSet:
-    """A detail target's fields with each top-level field checked against the variant rows (owner decision: a
-    top-level field publishes only a value every variant shares). A row sub-field of the top-level field's type and
-    `schema_org` path states that property of each variant (the same schema.org property, read on each variant's
-    Product or Offer). Where every published row states one value of it, the top-level field publishes that value:
-    a missing one takes it from the rows, and another value is a `conflict` (`variants_disagree`), as the record
-    would state two values of one fact (C7: decline rather than guess). Unchanged elsewhere."""
+_SubFields = Mapping[str, FieldSpec]
+_Rows = tuple[tuple[RowOutcome, ...], _SubFields]  # a row-mapped field's published rows and sub-fields
+
+
+def with_variants(schema: SchemaDef, fields: FieldSet, request_url: str) -> FieldSet:
+    """A detail target's fields with each top-level field checked against the variant rows. A row sub-field of the
+    top-level field's type that shares a `schema_org` path with it states that property of each variant (the same
+    schema.org property, read on each variant's Product or Offer).
+
+    Owner, 2026-10-28: when the request URL selects one variant (`_selected`), the top-level field states that
+    variant's value: the selected row's published value replaces the product group's, and the row's `conflict` (two
+    sources stating rival values of the selected variant itself) is the field's. Otherwise a top-level field publishes
+    only a value every variant shares: where every published row states one value, a missing top-level field takes it
+    from the rows, and another value is a `conflict` (`variants_disagree`), as the record would state two values of one
+    fact (C7: decline rather than guess). The record's own URL is the page's (RFC 6596 canonical link), never a
+    variant's, so url fields are left alone. Unchanged elsewhere."""
     checked = dict(fields)
+    rows = _row_fields(schema, fields)
+    selected = [(row, subs) for items, subs in rows if (row := _selected(items, subs, request_url)) is not None]
     for name, spec in schema.fields.items():
         outcome = fields.get(name)
-        if outcome is None or spec.row_mapped or spec.schema_org is None:
+        if outcome is None or spec.row_mapped or spec.schema_org is None or spec.type is FieldType.URL:
             continue
-        shared = next((s for s in _shared_values(schema, fields, spec) if s is not None), None)
-        if shared is not None:
-            checked[name] = _agreeing(outcome, shared, spec)
+        checked[name] = _top_level(outcome, spec, rows, selected)
     return checked
 
 
-def _shared_values(schema: SchemaDef, fields: FieldSet, spec: FieldSpec) -> Iterator[FieldOutcome | None]:
-    """For each published row-mapped field with a sub-field of `spec`'s type and path, the first row's outcome of it
-    when every row publishes it alike, else None."""
-    for name, list_spec in schema.fields.items():
-        items = fields[name].items if list_spec.row_mapped and name in fields else None
-        sub_fields = (list_spec.item.fields or {}) if items and list_spec.item is not None else {}
-        for sub, sub_spec in sub_fields.items():
-            if (sub_spec.type, sub_spec.schema_org) == (spec.type, spec.schema_org) and items:
-                yield _alike([row.fields.get(sub) for row in items], spec)
+def _top_level(
+    outcome: FieldOutcome, spec: FieldSpec, rows: Sequence[_Rows], selected: Sequence[tuple[RowOutcome, _SubFields]]
+) -> FieldOutcome:
+    """The top-level field's outcome given the variant rows (`with_variants`): the selected row's, else the shared
+    value's, else `outcome`."""
+    chosen = next((o for row, subs in selected if (o := _selected_value(row, subs, spec)) is not None), None)
+    if chosen is not None:
+        return chosen
+    shared = next((s for items, subs in rows if (s := _shared_value(items, subs, spec)) is not None), None)
+    return outcome if shared is None else _agreeing(outcome, shared, spec)
+
+
+def _row_fields(schema: SchemaDef, fields: FieldSet) -> list[_Rows]:
+    """Each published row-mapped field's rows, with its sub-fields."""
+    return [
+        (items, list_spec.item.fields or {})
+        for name, list_spec in schema.fields.items()
+        if list_spec.row_mapped and name in fields and (items := fields[name].items) and list_spec.item is not None
+    ]
+
+
+def _same_property(sub_spec: FieldSpec, spec: FieldSpec) -> bool:
+    """Whether a row sub-field states the top-level field's property: one type, and a `schema_org` path in common
+    other than the item's name."""
+    if sub_spec.type is not spec.type or sub_spec.schema_org is None or spec.schema_org is None:
+        return False
+    return bool(_unranked(sub_spec.schema_org) & _unranked(spec.schema_org))
+
+
+# The schema.org `name` of the item itself (a property of Thing): a ProductGroup's name names the product, a
+# variant's (`hasVariant`) the one variant, often only by its `variesBy` values; neither is the other's value.
+_ITEM_NAME: Final = ("name",)
+
+
+def _unranked(schema_org: str) -> set[MappedPath]:
+    return {path._replace(rank=0) for path in parse_paths(schema_org) if path.steps != _ITEM_NAME}
+
+
+def _subs_of(sub_fields: Mapping[str, FieldSpec], spec: FieldSpec) -> list[str]:
+    return [sub for sub, sub_spec in sub_fields.items() if _same_property(sub_spec, spec)]
+
+
+def _shared_value(
+    items: Sequence[RowOutcome], sub_fields: Mapping[str, FieldSpec], spec: FieldSpec
+) -> FieldOutcome | None:
+    """The first row's outcome of the first sub-field stating `spec`'s property that every row publishes alike."""
+    shared = (_alike([row.fields.get(sub) for row in items], spec) for sub in _subs_of(sub_fields, spec))
+    return next((s for s in shared if s is not None), None)
+
+
+def _selected_value(row: RowOutcome, sub_fields: Mapping[str, FieldSpec], spec: FieldSpec) -> FieldOutcome | None:
+    """The selected row's published or `conflict` outcome of the first sub-field stating `spec`'s property, if any."""
+    stated = (row.fields.get(sub) for sub in _subs_of(sub_fields, spec))
+    return next((o for o in stated if o is not None and o.status in ("published", "conflict")), None)
+
+
+# The sub-field types whose values a URL may carry to select a variant: identifiers (schema.org `productID`, `sku`,
+# `gtin`) and option values (the schema.org `variesBy` properties, such as `color` and `size`, stated as text).
+_SELECTING = frozenset({FieldType.IDENTIFIER, FieldType.TEXT})
+
+
+def _selected(items: Sequence[RowOutcome], sub_fields: Mapping[str, FieldSpec], request_url: str) -> RowOutcome | None:
+    """The row the request URL selects: the one row that every URL part naming a row names (`_url_parts`). A part
+    names a row when it equals one of the row's stated identifiers or option values (`_SELECTING`); the request URL
+    itself names a row whose own URL it is (schema.org `url` of a `hasVariant` member or of its Offer: the page showing
+    that variant). None when no part names a row, or the parts leave more or fewer than one; a part that only contains
+    a row's value names nothing. Parts are matched by value, never by the parameter's name."""
+    stating = {sub: spec for sub, spec in sub_fields.items() if spec.type in _SELECTING}
+    urls = {sub: spec for sub, spec in sub_fields.items() if spec.type is FieldType.URL}
+    named = [{i for i, row in enumerate(items) if _states(row, stating, part)} for part in _url_parts(request_url)]
+    named.append({i for i, row in enumerate(items) if _states(row, urls, request_url)})
+    common = set.intersection(*(rows for rows in named if rows)) if any(named) else set()
+    return items[common.pop()] if len(common) == 1 else None
+
+
+def _url_parts(url: str) -> list[str]:
+    """The values a URL carries: each query parameter's value (WHATWG URL Standard, application/x-www-form-urlencoded
+    parsing) and each non-empty path segment, percent-decoded (RFC 3986 §3.3, §3.4, §2.1)."""
+    parts = urlsplit(url)
+    segments = [unquote(segment) for segment in parts.path.split("/") if segment]
+    return [*(value for _, value in parse_qsl(parts.query) if value), *segments]
+
+
+def _states(row: RowOutcome, sub_fields: Mapping[str, FieldSpec], raw: str) -> bool:
+    """Whether the row states `raw` as a value of one of `sub_fields` (`_stated`), under the sub-field's own equality;
+    text ignoring case (a URL often writes an option value in lower case)."""
+    return any(_equal_part(value, raw.strip(), sub_fields[sub]) for sub, value in _stated(row, sub_fields))
+
+
+def _stated(row: RowOutcome, sub_fields: Mapping[str, FieldSpec]) -> Iterator[tuple[str, JsonValue]]:
+    """The values the row states of `sub_fields`: those it publishes, and those only the URL-parameter rule kept from
+    publishing (`URL_PARAM`: the request URL carries the value and the page does not show it). Such a value is no
+    evidence of the row's field, but the row still states it, so the URL carrying it names that row."""
+    for sub in sub_fields:
+        outcome = row.fields.get(sub)
+        if outcome is None:
+            continue
+        if outcome.status == "published":
+            yield sub, outcome.value
+        yield from (
+            (sub, c.normalized.value)
+            for c, why in outcome.rejected
+            if why == URL_PARAM and isinstance(c.normalized, Ok)
+        )
+
+
+def _equal_part(stated: JsonValue, part: str, spec: FieldSpec) -> bool:
+    if spec.type is FieldType.TEXT and isinstance(stated, str):
+        return bool(part) and stated.casefold() == part.casefold()
+    return equal(stated, part, spec)
 
 
 def _alike(outcomes: Sequence[FieldOutcome | None], spec: FieldSpec) -> FieldOutcome | None:

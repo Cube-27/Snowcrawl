@@ -437,7 +437,7 @@ class _Page:
             }
             if detail:
                 rows = self._rows(target, candidates)
-                return with_variants(schema, self._assess(decisions) | rows)
+                return with_variants(schema, self._assess(decisions) | rows, self.facts.request_url)
         return self._assess(decisions) | rows
 
     def _confident(self, name: str, spec: FieldSpec, chosen: Chosen) -> bool:

@@ -27,7 +27,7 @@ from dataclasses import dataclass, field, replace
 from decimal import Decimal
 from fractions import Fraction
 from itertools import combinations
-from typing import Literal, cast
+from typing import Final, Literal, cast
 from urllib.parse import parse_qsl, urlsplit
 
 from pydantic import JsonValue
@@ -58,7 +58,9 @@ from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
 __all__ = ["PRECEDENCE_TYPES", "Chosen", "PageFacts", "Preference", "Resolver", "Unpublished", "rule_type"]
 
 # The screening stages in the order a candidate meets them; a missing field states the furthest one reached.
-_STAGES = ("invalid", "ambiguous", "not_owned", "url_param", "range_bound")
+# §8.2 rule 4: a value the request URL carries that the page does not show.
+URL_PARAM: Final = "url_param"
+_STAGES = ("invalid", "ambiguous", "not_owned", URL_PARAM, "range_bound")
 # Why a field publishes with a flag, or is a conflict.
 DISAGREE = "disagree"
 OFFERS_DISAGREE = "offers_disagree"
@@ -180,7 +182,7 @@ class Resolver:
             return "not_owned"
         # §8.2 rule 4: a value the request URL carries is not evidence about the page unless the page shows it.
         if any(text_form(s) in self.page.query_values and not self.page.visible(s) for s in _scalars(candidate.raw)):
-            return "url_param"
+            return URL_PARAM
         return None
 
     def _owned(self, candidate: Candidate) -> bool:

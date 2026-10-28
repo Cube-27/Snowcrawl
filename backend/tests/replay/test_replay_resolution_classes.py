@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
+import pytest
 from pydantic import JsonValue
 
 from snowcrawl.collect.vocabulary import Vocabulary
@@ -26,10 +27,12 @@ _PRESET = next(p for p in load_presets() if p.name == "commerce_detail")
 SCHEMA = SchemaDef(**_PRESET.model_dump(), id=SchemaId(uuid7()), origin="preset", status="active")
 
 
-def _extract(head: str, body: str = "", schema: SchemaDef = SCHEMA, lang: str = "") -> ExtractionResult:
+def _extract(
+    head: str, body: str = "", schema: SchemaDef = SCHEMA, lang: str = "", url: str = PAGE_URL
+) -> ExtractionResult:
     lang_attribute = f' lang="{lang}"' if lang else ""
     raw = f"<html{lang_attribute}><head>{head}</head><body>{body}</body></html>".encode()
-    return asyncio.run(extract_page(capture(raw), schema, None, None, data=DATA))
+    return asyncio.run(extract_page(capture(raw, url=url), schema, None, None, data=DATA))
 
 
 def _jsonld(*nodes: Mapping[str, Any]) -> str:
@@ -230,3 +233,45 @@ def test_a_top_level_value_no_variant_shares_is_a_conflict_and_a_shared_one_fill
         "color": ("published", None, "Red"),
         "price": ("published", None, {"amount": "50.00", "currency": "EUR"}),
     }
+
+
+@pytest.mark.parametrize(
+    ("query", "selected"),
+    [
+        ("?colour=blue", ("W-2", "Blue", "45.00", "OutOfStock")),  # an option value one row states
+        ("?item=101", ("W-1", "Red", "40.00", "InStock")),  # an id one row states
+        ("?id=W", None),  # a part of every sku: no row is named
+        ("?colour=blue&item=101", None),  # two rows named: none selected
+    ],
+)
+def test_the_variant_the_request_url_selects_states_the_top_level_values(
+    query: str, selected: tuple[str, str, str, str] | None
+) -> None:
+    # The group's own Offer states another price; the URL names a variant by one value of its row.
+    group = _product(
+        **{"@type": "ProductGroup"},
+        name="Widget One",
+        url=PAGE_URL,
+        offers=_offer("50.00", "https://schema.org/InStock"),
+        hasVariant=[
+            {
+                **_variant(1, "InStock", color="Red", productID="101"),
+                "offers": _offer("40.00", "https://schema.org/InStock"),
+            },
+            {
+                **_variant(2, "OutOfStock", color="Blue", productID="102"),
+                "offers": _offer("45.00", "https://schema.org/OutOfStock"),
+            },
+        ],
+    )
+
+    outcomes = _outcomes(
+        _extract(_jsonld(group), "<h1>Widget One</h1>", url=PAGE_URL + query), "sku", "color", "price", "availability"
+    )
+
+    values = (outcomes["sku"][2], outcomes["color"][2], outcomes["price"][2], outcomes["availability"][2])
+    if selected is None:
+        assert values[0] is None and values[1] is None
+    else:
+        sku, color, amount, availability = selected
+        assert values == (sku, color, {"amount": amount, "currency": "EUR"}, availability)
