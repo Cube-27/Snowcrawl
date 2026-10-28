@@ -39,9 +39,12 @@ Reasoning for a single change goes in its PR body.
 - **Mapped words become codes; unmapped values publish as stated.** For every enum field (gender, availability,
   condition), top level and in `variants` rows, a value the tables or schema.org names map publishes as the code; any
   other value from the field's own source (JSON-LD, microdata, Open Graph, a labelled pair) publishes as the page states
-  it, white space collapsed. Neither a table term nor an unmapped value is evidence by itself (`Ok.checked`): a script
-  string or menu word that merely equals one ("New", "Sold", "Kids") is not taken without such a source. Why: owner
-  2026-10-28, the tables may miss words and the page's data is not dropped for that.
+  it, white space collapsed. A mapped value is a known value whichever table maps it; an unmapped one is no evidence
+  by itself (`Ok.checked`). Noise is told apart by where the page states a word, never by table membership: a script
+  value is taken without such a source only when visible and held by an object that also states the item's name, an
+  identifier or its URL (`collect.admission`), so a message catalog's or menu's "New", "Sold" or "Kids" is not.
+  Open Graph `og:availability` short forms map too (`oos`, `pending`). Why: owner 2026-10-28, the tables may miss
+  words and the page's data is not dropped for that.
 - **The main image is not repeated in the image list.** A list of images that reads the same schema.org property as
   the record's main image field (`additional_images` beside `image_url`) leaves out that file and its renditions
   (`images.same_file`). Why: owner 2026-10-28, the list is the other images.

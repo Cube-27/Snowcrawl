@@ -88,9 +88,9 @@
       "url": "https://github.com/Cube-27/Snowcrawl/pull/528",
       "version": "owner decision 2026-10-28",
       "retrieved": "2026-10-28",
-      "sha256": "df96483b1f1a84d2c4aafe8218da04bd7645e1c15f4012fc4d1a0ab864be3636",
+      "sha256": "e078f5db278a24c8769ae0142dc5cdbe09a90d76fa85150a467b02fac9d9a4b7",
       "license": "Project data (owner decision 2026-10-28); the codes are schema.org ItemAvailability members (CC BY-SA 3.0, attribution in NOTICE)",
-      "justification": "The availability type vocabulary (`type:availability`, `normalize.vocab`, read for `schema:ItemAvailability` fields): the page stock wording the owner maps to the schema.org ItemAvailability members InStock and OutOfStock (owner decision 2026-10-28). Terms match by token form, case, hyphens and spacing aside. A member's own name, and its words written apart, state that member without this file. A term from this file is not evidence of availability by itself (`Ok.checked`)."
+      "justification": "The availability type vocabulary (`type:availability`, `normalize.vocab`, read for `schema:ItemAvailability` fields): the page stock wording the owner maps to the schema.org ItemAvailability members InStock and OutOfStock (owner decision 2026-10-28), and the Open Graph product availability values (`og:availability`, Pinterest product rich pins, https://developers.pinterest.com/docs/web-features/product-rich-pins/: `instock`, `preorder`, `backorder` or `pending`, `out of stock`, `discontinued`) that are no member name: `pending`, back in stock soon, is BackOrder; `oos`, the short form of `out of stock` that pages write in `og:availability`, is OutOfStock. The others are member names or their words already. Terms match by token form, case, hyphens and spacing aside. A member's own name, and its words written apart, state that member without this file. A term from this file is not evidence of availability by itself (`Ok.checked`)."
     },
     {
       "path": "vocab/condition/en.json",

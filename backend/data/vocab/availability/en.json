@@ -1,4 +1,5 @@
 {
+  "BackOrder": ["pending"],
   "InStock": ["in stock", "available", "in-stock", "instock", "available now", "ready to ship", "in stock now"],
-  "OutOfStock": ["sold", "out of stock", "unavailable", "not available", "currently unavailable", "no longer available", "out-of-stock"]
+  "OutOfStock": ["sold", "out of stock", "unavailable", "not available", "currently unavailable", "no longer available", "out-of-stock", "oos"]
 }

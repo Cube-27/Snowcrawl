@@ -210,17 +210,15 @@ _CHECKABLE = frozenset({FieldType.MONEY, FieldType.ENUM, FieldType.DATE, FieldTy
 def checkable(raw: Raw, spec: FieldSpec) -> bool:
     """Whether `raw` normalizing as `spec`'s type would be evidence that it is a value of the type, because the type
     has a syntax its normalizer checks. An identifier qualifies only under a scheme
-    with a check digit, a url only when `raw` is absolute (a relative reference resolves from any word), an enum only
-    over a schema.org enumeration, whose member names and phrases state its one property (an `ItemAvailability` member
-    is an availability), not over a type vocabulary, whose codes are common words (`kids`) a page's navigation also
-    writes, and a list as its item does. An enum value read through a pinned page term ("Sold") or stated unmapped
-    normalizes unchecked (`Ok.checked`), so it too is evidence only where the field's own source places it."""
+    with a check digit, a url only when `raw` is absolute (a relative reference resolves from any word), and a list as
+    its item does. An enum value a vocabulary maps, by a standard's name or the owner's terms alike, is checked; one
+    stated unmapped normalizes unchecked (`Ok.checked`), as any string would, so it is evidence only where the field's
+    own source places it. A mapped word a navigation also writes ("Kids") is told apart by where it stands (an array
+    row is its own item, `collect.admission`), never by which table maps it."""
     if spec.type is FieldType.LIST:
         return checkable(raw, _item(spec))
     if spec.type is FieldType.IDENTIFIER:
         return identifier.has_check_digit(spec)
-    if spec.type is FieldType.ENUM:
-        return spec.vocab is not None and spec.vocab.startswith("schema:")
     if spec.type in (FieldType.URL, FieldType.IMAGE_URL):
         return url.is_absolute(raw)
     return spec.type in _CHECKABLE
