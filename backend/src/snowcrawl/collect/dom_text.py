@@ -538,8 +538,19 @@ def _linked(block: _Block) -> bool:
 def _references(region: LexborNode) -> frozenset[str]:
     """The note references the region's text states: the text of its `sup` elements. HTML has no element for a
     footnote; a reference to one is its marker set in superscript where the text refers to it (HTML Standard §4.13.8,
-    §4.5.19 `sup`)."""
-    return frozenset(text for sup in region.css("sup") if (text := collapse(sup.text(deep=True))))
+    §4.5.19 `sup`), its punctuation aside (`_bare`)."""
+    return frozenset(text for sup in region.css("sup") if (text := _bare(collapse(sup.text(deep=True)))))
+
+
+def _bare(marker: str) -> str:
+    """A marker without the punctuation around it (Unicode general category P, UAX #44): `1.`, `(1)` and `[1]` are the
+    marker `1`."""
+    start, end = 0, len(marker)
+    while start < end and unicodedata.category(marker[start]).startswith("P"):
+        start += 1
+    while end > start and unicodedata.category(marker[end - 1]).startswith("P"):
+        end -= 1
+    return marker[start:end]
 
 
 def _notes(block: _Block, references: frozenset[str]) -> bool:
@@ -552,7 +563,7 @@ def _notes(block: _Block, references: frozenset[str]) -> bool:
     if not markers or None in markers:
         return False
     first = markers[0]
-    return first is not None and (_superscript(first) or first in references)
+    return first is not None and (_superscript(first) or _bare(first) in references)
 
 
 def _marker(line: str) -> str | None:

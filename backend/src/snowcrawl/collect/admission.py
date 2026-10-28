@@ -353,7 +353,7 @@ class _ItemScopes:
         """Whether a visible value of field `name` held by `holder` may be admitted: any but an enum's, and an enum's
         when `holder` states the page's item. Objects are told apart by identity, as the documents live through
         `admit`."""
-        if self._schema.fields[name].type is not FieldType.ENUM:
+        if _leaf(self._schema.fields[name]).type is not FieldType.ENUM:
             return True
         key = id(holder)
         if key not in self._states:
@@ -366,6 +366,13 @@ class _ItemScopes:
 # subproperties (sku, gtin, mpn, productID) an identifier field reads.
 _NAME = "name"
 _IDENTIFYING = frozenset({FieldType.IDENTIFIER, FieldType.URL})
+
+
+def _leaf(spec: FieldSpec) -> FieldSpec:
+    """The spec of a field's values: a list's item, as `normalize.dispatch.checkable` reads it."""
+    while spec.type is FieldType.LIST and spec.item is not None:
+        spec = spec.item
+    return spec
 
 
 def _identifies(spec: FieldSpec) -> bool:
