@@ -9,6 +9,7 @@ syntax, so parsing never fails.
 """
 
 import re
+from collections.abc import Mapping
 from typing import Literal, NamedTuple
 
 from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaContent
@@ -82,13 +83,14 @@ def target_types(schema: SchemaContent) -> tuple[str, ...]:
     return _roots(schema, grouped | {name for name, spec in schema.fields.items() if spec.required})
 
 
-def rooted_at(schema: SchemaContent, root: str) -> tuple[str, ...]:
-    """The schema's row fields every alternative of whose `schema_org` path starts at type `root`, sorted: for
-    `Offer`, the fields an item's schema.org Offer states (its price, its availability)."""
+def rooted_at(fields: Mapping[str, FieldSpec], root: str) -> tuple[str, ...]:
+    """The row fields of `fields` (a schema's, or a row-mapped list item's) every alternative of whose `schema_org`
+    path starts at type `root`, sorted: for `Offer`, the fields an item's schema.org Offer states (its price, its
+    availability)."""
     return tuple(
         sorted(
             name
-            for name, spec in schema.fields.items()
+            for name, spec in fields.items()
             if spec.schema_org and spec.scope == "row" and all(p.root == root for p in parse_paths(spec.schema_org))
         )
     )

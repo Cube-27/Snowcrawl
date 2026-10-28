@@ -492,15 +492,26 @@ def _read_and_resolve(source: _Source) -> tuple[_Page, FieldSet]:
 def states_offer(bundle: CaptureBundle, schema: SchemaDef, config: ConfigExecutor | None, *, data: EngineData) -> bool:
     """Whether the detail page in `bundle`, read by every collector and `config` and resolved for its target as
     `extract_page` resolves it before role C, publishes a field the schema reads from the item's schema.org Offer (its
-    price, its availability: `paths.rooted_at`). A page whose resolution raises states one: it is no evidence that a
-    render would. CPU work."""
-    offer = rooted_at(schema, OFFER)
+    price, its availability: `paths.rooted_at`), on the item or on one of its variants (a row-mapped list). A page
+    whose resolution raises states one: it is no evidence that a render would. CPU work."""
     try:
         _, fields = _read_and_resolve(_Source(bundle, schema, data, None, config))
     except Exception:  # resolution failing is the extraction's to report (`extract_page`), not the fetch's
         log.exception(_FAILED)
         return True
-    return any(_published(fields, name) for name in offer)
+    if any(_published(fields, name) for name in rooted_at(schema.fields, OFFER)):
+        return True
+    return any(_rows_state(fields, name, spec, OFFER) for name, spec in schema.fields.items() if spec.row_mapped)
+
+
+def _rows_state(fields: FieldSet, name: str, spec: FieldSpec, root: str) -> bool:
+    """Whether a published row-mapped list's rows state a value for one of its item's fields rooted at `root`."""
+    outcome = fields.get(name)
+    item = None if spec.item is None else spec.item.fields
+    if outcome is None or outcome.status != "published" or not item or not isinstance(outcome.value, list):
+        return False
+    rooted = rooted_at(item, root)
+    return any(isinstance(row, dict) and any(row.get(f) is not None for f in rooted) for row in outcome.value)
 
 
 # Why a listing gave no rows, as `no_rows: <cause>`:

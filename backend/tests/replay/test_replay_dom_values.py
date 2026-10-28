@@ -81,3 +81,24 @@ def test_a_page_states_an_offer_when_its_extraction_publishes_a_price_or_an_avai
         raw = f"<html><head>{og}</head><body>{body}</body></html>".encode()
 
         assert states_offer(capture(raw), SCHEMA, None, data=DATA) is offered, body
+
+
+def test_a_page_whose_variants_alone_state_their_prices_states_an_offer() -> None:
+    variant = {
+        "@type": "Product",
+        "sku": "W-{0}",
+        "offers": {"@type": "Offer", "price": "{0}.00", "priceCurrency": "USD"},
+    }
+    group = {
+        "@context": "https://schema.org",
+        "@type": "ProductGroup",
+        "name": "Synthetic Widget",
+        "hasVariant": [json.loads(json.dumps(variant).replace("{0}", n)) for n in ("10", "12")],
+    }
+    raw = f'<html><body><script type="application/ld+json">{json.dumps(group)}</script></body></html>'.encode()
+    fields = asyncio.run(extract_page(capture(raw), SCHEMA, None, None, data=DATA)).entity
+    assert fields is not None
+
+    # The rows state the prices the item as a whole does not (schema.org ProductGroup `hasVariant`).
+    assert (fields["price"].status != "published", fields["variants"].status) == (True, "published")
+    assert states_offer(capture(raw), SCHEMA, None, data=DATA) is True
