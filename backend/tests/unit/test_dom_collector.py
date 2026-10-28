@@ -377,6 +377,9 @@ def _values(body: str, schema: SchemaDef = SCHEMA) -> dict[str, list[object]]:
         "<ul><li><div>Brand</div><div>Example Brand</div></li><li><div>Other</div><div>x</div></li></ul>",  # siblings
         "<section><div>Brand</div><div>Example Brand</div></section>"
         "<section><div>Gender</div><div>Unisex</div></section>",
+        "<label>Brand <span>— Example Brand</span></label>",  # a dash and a space separate label and value
+        "<section><div>Brand</div><div>- Example Brand</div></section>"
+        "<section><div>Gender</div><div>Unisex</div></section>",
     ],
 )
 def test_two_column_structures_beyond_rows_and_description_lists_give_a_label_its_value(body: str) -> None:

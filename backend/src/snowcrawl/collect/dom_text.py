@@ -8,7 +8,9 @@ reviews, related items and the blocks outside the product container (`collect.pr
 - **Extension.** A block of prose whose text begins with a candidate another collector proposed for the field (the
   JSON-LD, microdata or Open Graph description, or its ellipsis-cut form) and goes on: it is the whole of what that
   candidate begins. A block that equals a candidate is its corroboration. Of the blocks that begin with it, the
-  outermost wins: a description's paragraphs are siblings, and the block holding them all is the description.
+  outermost wins: a description's paragraphs are siblings, and the block holding them all is the description. A block
+  holding several sections (two or more headings of its highest rank, HTML Standard §4.3.6) is not one: the
+  description's section ends where its sibling section (delivery and returns, an importer's address) begins.
 - **Labelled section.** The content that follows a heading (HTML Standard §4.3.6, WAI-ARIA `heading`) up to the next
   heading, or that a section names with `aria-label` or `aria-labelledby` (WAI-ARIA 1.2), when the label's words are
   one of the field's labels (`collect.labels`: its name, schema.org property, description and drafted synonyms), as
@@ -167,8 +169,11 @@ def _outermost(node: LexborNode, outside: frozenset[int]) -> bool:
     return node.mem_id in outside and (node.parent is None or node.parent.mem_id not in outside)
 
 
+_HEADING_TAGS = frozenset({"h1", "h2", "h3", "h4", "h5", "h6"})
+
+
 def _heading(node: LexborNode) -> bool:
-    return node.tag in {"h1", "h2", "h3", "h4", "h5", "h6"} or "heading" in tokens(node.attributes.get("role"))
+    return node.tag in _HEADING_TAGS or "heading" in tokens(node.attributes.get("role"))
 
 
 def _stated(candidate_: Candidate) -> str | None:
@@ -365,11 +370,32 @@ def _extending(blocks: _Blocks, stated: Sequence[tuple[str, str]]) -> _Block | N
     matching = {
         b.node.mem_id: b
         for b in blocks.blocks.values()
-        if any(is_cut_of(form, b.form, word_boundary=True) for _, form in stated)
+        if any(is_cut_of(form, b.form, word_boundary=True) for _, form in stated) and not _sections(b.node)
     }
     equal = [b for b in matching.values() if solid(b.form) in solids]
     outer = [b for b in matching.values() if not any(a.mem_id in matching for a in _ancestors(b.node, blocks.region))]
     return _only(equal) or _only(outer)
+
+
+def _sections(node: LexborNode) -> bool:
+    """Whether the element holds several sections: two or more headings of the highest rank it holds (HTML Standard
+    §4.3.6: a heading of the same or a higher rank than the one before it starts a new section, as a disclosure list's
+    titled panels do). What extends a stated value is one section; its next sibling section (a delivery and returns
+    panel after the description's) is another one's."""
+    ranks = [_rank(heading) for heading in node.css(_HEADING)]
+    return bool(ranks) and ranks.count(min(ranks)) > 1
+
+
+# WAI-ARIA 1.2 `heading`: an `aria-level` that is no positive integer is the default level, 2.
+_DEFAULT_LEVEL = 2
+
+
+def _rank(heading: LexborNode) -> int:
+    """A heading's rank, 1 the highest: an `h1`-`h6` element's number (HTML Standard §4.3.6), else its `aria-level`."""
+    if heading.tag in _HEADING_TAGS:
+        return int(heading.tag[1])
+    level = (heading.attributes.get("aria-level") or "").strip()
+    return int(level) if level.isdigit() and int(level) > 0 else _DEFAULT_LEVEL
 
 
 def _full(stated: Sequence[tuple[str, str]]) -> list[str]:

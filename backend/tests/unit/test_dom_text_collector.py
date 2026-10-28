@@ -70,6 +70,13 @@ def test_block_extending_a_summary_is_the_description() -> None:
     assert found == {"description": f"{FIRST}\n{SECOND}"}
 
 
+def test_the_description_ends_where_a_sibling_section_of_its_heading_rank_begins() -> None:
+    panel = '<div class="panel"><h3>{}</h3><div><p>{}</p></div></div>'
+    sections = panel.format("Details", f"{FIRST} {SECOND}") + panel.format("Delivery", "Orders ship in two days.")
+    body = f"<main><h1>Kettle</h1><div>{sections}</div></main>"
+    assert _read(body, _stated("og", SUMMARY)) == {"description": f"{FIRST} {SECOND}"}
+
+
 def test_review_and_tangential_blocks_are_not_the_description() -> None:
     body = (
         "<main><h1>Kettle</h1>"

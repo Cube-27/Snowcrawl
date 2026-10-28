@@ -13,6 +13,8 @@ Reasoning for a single change goes in its PR body.
   never executed. Why: accuracy and auditability.
 - **Every crawl extracts fresh.** Learning keeps selectors and cookies, never values.
 - **Numbers as JSON numbers.** Money and ratings are numbers; decimals may be rounded; the meaning of page data is never rewritten.
+- **Published URLs are absolute.** A url or image_url publishes in the page's spelling, resolved against the document
+  base (RFC 3986 §5.2). Why: a relative or protocol-relative reference (`//cdn…`, `/media/…`) is unusable off the page.
 - **Price is never skipped.** An unclear currency never drops a price: page evidence, else the URL locale/subdomain/ccTLD
   (flagged), else the symbol's CLDR primary currency (`$` = USD, flagged), else null. Contested amounts are conflicts.
 - **Variants.** Values that vary publish only in `variants` rows (2 or more variants); a top-level field publishes only a
