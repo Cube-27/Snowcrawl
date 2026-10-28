@@ -20,7 +20,7 @@ from snowcrawl.collect.scope import LISTS, RELATIONS
 from snowcrawl.normalize import money
 from snowcrawl.normalize.base import Ok
 from snowcrawl.normalize.dispatch import equal, equality_key
-from snowcrawl.normalize.url_key import DocumentKey, document_key
+from snowcrawl.normalize.url_key import DocumentKey, document_key, refined_by
 from snowcrawl.resolve.check_digits import CHECK_DIGIT_CHANCE, chance_passes
 from snowcrawl.resolve.evidence import BELOW_MIN_CONFIDENCE, Calibration, assess
 from snowcrawl.resolve.identity import VARIANT
@@ -45,7 +45,6 @@ _NO_ROWS = ("no_rows", "no_row_key", "row_key_conflict", "key_unpublished", "url
 # an Offer's `url` names where it is offered, not the item.
 URL_ONLY: Final = "url_only"
 OTHER_PAGE: Final = "other_page"
-_URL = FieldSpec(type=FieldType.URL)
 # Owner, 2026-10-16 (Appendix A #48): a product without variants has no variant list; the list is published only for
 # two or more variants, and one row's values publish at the top level by the common-value rule.
 _MIN_ROWS = 2
@@ -328,23 +327,24 @@ def _key_value(candidate: Candidate, excluded: frozenset[str]) -> JsonValue:
 
 
 def _not_keys(row_field: RowField) -> tuple[frozenset[str], frozenset[str]]:
-    """URLs that name the page or the target, not one variant: the page URLs but one addressing a variant
-    (`_addressing`) and the target's own URLs; and the target's URLs that one of its Offers repeats. `Entity.urls`
-    includes the Offers' URLs, so a URL both declare is either the target's or an Offer's: `_without_group_urls` decides
-    by how many rows carry it."""
+    """URLs that name the page or the target, not one variant: the page URLs but those the URL addressing a variant
+    refines (`_addressing`, `url_key.refined_by`) and the target's own URLs; and the target's URLs that one of its
+    Offers repeats. `Entity.urls` includes the Offers' URLs, so a URL both declare is either the target's or an
+    Offer's: `_without_group_urls` decides by how many rows carry it."""
     graph, target = row_field.graph, row_field.target
     # An AggregateOffer is no offer of one item: a URL it repeats is not one row's.
     offers = {u for e in graph.offers(target) for u in e.urls}
     own = [u for u in target.urls if u not in offers]
     addressing = _addressing(row_field)
-    pages = [u for u in row_field.page_urls if addressing is None or not equal(u, addressing, _URL)]
+    pages = [u for u in row_field.page_urls if addressing is None or not refined_by(u, addressing)]
     return frozenset((*pages, *own)), frozenset(u for u in target.urls if u in offers)
 
 
 def _addressing(row_field: RowField) -> str | None:
     """The request URL when it addresses one variant of the target: it has a query (RFC 3986 §3.4: the query may
-    select a variant of the resource its path names) and is no URL of the item itself. A row stating it as its own URL
-    (schema.org `url` of a variant or its Offer) is that variant, the one the page shows, so it keys that row."""
+    select a variant of the resource its path names) and is no URL of the item itself. A row stating as its own URL
+    (schema.org `url` of a variant or its Offer) one the request URL refines (`url_key.refined_by`: its pairs all
+    among the request's) is that variant, the one the page shows, so it keys that row."""
     url = row_field.page.request_url
     return url if urlsplit(url).query and not names_item(row_field.target, url) else None
 
@@ -609,15 +609,24 @@ _SELECTING = frozenset({FieldType.IDENTIFIER, FieldType.TEXT})
 def _selected(items: Sequence[RowOutcome], sub_fields: Mapping[str, FieldSpec], request_url: str) -> RowOutcome | None:
     """The row the request URL selects: the one row that every URL part naming a row names (`_url_parts`). A part
     names a row when it equals one of the row's stated identifiers or option values (`_SELECTING`); the request URL
-    itself names a row whose own URL it is (schema.org `url` of a `hasVariant` member or of its Offer: the page showing
-    that variant). None when no part names a row, or the parts leave more or fewer than one; a part that only contains
-    a row's value names nothing. Parts are matched by value, never by the parameter's name."""
+    itself names a row whose own URL it refines (schema.org `url` of a `hasVariant` member or of its Offer: the page
+    showing that variant; `_names_request`). None when no part names a row, or the parts leave more or fewer than
+    one; a part that only contains a row's value names nothing. Parts are matched by value, never by the parameter's
+    name."""
     stating = {sub: spec for sub, spec in sub_fields.items() if spec.type in _SELECTING and _names_a_value(spec)}
     urls = {sub: spec for sub, spec in sub_fields.items() if spec.type is FieldType.URL}
     named = [{i for i, row in enumerate(items) if _states(row, stating, part)} for part in _url_parts(request_url)]
-    named.append({i for i, row in enumerate(items) if _states(row, urls, request_url)})
+    named.append({i for i, row in enumerate(items) if _names_request(row, urls, request_url)})
     common = set.intersection(*(rows for rows in named if rows)) if any(named) else set()
     return items[common.pop()] if len(common) == 1 else None
+
+
+def _names_request(row: RowOutcome, urls: Mapping[str, FieldSpec], request_url: str) -> bool:
+    """Whether the row states a URL the request URL refines (`url_key.refined_by`): the same document, and every query
+    pair of the row's URL among the request's (RFC 3986 §3.4), so a pair the request adds, whatever its name, still
+    shows that row's variant. A row URL without a query names the product, not one variant, so only the request URL
+    itself matches it."""
+    return any(isinstance(value, str) and refined_by(value, request_url) for _, value in _stated(row, urls))
 
 
 def _names_a_value(spec: FieldSpec) -> bool:

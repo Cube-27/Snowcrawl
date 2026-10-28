@@ -67,6 +67,18 @@ def item_key(url: str, base: str | None = None) -> ItemKey | None:
     return (parts.scheme, parts.netloc, parts.path.removesuffix("/")), pairs
 
 
+def refined_by(url: str, other: str) -> bool:
+    """Whether `other` names the item `url` names, or that item refined (module docstring's keys): one document, and
+    `url`'s query pairs all among `other`'s, as a multiset (RFC 3986 §3.4: a query selects within the resource; WHATWG
+    URL Standard, application/x-www-form-urlencoded parsing). A pair `other` adds, whatever its name, narrows or
+    annotates the same item; a `url` without a query names the document, not one item in it, so it is refined by no
+    URL with a query. Neither URL resolves against a base."""
+    mine, theirs = item_key(url), item_key(other)
+    if mine is None or theirs is None or mine[0] != theirs[0]:
+        return False
+    return mine[1] == theirs[1] or (bool(mine[1]) and Counter(mine[1]) <= Counter(theirs[1]))
+
+
 def session_parameters(row_urls: Collection[str], page_urls: Iterable[str]) -> frozenset[str]:
     """The names of the query parameters that carry no item identity on a listing page: each of two or more row URLs
     carries the parameter once and with one same value, and none of the page's own URLs (`collect.run`'s `page_urls`)
