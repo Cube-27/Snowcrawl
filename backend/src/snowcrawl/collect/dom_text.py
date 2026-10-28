@@ -163,6 +163,11 @@ class _Blocks:
         span = self.page.text_spans.get(node_xpath(node))
         return self.page.cleaned_text.text[span[0] : span[1]].strip() if span else ""
 
+    def only_links(self, node: LexborNode) -> bool:
+        """Whether every line of the element's text is only a link: a control (`CleanedText.only_links`), no prose."""
+        span = self.page.text_spans.get(node_xpath(node))
+        return span is not None and self.page.cleaned_text.only_links(*span)
+
 
 def _ancestors(node: LexborNode, region: LexborNode) -> Iterator[LexborNode]:
     parent = node.parent
@@ -243,13 +248,14 @@ def _continued(blocks: _Blocks, stated: Candidate) -> _Block | None:
 
 
 def _going_on(blocks: _Blocks, element: LexborNode) -> Iterator[str]:
-    """The texts of the element's following siblings that are prose or headings, up to the first that is neither or
-    that states (or holds an element stating) another property or item. An element that is the last of its parent's
-    goes on with its parent's following siblings, up to the element that opens the item's scope (`_continuing`)."""
+    """The texts of the element's following siblings that are prose or headings, up to the first that is neither, that
+    is only a link (a control after the text), or that states (or holds an element stating) another property or item.
+    An element that is the last of its parent's goes on with its parent's following siblings, up to the element that
+    opens the item's scope (`_continuing`)."""
     for sibling in _continuing(blocks, element):
         if not sibling.is_element_node:
             continue
-        if _states_items(sibling) or sibling.mem_id in blocks.apart:
+        if _states_items(sibling) or sibling.mem_id in blocks.apart or blocks.only_links(sibling):
             return
         raw = blocks.text(sibling)
         if raw and not (_heading(sibling) or blocks.prose(sibling) is not None):

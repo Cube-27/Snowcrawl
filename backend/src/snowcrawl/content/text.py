@@ -121,6 +121,11 @@ class CleanedText:
             return start, end
         return lines[first][0], lines[last - 1][1]
 
+    def only_links(self, start: int, end: int) -> bool:
+        """Whether the span `[start, end)` holds text and every line of it is wholly a shown link's text."""
+        lines = _line_spans(self.text, start, end)
+        return bool(lines) and all(self._link_line(*line) for line in lines)
+
     def _link_line(self, start: int, end: int) -> bool:
         starts, ends = self._links
         at = bisect_right(starts, start) - 1

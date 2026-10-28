@@ -223,6 +223,12 @@ def test_an_element_valued_description_goes_on_over_its_sibling_sections_in_its_
         ParsedPage(f"<html><body>{nested}</body></html>"), _schema(), CTX, (stated,)
     )
     assert [c.normalized for c in nested_found.candidates] == [Ok(FIRST)]
+    # A sibling that is only a link is a control after the text: the text ends before it.
+    linked = body.replace("<section><h2>", '<p><a href="/jobs">All jobs</a></p><section><h2>')
+    linked_found = DescriptionCollector().collect(
+        ParsedPage(f"<html><body>{linked}</body></html>"), _schema(), CTX, (stated,)
+    )
+    assert [c.normalized for c in linked_found.candidates] == [Ok(FIRST)]
     # Out of wrappers holding nothing after it, inside the item; its own heading names it, it is no text.
     wrapped = body.replace(
         f'<section itemprop="description"><p>{FIRST}</p></section>',
