@@ -557,6 +557,11 @@ def _agreeing(outcome: FieldOutcome, shared: FieldOutcome, spec: FieldSpec) -> F
 
 
 def _same(a: JsonValue, b: JsonValue, spec: FieldSpec) -> bool:
-    """Whether two values state one value of the field; two prices of one amount do, whatever currencies they state
-    (C7: an unclear currency is not a rival price)."""
-    return money.same_amount([a, b]) if spec.type is FieldType.MONEY else equal(a, b, spec)
+    """Whether two values state one value of the field; two prices do when they state one amount and no two different
+    currencies (C7: an unclear currency is not a rival price, but two stated currencies are two prices)."""
+    if spec.type is not FieldType.MONEY:
+        return equal(a, b, spec)
+    x, y = money.amount_and_currency(a), money.amount_and_currency(b)
+    if x is None or y is None:
+        return False
+    return x[0] == y[0] and (x[1] == y[1] or None in (x[1], y[1]))
