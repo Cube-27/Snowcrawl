@@ -150,6 +150,7 @@ async def fetch_task(
         fetch=by_sources,
         custom=custom,
         trial=page_task.trial,
+        offered=None if records is None else records.offered,
     )
     try:
         fetched, further = await _fetched(engine, fetching, page_task, plan, waiting)

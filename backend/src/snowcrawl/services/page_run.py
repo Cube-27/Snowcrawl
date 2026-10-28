@@ -26,7 +26,7 @@ from snowcrawl.core.capture import BlockClass
 from snowcrawl.core.retry import backoff_delay
 from snowcrawl.db.models import CaptureId, FinishedOutcome
 from snowcrawl.db.queue import ClaimedTask, Failed, Finished
-from snowcrawl.resolve.pipeline import EngineData, RoleC, extract_page
+from snowcrawl.resolve.pipeline import EngineData, RoleC, extract_page, states_offer
 from snowcrawl.resolve.task import ActiveConfig, StoredRecord
 from snowcrawl.resolve.types import ExtractionResult
 from snowcrawl.schemas.types import SchemaDef
@@ -44,6 +44,7 @@ from snowcrawl.services.records import RecordField, page_fields
 from snowcrawl.services.scrape_request import RenderOptions
 from snowcrawl.services.stored_captures import NotCached, Recent, recent_capture, reread
 from snowcrawl.storage.base import ObjectStore
+from snowcrawl.storage.capture_bundle import CaptureBundle
 
 # The outcomes of a page the fetch reached.
 ReachedOutcome = Literal[
@@ -127,6 +128,12 @@ class Records:
     config: ActiveConfig | None
     margins: DriftMargins | None
     render: RenderOptions | None = None
+
+    def offered(self, bundle: CaptureBundle) -> bool:
+        """Whether the page in `bundle` publishes a field the schema reads from the item's Offer, extracted with the
+        site's config for that capture as `extract_run` extracts it, before role C (`resolve.pipeline.states_offer`)."""
+        config = None if self.config is None else self.config.for_capture(bundle.manifest, self.data.adapters)
+        return states_offer(bundle, self.schema, None if config is None else config.executor, data=self.data)
 
 
 @dataclass(frozen=True)

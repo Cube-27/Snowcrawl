@@ -11,7 +11,7 @@ from typing import get_args
 
 from snowcrawl.acquire.api import JsonRequest
 from snowcrawl.acquire.memory import Lesson, Remembered, lesson
-from snowcrawl.acquire.rungs import BROWSER_MIN_S, FetchPlan, Rungs, acquire
+from snowcrawl.acquire.rungs import BROWSER_MIN_S, FetchPlan, Offered, Rungs, acquire
 from snowcrawl.acquire.session import ENGINE
 from snowcrawl.acquire.types import FetchPolicy, FetchResult
 from snowcrawl.adapters.base import AdapterMatch, PageRefs, Shape
@@ -21,6 +21,7 @@ from snowcrawl.core.ids import uuid7
 from snowcrawl.db.models import FetchMethod, JobId, PageKind, UrlTaskId
 from snowcrawl.db.queue import ClaimedTask, Finished
 from snowcrawl.services.page_task import queued_end
+from snowcrawl.storage.capture_bundle import CaptureBundle
 from tests.support.captures import ScriptedRung
 
 URL = "https://shop.example.test/item/1"
@@ -42,10 +43,12 @@ class Web:
 
     recipe: ScriptedRung | None = None
 
-    def acquire(self, policy: FetchPolicy | None = None, remembered: FetchMethod = "http") -> FetchResult:
+    def acquire(
+        self, policy: FetchPolicy | None = None, remembered: FetchMethod = "http", offered: Offered | None = None
+    ) -> FetchResult:
         rungs = Rungs(http=self.http, browser=self.browser)
         memory = Remembered(remembered)
-        return asyncio.run(acquire(URL, policy or FetchPolicy(), memory, rungs, recipe=self.recipe))
+        return asyncio.run(acquire(URL, policy or FetchPolicy(), memory, rungs, recipe=self.recipe, offered=offered))
 
 
 def web(
@@ -150,24 +153,66 @@ def test_the_browser_is_tried_exactly_for_the_block_classes_of_the_table() -> No
 
 
 _LD = '<script type="application/ld+json">{}</script>'
-# A detail page whose server markup states its product without an offer, and its render, whose script states one.
+_OG = '<meta property="og:title" content="Kettle">'
+# Detail pages: one whose server markup states its product without an offer, one stating only Open Graph tags, one
+# whose structured data states an offer out of stock (no price), and a render whose script states the offer.
 STUB = ("<html><body>" + _LD.format('{"@type": "Product", "name": "Kettle"}') + "</body></html>").encode()
+# Text and links enough not to be a shell (`classify`).
+_SHOWN = "<h1>Kettle</h1><p>" + "A kettle. " * 30 + "</p>" + "".join(f'<a href="/p/{i}">p{i}</a>' for i in range(6))
+OG_ONLY = f"<html><head>{_OG}</head><body>{_SHOWN}</body></html>".encode()
+SOLD = (
+    "<html><body>"
+    + _LD.format('{"@type": "Product", "offers": {"availability": "https://schema.org/OutOfStock"}}')
+    + "</body></html>"
+).encode()
 OFFERED = (
     "<html><body>" + _LD.format('{"@type": "Product", "name": "Kettle", "offers": {"price": "9"}}') + "</body></html>"
 ).encode()
+# A page whose extraction publishes a price from its DOM or script state (`Offered`), here told by its text.
+DOM_PRICE = b"<html><head></head><body><h1>Kettle</h1><p>$9.00</p></body></html>"
+OFFER_POLICY = FetchPolicy(page_kind="detail", target_types=("Offer", "Product"))
+
+
+def _shows_price(bundle: CaptureBundle) -> bool:
+    return b"$9.00" in bundle.body
+
+
+def _offer_web(http: bytes, rendered: bytes) -> Web:
+    return Web(ScriptedRung("http", "ok", body=http), ScriptedRung("browser", "ok", body=rendered))
 
 
 def test_a_detail_page_stating_no_offer_is_rendered_once_and_the_render_kept_only_when_it_states_one() -> None:
-    policy = FetchPolicy(page_kind="detail", target_types=("Offer", "Product"))
-    for rendered, kept in ((OFFERED, "browser"), (STUB, "http")):
-        stubs = Web(ScriptedRung("http", "shell", body=STUB), ScriptedRung("browser", "ok", body=rendered))
+    for http in (STUB, OG_ONLY):
+        for rendered, kept in ((OFFERED, "browser"), (DOM_PRICE, "browser"), (http, "http")):
+            stubs = _offer_web(http, rendered)
 
-        result = stubs.acquire(policy)
+            result = stubs.acquire(OFFER_POLICY, offered=_shows_price)
 
-        assert (result.method, result.block_class, len(stubs.browser.calls)) == (kept, "ok", 1)
-        assert _attempts(result) == [("http", "shell"), ("browser", "ok")]
-        # Memory learns the browser start only from a render that did better.
-        assert lesson(result) == (Lesson("browser", engine=ENGINE) if kept == "browser" else Lesson("http"))
+            assert (result.method, result.block_class, len(stubs.browser.calls)) == (kept, "ok", 1)
+            assert _attempts(result) == [("http", "shell"), ("browser", "ok")]
+            # Memory learns the browser start only from a render that did better.
+            assert lesson(result) == (Lesson("browser", engine=ENGINE) if kept == "browser" else Lesson("http"))
+
+
+def test_a_page_stating_its_offer_or_not_read_as_a_detail_page_for_one_is_not_rendered() -> None:
+    no_page_kind = FetchPolicy(target_types=OFFER_POLICY.target_types)
+    cases = (
+        (DOM_PRICE, OFFER_POLICY),  # a price its DOM or script state shows
+        (SOLD, OFFER_POLICY),  # an offer out of stock, stating no price
+        (OG_ONLY, OFFER_POLICY.model_copy(update={"page_kind": "listing"})),
+        (OG_ONLY, no_page_kind),
+        (OG_ONLY, OFFER_POLICY.model_copy(update={"target_types": ("JobPosting",)})),
+        (OG_ONLY, OFFER_POLICY.model_copy(update={"method_hint": "http"})),
+    )
+    for http, policy in cases:
+        stubs = _offer_web(http, OFFERED)
+
+        result = stubs.acquire(policy, offered=_shows_price)
+
+        assert (result.method, result.block_class, stubs.browser.calls) == ("http", "ok", []), (http, policy)
+    # A fetch handed no reading of the page's offer renders none either.
+    stubs = _offer_web(OG_ONLY, OFFERED)
+    assert (stubs.acquire(OFFER_POLICY).method, stubs.browser.calls) == ("http", [])
 
 
 def test_no_browser_retry_starts_too_close_to_the_deadline() -> None:

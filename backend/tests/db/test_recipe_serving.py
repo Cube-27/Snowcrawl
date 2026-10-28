@@ -41,8 +41,10 @@ from tests.db.support import Web as SharedWeb
 pytestmark = pytest.mark.anyio
 
 # The page's heading is not the product's name, so a value read from the page and one from the API differ.
+# It shows its price, so the ladder renders it for no missing offer (`acquire.rungs._offerless`).
 PAGE = b"""<!doctype html><html lang="en"><head><title>Lamps</title></head>
-<body><main><h1>Lamp page</h1><p>A lamp that lights a desk.</p><a href="/p/other-lamp">Another lamp</a></main></body>
+<body><main><h1>Lamp page</h1><p>A lamp that lights a desk.</p>
+<p>$19.50</p><a href="/p/other-lamp">Another lamp</a></main></body>
 </html>"""
 # The API's answer states the product it was asked for (its slug), as the identity check requires.
 PRODUCT = {"data": {"slug": "desk-lamp", "name": "Desk Lamp", "price": 19.5, "currency": "EUR"}}
