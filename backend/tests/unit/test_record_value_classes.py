@@ -81,3 +81,22 @@ def test_a_pass_among_mostly_failing_same_length_values_at_one_path_is_by_chance
 
     assert chance_passes("variants", sub_fields, [*eight, *thirteen]) == [eight[2]]
     assert chance_passes("variants", sub_fields, [_gtin("10000007", 0), _gtin("10000014", 1), eight[0]]) == []
+
+
+def test_a_printed_isbn_counts_by_its_digits() -> None:
+    isbn = FieldSpec(type=FieldType.IDENTIFIER, scheme="isbn")
+    printed = [
+        Candidate(
+            field="variants.isbn",
+            entity_id=f"jsonld:0:$['offers'][{n}]",
+            source_kind="jsonld",
+            raw=raw,
+            normalized=normalize(raw, isbn, CTX),
+            locator=f"jsonld:0:$['offers'][{n}]['isbn']",
+            independent=True,
+        )
+        for n, raw in enumerate(["ISBN 0-306-40615-1", "0-306-40615-3", "0-306-40615-2"])
+    ]
+    assert isinstance(printed[2].normalized, Ok)
+
+    assert chance_passes("variants", {"isbn": isbn}, printed) == [printed[2]]

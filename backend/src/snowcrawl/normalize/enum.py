@@ -114,8 +114,11 @@ def _type_code(raw: Raw, name: str, ctx: Context) -> NormalizeResult:
         return Invalid("not_a_string")
     if has_surrogate(raw):
         return Invalid("surrogate")
-    # A schema.org IRI names its term (schema.org, "Data model"): `https://schema.org/Male` states the term `Male`.
+    # A schema.org IRI names its term (schema.org, "Data model"): `https://schema.org/Male` states the term `Male`. A
+    # term is one path segment, so `https://schema.org/Male/Other` names none.
     term = _schema_term(raw.strip())
+    if term is not None and "/" in term:
+        return Invalid("no_match")
     text = raw if term is None else term
     if not vocab.tokens(text):
         return Invalid("empty")

@@ -126,7 +126,10 @@ def test_a_schema_org_gender_iri_states_its_code(raw: object, code: str) -> None
     assert enum.normalize(raw, GENDER, CTX) == Ok(code)  # type: ignore[arg-type]
 
 
-@pytest.mark.parametrize("raw", ["Men's", "Women", "toddler", "https://example.test/male", "female and more"])
+@pytest.mark.parametrize(
+    "raw",
+    ["Men's", "Women", "toddler", "https://example.test/male", "https://schema.org/Male/Other", "female and more"],
+)
 def test_a_word_the_gender_sources_do_not_list_states_no_code(raw: str) -> None:
     assert enum.normalize(raw, GENDER, CTX) == Invalid("no_match")
 

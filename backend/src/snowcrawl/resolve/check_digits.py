@@ -22,6 +22,9 @@ CHECK_DIGIT_CHANCE: Final = "check_digit_chance"
 # A list index in a locator's path (RFC 9535 index selector, `[3]`): the rows' values at one path differ only there.
 _INDEX = re.compile(r"\[\d+\]")
 _CHECK_FAILED = Invalid("check_digit")
+_ISBN_PREFIX = re.compile(r"\AISBN\s+")
+_ISBN_SEPARATORS = re.compile(r"[- ]")
+_DIGITS = re.compile(r"\d+[Xx]?", re.ASCII)
 
 
 def chance_passes(name: str, sub_fields: Mapping[str, FieldSpec], candidates: Sequence[Candidate]) -> list[Candidate]:
@@ -50,11 +53,13 @@ def _same_path_and_length(
 
 
 def _digits(c: Candidate) -> str | None:
-    """The candidate's raw value as a string of ASCII digits (a JSON integer as its decimal digits), else None."""
+    """The candidate's raw value as its ASCII digits (a JSON integer as its decimal digits; an ISBN as printed, without
+    its prefix and separators, its `X` check character kept), else None."""
     raw = c.raw
     if isinstance(raw, int) and not isinstance(raw, bool):
         raw = str(raw)
     if not isinstance(raw, str):
         return None
-    digits = raw.strip()
-    return digits if digits.isascii() and digits.isdigit() else None
+    # ISO 2108: a printed ISBN may carry the "ISBN" prefix, hyphens or spaces, and `X` as its check character.
+    digits = _ISBN_SEPARATORS.sub("", _ISBN_PREFIX.sub("", raw.strip(), count=1))
+    return digits if _DIGITS.fullmatch(digits) else None
