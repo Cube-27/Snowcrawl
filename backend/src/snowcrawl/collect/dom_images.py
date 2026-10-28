@@ -20,6 +20,10 @@ landmark, WAI-ARIA 1.2, else the document's one `article`), outside the region's
   path, else its first image named after the main image's file (`images.same_family`), a source several blocks give (a
   placeholder) left out; none when a block links to another document (cards) or fewer than two images remain
   (`_gallery`). A slide need not be shown: a carousel hides its slides but the current one.
+- **The largest copy.** The main image and each slide publish at the largest rendition of their file
+  (`images.same_file`, `images.largest_rendition`) any `img` or `picture` `source` of the region states (`Copies`): a
+  thumbnail strip, the slides, a zoom layer and a grid state one image at their own sizes, and the first read may be
+  the smallest.
 - **An image's source.** Its `src`, unless its `srcset` leaves `src` out of its source set (HTML Standard §4.8.4.3:
   width descriptors, or a candidate of pixel density 1, which a candidate without a descriptor is): then the widest
   candidate, else the densest (a `2x` candidate is a larger rendition of the image a `1x` one shows). A lazy loader
@@ -45,7 +49,7 @@ from snowcrawl.content.regions import DIALOG, DIALOG_ROLES, TANGENTIAL, main_reg
 from snowcrawl.content.repeats import MIN_REPEATS
 from snowcrawl.content.text import shown
 from snowcrawl.normalize.base import Context, Ok
-from snowcrawl.normalize.images import same_family, same_file
+from snowcrawl.normalize.images import preferred_rendition, same_family, same_file
 from snowcrawl.normalize.url import canonical_url, media_type
 from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
 
@@ -115,11 +119,43 @@ def image_found(
     if found is None:
         return
     image, source, apart = found
-    yield from ((name, source, node_xpath(image), None) for name in fields)
+    copies = Copies.of(region, base)
+    shown_at, source = copies.largest(image, source)
+    yield from ((name, source, node_xpath(shown_at), None) for name in fields)
     gallery = _gallery(image, region, links, apart, base) if lists else None
     if gallery is not None:
-        views: list[JsonValue] = [*gallery[1]]
+        views: list[JsonValue] = list(dict.fromkeys(copies.largest(image, view)[1] for view in gallery[1]))
         yield from ((name, views, node_xpath(gallery[0]), None) for name in lists)
+
+
+@dataclass(frozen=True, slots=True)
+class Copies:
+    """Every image source a region states, by element: an `img`'s (`image_source`) and its `picture`'s `source`
+    elements' (HTML Standard §4.8.2: alternative sources of the one image). The same file at another rendition
+    (`images.same_file`) is the same image: a thumbnail strip, the slides, a zoom layer and a grid each state it at
+    their own size."""
+
+    stated: tuple[tuple[LexborNode, str, str], ...]
+
+    @classmethod
+    def of(cls, region: LexborNode, base: str | None) -> "Copies":
+        found = ((node, image_source(node.attributes)) for node in region.css(_COPIES))
+        return cls(tuple((n, s, a) for n, s in found if s is not None and (a := canonical_url(s, base)) is not None))
+
+    def largest(self, element: LexborNode, source: str) -> tuple[LexborNode, str]:
+        """The element stating the source's file at its largest rendition (`images.preferred_rendition`), and that
+        source as written; the element and source themselves when no other states it larger."""
+        own = next(((n, s, a) for n, s, a in self.stated if s == source), None)
+        if own is None:
+            return element, source
+        found = [own, *(c for c in self.stated if c[2] != own[2] and same_file(c[2], own[2]))]
+        chosen = preferred_rendition([a for _, _, a in found])
+        node, written, _ = next(c for c in found if c[2] == chosen)
+        return (element, source) if chosen == own[2] else (node, written)
+
+
+# An `img`, and the `source` elements of a `picture` (HTML Standard §4.8.1, §4.8.2).
+_COPIES = "img, picture > source"
 
 
 def _image_fields(schema: SchemaDef) -> dict[str, FieldSpec]:

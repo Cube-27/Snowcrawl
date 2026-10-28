@@ -161,30 +161,42 @@ _NUMBER = re.compile(r"(?<![\d.])\d{1,9}(?![\d.])")
 
 
 def largest_rendition(values: Sequence[str]) -> int:
-    """The index of the largest of renditions of one file (`resource_key`), or 0 when not every one states its size.
+    """The index of the largest of renditions of one file (`resource_key`), or 0 when none is shown larger.
 
     A rendition states its size in what `resource_key` sets aside: the path's dimension segments, size suffix and
     options, and query parameters (RFC 3986 §3.4) every rendition states with a decimal value that differ between them
     (a parameter equal in all, such as a version stamp, says nothing of size, and one only some state, such as a scale
-    factor, compares with no other). Its size is the largest such number; of equal sizes
-    the first wins. A rendition stating none may be the unresized file or a default one, so nothing is ranked then."""
+    factor, compares with no other). When every rendition states as many sizes, read alike (the path's in order, the
+    query's by name), the largest is one at least as large in each as every other: a rendition larger in one size and
+    smaller in another (`1200x630` beside `1000x1000`) is another crop of the file, such as the card an Open Graph
+    `og:image` is cut to (Open Graph protocol, "Structured Properties": `og:image:width`, `og:image:height`), not a
+    larger copy, so none is largest then. Else a rendition's size is the largest number it states. Of equal sizes the
+    first wins. A rendition stating none may be the unresized file or a default one, so nothing is ranked then."""
     sizes = [_stated_size(value, values) for value in values]
-    if not sizes or None in sizes:
+    if not sizes or not all(sizes):
         return 0
-    known = [size for size in sizes if size is not None]
-    return known.index(max(known))
+    if len({len(size) for size in sizes}) > 1:
+        longest = [max(size) for size in sizes]
+        return longest.index(max(longest))
+    return next((i for i, size in enumerate(sizes) if all(_covers(size, other) for other in sizes)), 0)
 
 
-def _stated_size(value: str, renditions: Sequence[str]) -> int | None:
+def _covers(size: tuple[int, ...], other: tuple[int, ...]) -> bool:
+    return all(mine >= theirs for mine, theirs in zip(size, other, strict=True))
+
+
+def _stated_size(value: str, renditions: Sequence[str]) -> tuple[int, ...]:
+    """The sizes a rendition states (`largest_rendition`): the path's in order, then the varying query's by name."""
     parts = urlsplit(value)
     path = parts.path
     stated = [m.group() for m in (_SIZE_SUFFIX.search(path), _OPTIONS.search(path)) if m is not None]
     stated += [segment for segment in path.split("/") if _rendition(segment)]
     query = _numeric_query(parts.query)
     others = [_numeric_query(urlsplit(r).query) for r in renditions]
-    varying = [v for name, v in query.items() if all(name in o for o in others) and any(o[name] != v for o in others)]
-    numbers = [int(n) for text in stated for n in _NUMBER.findall(text)] + varying
-    return max(numbers) if numbers else None
+    varying = [
+        v for name, v in sorted(query.items()) if all(name in o for o in others) and any(o[name] != v for o in others)
+    ]
+    return (*(int(n) for text in stated for n in _NUMBER.findall(text)), *varying)
 
 
 def _numeric_query(query: str) -> dict[str, int]:

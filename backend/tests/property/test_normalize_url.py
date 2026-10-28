@@ -172,6 +172,18 @@ def test_renditions_an_image_server_writes_into_the_path_name_one_file(rendition
     assert not images.same_file("https://cdn.example.test/a.jpg", "https://cdn.example.test/i/a.jpg")
 
 
+_SIDES = st.integers(min_value=1, max_value=4000)
+
+
+@given(_SIDES, _SIDES, _SIDES, _SIDES)
+def test_a_rendition_is_larger_only_when_it_is_at_least_as_large_in_every_size(w: int, h: int, x: int, y: int) -> None:
+    file = "https://cdn.example.test/i/7/a.jpg?v=3&fit=crop"
+    first, other = f"{file}&w={w}&h={h}", f"{file}&h={y}&w={x}"
+
+    # Another crop (larger in one size, smaller in the other) never replaces the first rendition; a larger copy does.
+    assert images.largest_rendition([first, other]) == (1 if x >= w and y >= h and (x, y) != (w, h) else 0)
+
+
 def test_a_proxy_url_names_the_file_its_url_parameter_names() -> None:
     key = images.resource_key("https://cdn.example.test/i/a.jpg?w=940")
     proxy = "https://www.example.test/_img?url="
