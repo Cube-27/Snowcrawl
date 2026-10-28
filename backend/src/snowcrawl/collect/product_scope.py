@@ -27,6 +27,9 @@ from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
 SPOT_LENGTH = 64
 # schema.org `Product`: the item type whose microdata items other than the page's are set apart (`product_apart`).
 _PRODUCT = "Product"
+# HTML Standard §4.10.6 `button` and §4.10.5 `input` in the Submit, Reset and Button states: a control of its form or
+# block.
+_BUTTONS = 'button, input[type="submit" i], input[type="button" i], input[type="image" i]'
 # schema.org properties whose values are other things than the page's item: `review`, `isRelatedTo`, `isSimilarTo`,
 # as an `itemprop` token names them, bare or as an IRI in either namespace; and a Review item, whose `itemtype` URL ends
 # with `/Review` (HTML Standard §5.4: microdata).
@@ -53,7 +56,8 @@ def product_apart(page: ParsedPage, schema: SchemaDef, ctx: Context, stated: Seq
     the product's own. A block whose hyperlinks lead to several documents is no card. Recommendations, "complete the
     look" and bundles of other items are such cards, whatever their markup. So is a schema.org Product item (HTML
     Standard §5.2: an `itemscope` whose `itemtype` is `Product`, outside other items' content, nested or not) that does
-    not hold the title. Without a stated price no price is the product's for certain: no card is set apart."""
+    not hold the title. Without a stated price no price is the product's for certain: no such card is set apart.
+    Sibling offer cards are, stated price or not (`_offer_cards`)."""
     region = content_region(page)
     money = next((spec for spec in schema.fields.values() if spec.type is FieldType.MONEY), None)
     if region is None or schema.page_kind != "detail" or page.json_body:
@@ -61,11 +65,15 @@ def product_apart(page: ParsedPage, schema: SchemaDef, ctx: Context, stated: Seq
     chrome = apart_ids(region) | struck_ids(region)
     title = next((h for h in region.css("h1") if h.mem_id not in chrome and shown(h)), None)
     apart = [item for item in _product_items(page) if title is None or not _holds(item, title)]
-    own = _stated_prices(schema, stated)
-    if money is None or not own:
+    if money is None:
         return inside(apart)
+    own = _stated_prices(schema, stated)
     titled = frozenset(node.mem_id for node in _up(title, region)) if title is not None else frozenset()
-    return inside((*apart, *_other_cards(region, _priced(region, chrome, money, ctx), own, titled, ctx)))
+    priced = _priced(region, chrome, money, ctx)
+    offers = _offer_cards(region, priced, own, titled)
+    if not own:
+        return inside((*apart, *offers))
+    return inside((*apart, *offers, *_other_cards(region, priced, own, titled, ctx)))
 
 
 def other_item_paths(page: ParsedPage, ctx: Context, outside: frozenset[int]) -> frozenset[str]:
@@ -113,6 +121,46 @@ def _other_cards(
         parent = card.parent if card.tag == "a" else None
         held = parent is not None and parent.mem_id != region.mem_id and foreign(parent)
         yield parent if held and parent is not None and targets[parent.mem_id] == targets[card.mem_id] else card
+
+
+def _offer_cards(
+    region: LexborNode,
+    priced: Sequence[tuple[LexborNode, object]],
+    own: frozenset[object],
+    titled: frozenset[int],
+) -> Iterator[LexborNode]:
+    """Sibling blocks of one tag (two or more) that each show one price, a different one each, and each hold a button
+    of their own (HTML Standard §4.10.6: a control acting for its block): offers of different things, other items
+    or the variants of one, whose price none states for the product as a whole (a top-level value is one every
+    variant shares). A block holding the title (`titled`) or showing one of the product's stated prices (`own`) is
+    the product's own, and leaves its group whole."""
+    shows: dict[int, set[object]] = {}
+    for element, value in priced:
+        for node in _up(element, region):
+            shows.setdefault(node.mem_id, set()).add(value)
+
+    def offer(block: LexborNode) -> bool:
+        values = shows.get(block.mem_id, set())
+        return len(values) == 1 and not values & own and block.mem_id not in titled and _holds_button(block)
+
+    for parent in (region, *region.css("*")):
+        groups: dict[str, list[LexborNode]] = {}
+        for child in children(parent):
+            groups.setdefault(child.tag or "", []).append(child)
+        for group in groups.values():
+            if len(group) >= MIN_REPEATS and all(offer(block) for block in group) and _distinct(group, shows):
+                yield from group
+
+
+def _holds_button(block: LexborNode) -> bool:
+    """Whether the block is or holds a button (HTML Standard §4.10.6 `button`, §4.10.5 `input` of a button type)."""
+    return block.tag == "button" or block.css_first(_BUTTONS) is not None
+
+
+def _distinct(group: Sequence[LexborNode], shows: dict[int, set[object]]) -> bool:
+    """Whether the blocks each show a price no other block of the group shows."""
+    values = [next(iter(shows[block.mem_id])) for block in group]
+    return len(set(values)) == len(values)
 
 
 def _stated_prices(schema: SchemaDef, stated: Sequence[Candidate]) -> frozenset[object]:
