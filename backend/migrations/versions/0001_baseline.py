@@ -22,6 +22,19 @@ down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+# Column defaults, the page kind check and foreign key targets, each stated by more than one table.
+_NOW = "now()"
+_EMPTY_OBJECT = "'{}'::jsonb"
+_EMPTY_ARRAY = "'[]'::jsonb"
+_PAGE_KINDS = "page_kind IN ('detail', 'listing')"
+_SET_NULL = "SET NULL"
+_PROJECT_ID = "project.id"
+_SITE_ID = "site.id"
+_SCHEMA_DEF_ID = "schema_def.id"
+_JOB_ID = "job.id"
+_URL_TASK_ID = "url_task.id"
+_EXTRACTION_ID = "extraction.id"
+
 # A record's `created_at` is set again as its transaction commits: a deferred constraint trigger fires at commit
 # (PostgreSQL §43.10), once per transaction, and holds `services.records.RECORD_FEED_LOCK` shared until the commit is
 # visible. The transaction's records are the rows whose `created_at` is still its start, `now()` (the column's
@@ -48,7 +61,7 @@ def upgrade() -> None:
         sa.Column("hashed_key", sa.Text(), nullable=False),
         sa.Column("label", sa.Text(), nullable=False),
         sa.Column("last_used_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("webhook_secret", sa.Text(), nullable=False),
         sa.Column("draft_calls", sa.BigInteger(), server_default=sa.text("0"), nullable=False),
@@ -60,7 +73,7 @@ def upgrade() -> None:
         "project",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("name", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.Column("llm_call_cap", sa.Integer(), nullable=True),
         sa.Column("draft_call_cap", sa.Integer(), nullable=True),
         sa.Column("require_config_approval", sa.Boolean(), server_default=sa.text("false"), nullable=False),
@@ -78,20 +91,20 @@ def upgrade() -> None:
         sa.Column(
             "field_order",
             postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'[]'::jsonb"),
+            server_default=sa.text(_EMPTY_ARRAY),
             nullable=False,
         ),
         sa.Column(
             "required_groups",
             postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'[]'::jsonb"),
+            server_default=sa.text(_EMPTY_ARRAY),
             nullable=False,
         ),
         sa.Column("origin", sa.Text(), nullable=False),
         sa.Column("status", sa.Text(), nullable=False),
         sa.Column("labels", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.CheckConstraint("origin IN ('preset', 'user', 'prompt_draft')", name=op.f("ck_schema_def_origin")),
-        sa.CheckConstraint("page_kind IN ('detail', 'listing')", name=op.f("ck_schema_def_page_kind")),
+        sa.CheckConstraint(_PAGE_KINDS, name=op.f("ck_schema_def_page_kind")),
         sa.CheckConstraint("status IN ('active', 'retired')", name=op.f("ck_schema_def_status")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_schema_def")),
         sa.UniqueConstraint("name", name=op.f("uq_schema_def_name")),
@@ -108,9 +121,9 @@ def upgrade() -> None:
         sa.Column("engine_version", sa.Text(), nullable=False),
         sa.Column("pinned", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column(
-            "usage", postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'{}'::jsonb"), nullable=False
+            "usage", postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text(_EMPTY_OBJECT), nullable=False
         ),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("cancel_requested", sa.Boolean(), server_default=sa.text("false"), nullable=False),
@@ -119,7 +132,7 @@ def upgrade() -> None:
         sa.Column(
             "webhook_events",
             postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'[]'::jsonb"),
+            server_default=sa.text(_EMPTY_ARRAY),
             nullable=False,
         ),
         sa.Column("webhook_batch", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
@@ -134,8 +147,8 @@ def upgrade() -> None:
             "status IN ('queued', 'running', 'completed', 'failed', 'cancelled')", name=op.f("ck_job_status")
         ),
         sa.ForeignKeyConstraint(["api_key_id"], ["api_key.id"], name=op.f("fk_job_api_key_id_api_key")),
-        sa.ForeignKeyConstraint(["project_id"], ["project.id"], name=op.f("fk_job_project_id_project")),
-        sa.ForeignKeyConstraint(["schema_id"], ["schema_def.id"], name=op.f("fk_job_schema_id_schema_def")),
+        sa.ForeignKeyConstraint(["project_id"], [_PROJECT_ID], name=op.f("fk_job_project_id_project")),
+        sa.ForeignKeyConstraint(["schema_id"], [_SCHEMA_DEF_ID], name=op.f("fk_job_schema_id_schema_def")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_job")),
     )
     op.create_index(
@@ -152,15 +165,15 @@ def upgrade() -> None:
         sa.Column("host", sa.Text(), nullable=False),
         sa.Column("platform", sa.Text(), nullable=True),
         sa.Column("robots_snapshot", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.Column(
             "adapter_declined",
             postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'{}'::jsonb"),
+            server_default=sa.text(_EMPTY_OBJECT),
             nullable=False,
         ),
         sa.CheckConstraint("host = lower(host)", name=op.f("ck_site_host_lowercase")),
-        sa.ForeignKeyConstraint(["project_id"], ["project.id"], name=op.f("fk_site_project_id_project")),
+        sa.ForeignKeyConstraint(["project_id"], [_PROJECT_ID], name=op.f("fk_site_project_id_project")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_site")),
         sa.UniqueConstraint("host", name=op.f("uq_site_host")),
     )
@@ -177,9 +190,9 @@ def upgrade() -> None:
         sa.CheckConstraint("engine IN ('patchright')", name=op.f("ck_site_contract_engine")),
         sa.CheckConstraint("failures >= 0", name=op.f("ck_site_contract_failures_non_negative")),
         sa.CheckConstraint("method IN ('http', 'browser')", name=op.f("ck_site_contract_method")),
-        sa.CheckConstraint("page_kind IN ('detail', 'listing')", name=op.f("ck_site_contract_page_kind")),
+        sa.CheckConstraint(_PAGE_KINDS, name=op.f("ck_site_contract_page_kind")),
         sa.ForeignKeyConstraint(
-            ["site_id"], ["site.id"], name=op.f("fk_site_contract_site_id_site"), ondelete="CASCADE"
+            ["site_id"], [_SITE_ID], name=op.f("fk_site_contract_site_id_site"), ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("site_id", "page_kind", name=op.f("pk_site_contract")),
     )
@@ -191,7 +204,7 @@ def upgrade() -> None:
         sa.Column("vendor", sa.Text(), nullable=True),
         sa.Column("browser_first_until", sa.DateTime(timezone=True), nullable=True),
         sa.CheckConstraint("blocks > 0", name=op.f("ck_site_block_blocks_positive")),
-        sa.ForeignKeyConstraint(["site_id"], ["site.id"], name=op.f("fk_site_block_site_id_site"), ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["site_id"], [_SITE_ID], name=op.f("fk_site_block_site_id_site"), ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("site_id", name=op.f("pk_site_block")),
     )
     op.create_table(
@@ -231,7 +244,7 @@ def upgrade() -> None:
         sa.Column(
             "fetch_policy",
             postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'{}'::jsonb"),
+            server_default=sa.text(_EMPTY_OBJECT),
             nullable=False,
         ),
         sa.CheckConstraint(
@@ -242,7 +255,7 @@ def upgrade() -> None:
         sa.CheckConstraint("method IN ('http', 'browser', 'api')", name=op.f("ck_capture_method")),
         sa.CheckConstraint("duration_ms >= 0", name=op.f("ck_capture_duration_ms_non_negative")),
         sa.CheckConstraint("size_bytes >= 0", name=op.f("ck_capture_size_bytes_non_negative")),
-        sa.ForeignKeyConstraint(["site_id"], ["site.id"], name=op.f("fk_capture_site_id_site")),
+        sa.ForeignKeyConstraint(["site_id"], [_SITE_ID], name=op.f("fk_capture_site_id_site")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_capture")),
         sa.UniqueConstraint("object_key", name=op.f("uq_capture_object_key")),
     )
@@ -267,33 +280,33 @@ def upgrade() -> None:
         sa.Column(
             "field_status",
             postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'{}'::jsonb"),
+            server_default=sa.text(_EMPTY_OBJECT),
             nullable=False,
         ),
         sa.Column("validation_report", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
         sa.Column(
             "drift_window",
             postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'{}'::jsonb"),
+            server_default=sa.text(_EMPTY_OBJECT),
             nullable=False,
         ),
         sa.Column(
-            "patterns", postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'[]'::jsonb"), nullable=False
+            "patterns", postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text(_EMPTY_ARRAY), nullable=False
         ),
         sa.Column("pattern_shape", sa.Text(), server_default=sa.text("''"), nullable=False),
         sa.CheckConstraint(
             "origin IN ('adapter', 'induced', 'llm_synth', 'operator', 'located')",
             name=op.f("ck_extraction_config_origin"),
         ),
-        sa.CheckConstraint("page_kind IN ('detail', 'listing')", name=op.f("ck_extraction_config_page_kind")),
+        sa.CheckConstraint(_PAGE_KINDS, name=op.f("ck_extraction_config_page_kind")),
         sa.CheckConstraint(
             "status IN ('draft', 'active', 'suspended', 'pending_approval')", name=op.f("ck_extraction_config_status")
         ),
         sa.CheckConstraint("version >= 1", name=op.f("ck_extraction_config_version_positive")),
         sa.ForeignKeyConstraint(
-            ["schema_id"], ["schema_def.id"], name=op.f("fk_extraction_config_schema_id_schema_def")
+            ["schema_id"], [_SCHEMA_DEF_ID], name=op.f("fk_extraction_config_schema_id_schema_def")
         ),
-        sa.ForeignKeyConstraint(["site_id"], ["site.id"], name=op.f("fk_extraction_config_site_id_site")),
+        sa.ForeignKeyConstraint(["site_id"], [_SITE_ID], name=op.f("fk_extraction_config_site_id_site")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_extraction_config")),
         sa.UniqueConstraint(
             "site_id",
@@ -314,12 +327,12 @@ def upgrade() -> None:
         "job_event",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("job_id", sa.Uuid(), nullable=False),
-        sa.Column("ts", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("ts", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.Column("kind", sa.Text(), nullable=False),
         sa.Column(
-            "payload", postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'{}'::jsonb"), nullable=False
+            "payload", postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text(_EMPTY_OBJECT), nullable=False
         ),
-        sa.ForeignKeyConstraint(["job_id"], ["job.id"], name=op.f("fk_job_event_job_id_job")),
+        sa.ForeignKeyConstraint(["job_id"], [_JOB_ID], name=op.f("fk_job_event_job_id_job")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_job_event")),
     )
     op.create_index(op.f("ix_job_event_job_id_id"), "job_event", ["job_id", "id"], unique=False)
@@ -332,7 +345,7 @@ def upgrade() -> None:
         sa.Column("model_or_pool", sa.Text(), nullable=True),
         sa.Column("quantity", sa.BigInteger(), nullable=False),
         sa.Column(
-            "metadata", postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'{}'::jsonb"), nullable=False
+            "metadata", postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text(_EMPTY_OBJECT), nullable=False
         ),
         sa.CheckConstraint(
             "resource IN ('llm_calls', 'llm_tokens_in', 'llm_tokens_out', 'browser_seconds', 'proxy_bytes',"
@@ -340,7 +353,7 @@ def upgrade() -> None:
             name=op.f("ck_usage_event_resource"),
         ),
         sa.CheckConstraint("quantity >= 0", name=op.f("ck_usage_event_quantity_non_negative")),
-        sa.ForeignKeyConstraint(["job_id"], ["job.id"], name=op.f("fk_usage_event_job_id_job")),
+        sa.ForeignKeyConstraint(["job_id"], [_JOB_ID], name=op.f("fk_usage_event_job_id_job")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_usage_event")),
     )
     op.create_index(op.f("ix_usage_event_job_id_id"), "usage_event", ["job_id", "id"], unique=False)
@@ -350,13 +363,13 @@ def upgrade() -> None:
         sa.Column("job_id", sa.Uuid(), nullable=False),
         sa.Column("status", sa.Text(), server_default=sa.text("'pending'"), nullable=False),
         sa.Column("attempts", sa.Integer(), server_default=sa.text("0"), nullable=False),
-        sa.Column("next_attempt_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("next_attempt_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("response_code", sa.Integer(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.CheckConstraint("status IN ('pending', 'delivered', 'failed')", name=op.f("ck_webhook_delivery_status")),
         sa.CheckConstraint("attempts >= 0", name=op.f("ck_webhook_delivery_attempts_non_negative")),
-        sa.ForeignKeyConstraint(["job_id"], ["job.id"], name=op.f("fk_webhook_delivery_job_id_job")),
+        sa.ForeignKeyConstraint(["job_id"], [_JOB_ID], name=op.f("fk_webhook_delivery_job_id_job")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_webhook_delivery")),
     )
     op.create_index(op.f("ix_webhook_delivery_job_id"), "webhook_delivery", ["job_id"], unique=False)
@@ -394,7 +407,7 @@ def upgrade() -> None:
             name=op.f("ck_progressive_state_learning_has_started"),
         ),
         sa.CheckConstraint("mode IN ('cold', 'learning', 'active')", name=op.f("ck_progressive_state_mode")),
-        sa.CheckConstraint("page_kind IN ('detail', 'listing')", name=op.f("ck_progressive_state_page_kind")),
+        sa.CheckConstraint(_PAGE_KINDS, name=op.f("ck_progressive_state_page_kind")),
         sa.CheckConstraint("pages_extracted >= 0", name=op.f("ck_progressive_state_pages_extracted_non_negative")),
         sa.CheckConstraint("render_mode IN ('off', 'locate', 'always')", name=op.f("ck_progressive_state_render_mode")),
         sa.CheckConstraint("retry_at_pages >= 0", name=op.f("ck_progressive_state_retry_at_pages_non_negative")),
@@ -404,9 +417,9 @@ def upgrade() -> None:
             name=op.f("fk_progressive_state_active_config_id_extraction_config"),
         ),
         sa.ForeignKeyConstraint(
-            ["schema_id"], ["schema_def.id"], name=op.f("fk_progressive_state_schema_id_schema_def")
+            ["schema_id"], [_SCHEMA_DEF_ID], name=op.f("fk_progressive_state_schema_id_schema_def")
         ),
-        sa.ForeignKeyConstraint(["site_id"], ["site.id"], name=op.f("fk_progressive_state_site_id_site")),
+        sa.ForeignKeyConstraint(["site_id"], [_SITE_ID], name=op.f("fk_progressive_state_site_id_site")),
         sa.PrimaryKeyConstraint("site_id", "schema_id", "page_kind", name=op.f("pk_progressive_state")),
     )
     op.create_table(
@@ -423,7 +436,7 @@ def upgrade() -> None:
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("claimed_by", sa.Text(), nullable=True),
         sa.Column("lease_until", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("next_attempt_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("next_attempt_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.Column("priority", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("depth", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("parent_task_id", sa.Uuid(), nullable=True),
@@ -435,17 +448,17 @@ def upgrade() -> None:
             " 'timeout', 'failed')",
             name=op.f("ck_url_task_outcome"),
         ),
-        sa.CheckConstraint("page_kind IN ('detail', 'listing')", name=op.f("ck_url_task_page_kind")),
+        sa.CheckConstraint(_PAGE_KINDS, name=op.f("ck_url_task_page_kind")),
         sa.CheckConstraint(
             "status IN ('queued', 'claimed', 'done', 'failed', 'cancelled')", name=op.f("ck_url_task_status")
         ),
         sa.CheckConstraint("attempts >= 0", name=op.f("ck_url_task_attempts_non_negative")),
         sa.CheckConstraint("depth >= 0", name=op.f("ck_url_task_depth_non_negative")),
         sa.ForeignKeyConstraint(
-            ["capture_id"], ["capture.id"], name=op.f("fk_url_task_capture_id_capture"), ondelete="SET NULL"
+            ["capture_id"], ["capture.id"], name=op.f("fk_url_task_capture_id_capture"), ondelete=_SET_NULL
         ),
-        sa.ForeignKeyConstraint(["job_id"], ["job.id"], name=op.f("fk_url_task_job_id_job")),
-        sa.ForeignKeyConstraint(["parent_task_id"], ["url_task.id"], name=op.f("fk_url_task_parent_task_id_url_task")),
+        sa.ForeignKeyConstraint(["job_id"], [_JOB_ID], name=op.f("fk_url_task_job_id_job")),
+        sa.ForeignKeyConstraint(["parent_task_id"], [_URL_TASK_ID], name=op.f("fk_url_task_parent_task_id_url_task")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_url_task")),
         sa.UniqueConstraint("job_id", "canonical_url", name=op.f("uq_url_task_job_id_canonical_url")),
     )
@@ -484,9 +497,9 @@ def upgrade() -> None:
         sa.Column("last_seen_job_id", sa.Uuid(), nullable=True),
         sa.CheckConstraint("missing_runs >= 0", name=op.f("ck_url_state_missing_runs_non_negative")),
         sa.ForeignKeyConstraint(
-            ["last_seen_job_id"], ["job.id"], name=op.f("fk_url_state_last_seen_job_id_job"), ondelete="SET NULL"
+            ["last_seen_job_id"], [_JOB_ID], name=op.f("fk_url_state_last_seen_job_id_job"), ondelete=_SET_NULL
         ),
-        sa.ForeignKeyConstraint(["site_id"], ["site.id"], name=op.f("fk_url_state_site_id_site")),
+        sa.ForeignKeyConstraint(["site_id"], [_SITE_ID], name=op.f("fk_url_state_site_id_site")),
         sa.PrimaryKeyConstraint("site_id", "canonical_url", name=op.f("pk_url_state")),
     )
     op.create_table(
@@ -501,15 +514,15 @@ def upgrade() -> None:
         sa.Column(
             "diagnostics",
             postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'[]'::jsonb"),
+            server_default=sa.text(_EMPTY_ARRAY),
             nullable=False,
         ),
         sa.CheckConstraint("mode IN ('adhoc', 'config')", name=op.f("ck_extraction_mode")),
         sa.CheckConstraint("llm_calls >= 0", name=op.f("ck_extraction_llm_calls_non_negative")),
         sa.ForeignKeyConstraint(
-            ["capture_id"], ["capture.id"], name=op.f("fk_extraction_capture_id_capture"), ondelete="SET NULL"
+            ["capture_id"], ["capture.id"], name=op.f("fk_extraction_capture_id_capture"), ondelete=_SET_NULL
         ),
-        sa.ForeignKeyConstraint(["url_task_id"], ["url_task.id"], name=op.f("fk_extraction_url_task_id_url_task")),
+        sa.ForeignKeyConstraint(["url_task_id"], [_URL_TASK_ID], name=op.f("fk_extraction_url_task_id_url_task")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_extraction")),
     )
     op.create_index(op.f("ix_extraction_capture_id"), "extraction", ["capture_id"], unique=False)
@@ -528,7 +541,7 @@ def upgrade() -> None:
         sa.Column("locator", sa.Text(), nullable=False),
         sa.Column("chosen", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("reject_reason", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.CheckConstraint(
             "normalize_status IN ('ok', 'ambiguous', 'invalid')", name=op.f("ck_candidate_normalize_status")
         ),
@@ -538,7 +551,7 @@ def upgrade() -> None:
             name=op.f("ck_candidate_source_kind"),
         ),
         sa.ForeignKeyConstraint(
-            ["extraction_id"], ["extraction.id"], name=op.f("fk_candidate_extraction_id_extraction")
+            ["extraction_id"], [_EXTRACTION_ID], name=op.f("fk_candidate_extraction_id_extraction")
         ),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_candidate")),
     )
@@ -559,23 +572,23 @@ def upgrade() -> None:
         sa.Column(
             "changed_fields",
             postgresql.JSONB(astext_type=sa.Text()),
-            server_default=sa.text("'[]'::jsonb"),
+            server_default=sa.text(_EMPTY_ARRAY),
             nullable=False,
         ),
         sa.Column("mode", sa.Text(), nullable=False),
         sa.Column("fingerprint", sa.Text(), nullable=True),
         sa.Column("schema_digest", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.Column("supersedes_record_id", sa.Uuid(), nullable=True),
         sa.Column("egress_country", sa.Text(), nullable=True),
         sa.Column("egress_basis", sa.Text(), server_default=sa.text("'unknown'"), nullable=False),
         sa.CheckConstraint("mode IN ('adhoc', 'config')", name=op.f("ck_record_mode")),
         sa.CheckConstraint("egress_basis IN ('pool', 'machine', 'unknown')", name=op.f("ck_record_egress_basis")),
         sa.CheckConstraint("version >= 1", name=op.f("ck_record_version_positive")),
-        sa.ForeignKeyConstraint(["extraction_id"], ["extraction.id"], name=op.f("fk_record_extraction_id_extraction")),
-        sa.ForeignKeyConstraint(["job_id"], ["job.id"], name=op.f("fk_record_job_id_job")),
-        sa.ForeignKeyConstraint(["schema_id"], ["schema_def.id"], name=op.f("fk_record_schema_id_schema_def")),
-        sa.ForeignKeyConstraint(["site_id"], ["site.id"], name=op.f("fk_record_site_id_site")),
+        sa.ForeignKeyConstraint(["extraction_id"], [_EXTRACTION_ID], name=op.f("fk_record_extraction_id_extraction")),
+        sa.ForeignKeyConstraint(["job_id"], [_JOB_ID], name=op.f("fk_record_job_id_job")),
+        sa.ForeignKeyConstraint(["schema_id"], [_SCHEMA_DEF_ID], name=op.f("fk_record_schema_id_schema_def")),
+        sa.ForeignKeyConstraint(["site_id"], [_SITE_ID], name=op.f("fk_record_site_id_site")),
         sa.ForeignKeyConstraint(
             ["supersedes_record_id"], ["record.id"], name=op.f("fk_record_supersedes_record_id_record")
         ),
@@ -598,16 +611,16 @@ def upgrade() -> None:
         sa.Column("extraction_id", sa.Uuid(), nullable=False),
         sa.Column("position", sa.Integer(), nullable=False),
         sa.Column("delta", sa.Text(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.CheckConstraint("delta IN ('new', 'changed', 'same')", name=op.f("ck_task_record_delta")),
         sa.ForeignKeyConstraint(
-            ["extraction_id"], ["extraction.id"], name=op.f("fk_task_record_extraction_id_extraction")
+            ["extraction_id"], [_EXTRACTION_ID], name=op.f("fk_task_record_extraction_id_extraction")
         ),
         sa.ForeignKeyConstraint(
             ["record_id"], ["record.id"], name=op.f("fk_task_record_record_id_record"), ondelete="CASCADE"
         ),
         sa.ForeignKeyConstraint(
-            ["url_task_id"], ["url_task.id"], name=op.f("fk_task_record_url_task_id_url_task"), ondelete="CASCADE"
+            ["url_task_id"], [_URL_TASK_ID], name=op.f("fk_task_record_url_task_id_url_task"), ondelete="CASCADE"
         ),
         sa.PrimaryKeyConstraint("url_task_id", "record_id", name=op.f("pk_task_record")),
     )
@@ -642,13 +655,13 @@ def _create_schedules_and_webhook_events() -> None:
         sa.Column("last_run_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_error", sa.Text(), nullable=True),
         sa.Column("api_key_id", sa.Uuid(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text(_NOW), nullable=False),
         sa.CheckConstraint("kind IN ('batch_scrape', 'crawl', 'extract')", name=op.f("ck_schedule_kind")),
         sa.CheckConstraint("(cron IS NULL) <> (interval_s IS NULL)", name=op.f("ck_schedule_one_cadence")),
         sa.CheckConstraint("interval_s >= 60", name=op.f("ck_schedule_interval_at_least_a_minute")),
         sa.ForeignKeyConstraint(["api_key_id"], ["api_key.id"], name=op.f("fk_schedule_api_key_id_api_key")),
-        sa.ForeignKeyConstraint(["project_id"], ["project.id"], name=op.f("fk_schedule_project_id_project")),
+        sa.ForeignKeyConstraint(["project_id"], [_PROJECT_ID], name=op.f("fk_schedule_project_id_project")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_schedule")),
     )
     op.create_index(
@@ -659,7 +672,7 @@ def _create_schedules_and_webhook_events() -> None:
         postgresql_where=sa.text("NOT paused"),
     )
     op.create_foreign_key(
-        op.f("fk_job_schedule_id_schedule"), "job", "schedule", ["schedule_id"], ["id"], ondelete="SET NULL"
+        op.f("fk_job_schedule_id_schedule"), "job", "schedule", ["schedule_id"], ["id"], ondelete=_SET_NULL
     )
     op.create_index(op.f("ix_job_schedule_id_id"), "job", ["schedule_id", "id"], unique=False)
     op.create_table(
@@ -668,7 +681,7 @@ def _create_schedules_and_webhook_events() -> None:
         sa.Column("job_id", sa.Uuid(), nullable=False),
         sa.Column("event", sa.Text(), nullable=False),
         sa.Column(
-            "payload", postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'{}'::jsonb"), nullable=False
+            "payload", postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text(_EMPTY_OBJECT), nullable=False
         ),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), server_default=sa.text("clock_timestamp()"), nullable=False
@@ -681,7 +694,7 @@ def _create_schedules_and_webhook_events() -> None:
         sa.ForeignKeyConstraint(
             ["delivery_id"], ["webhook_delivery.id"], name=op.f("fk_webhook_event_delivery_id_webhook_delivery")
         ),
-        sa.ForeignKeyConstraint(["job_id"], ["job.id"], name=op.f("fk_webhook_event_job_id_job")),
+        sa.ForeignKeyConstraint(["job_id"], [_JOB_ID], name=op.f("fk_webhook_event_job_id_job")),
         sa.PrimaryKeyConstraint("id", name=op.f("pk_webhook_event")),
     )
     op.create_index(op.f("ix_webhook_event_delivery_id_id"), "webhook_event", ["delivery_id", "id"], unique=False)

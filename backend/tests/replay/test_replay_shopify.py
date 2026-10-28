@@ -231,7 +231,8 @@ def test_the_shown_variants_identifiers_yield_to_those_the_page_states_for_the_p
     result = _product_page(variants, query=query, markup=_jsonld(product))
 
     assert result.entity is not None
-    assert (result.entity["sku"].value, result.entity["gtin"].value) == identifiers
+    stated = (result.entity["sku"].value, result.entity["gtin"].value)
+    assert stated == identifiers
     assert result.entity["price"].value == {"amount": "12.00", "currency": "EUR"}
 
 
