@@ -184,6 +184,21 @@ def test_a_rendition_is_larger_only_when_it_is_at_least_as_large_in_every_size(w
     assert images.largest_rendition([first, other]) == (1 if x >= w and y >= h and (x, y) != (w, h) else 0)
 
 
+@given(_SIDES, _SIDES, _SIDES, _SIDES)
+def test_sizes_only_one_rendition_states_never_rank_it_by_themselves(w: int, h: int, resize: int, plain: int) -> None:
+    file = "4f2a/widget_01.jpg"
+    crop, copy = (
+        f"https://cdn.example.test/i/c_fill,w_{w},h_{h}/w_{resize}/{file}",
+        f"https://cdn.example.test/i/w_{plain}/{file}",
+    )
+
+    # A crop outranks a copy stating fewer sizes only when larger whichever of its sizes the copy's is; the copy
+    # outranks it when at least as large as each of the crop's.
+    expected = 1 if min(w, h, resize) > plain else 0
+    assert images.largest_rendition([copy, crop]) == expected
+    assert images.largest_rendition([crop, copy]) == (1 if plain >= max(w, h, resize) else 0)
+
+
 def test_a_proxy_url_names_the_file_its_url_parameter_names() -> None:
     key = images.resource_key("https://cdn.example.test/i/a.jpg?w=940")
     proxy = "https://www.example.test/_img?url="

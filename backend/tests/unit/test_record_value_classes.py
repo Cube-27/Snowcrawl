@@ -3,6 +3,8 @@ values mostly fail is a chance pass, not an identifier."""
 
 from typing import Any
 
+import pytest
+
 from snowcrawl.collect.base import Candidate
 from snowcrawl.core.ids import uuid7
 from snowcrawl.db.models import SchemaId
@@ -41,15 +43,19 @@ def _published(value: Any) -> FieldOutcome:
     )
 
 
-def test_the_list_of_images_leaves_out_the_main_image_and_its_renditions() -> None:
+@pytest.mark.parametrize(("main", "listed"), [(900, 300), (300, 900)])
+def test_the_list_of_images_leaves_out_the_main_image_which_publishes_at_its_larger_copy(
+    main: int, listed: int
+) -> None:
     fields = {
-        "image_url": _published(f"{IMAGE}?width=900"),
-        "additional_images": _published([f"{IMAGE}?width=300", OTHER]),
+        "image_url": _published(f"{IMAGE}?width={main}"),
+        "additional_images": _published([f"{IMAGE}?width={listed}", OTHER]),
     }
 
-    images = without_main_image(_schema(), fields)["additional_images"]
+    out = without_main_image(_schema(), fields)
 
-    assert (images.status, images.value) == ("published", [OTHER])
+    assert out["image_url"].value == f"{IMAGE}?width=900"
+    assert (out["additional_images"].status, out["additional_images"].value) == ("published", [OTHER])
 
 
 def test_a_list_holding_only_the_main_image_is_unpublished() -> None:
