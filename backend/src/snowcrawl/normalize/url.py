@@ -3,8 +3,8 @@
 Accepts a string, from the DOM, an LLM or a structured source (JSON-LD `url` and `image` values are strings). Any
 other JSON value is `Invalid("not_a_string")`. A relative reference resolves against `ctx.base_url`. The reference as
 the page writes it (WHATWG URL Standard: without the leading and trailing C0 controls and spaces and the tabs and
-newlines the parser removes) is the value's stated form (`Ok.stated`), the one that publishes: a relative reference
-stays relative, and the canonical form is for equality and identity only.
+newlines the parser removes), resolved against the base when relative, is the value's stated form (`Ok.stated`), the
+one that publishes: always absolute, in the page's spelling; the canonical form is for equality and identity only.
 """
 
 import mimetypes
@@ -77,9 +77,16 @@ def normalize(raw: Raw, spec: FieldSpec, ctx: Context) -> NormalizeResult:
         return Invalid("page_url")
     if spec.type is FieldType.IMAGE_URL and isinstance(result, Ok) and _other_media(result.value):
         return Invalid("not_an_image")
-    if isinstance(result, Ok) and (written := _reference(raw)) != result.value:
+    if isinstance(result, Ok) and (written := _written(raw, ctx.base_url)) != result.value:
         return replace(result, stated=written)
     return result
+
+
+def _written(raw: str, base: str | None) -> str:
+    """The reference as the page writes it, resolved against the document base when relative (RFC 3986 §5.2): a
+    published URL is absolute, so a reader outside the page can follow it, and otherwise keeps the page's spelling."""
+    written = _reference(raw)
+    return written if base is None or urlsplit(written).scheme else urljoin(base, written)
 
 
 def media_type(url: str) -> str | None:

@@ -8,7 +8,9 @@ reviews, related items and the blocks outside the product container (`collect.pr
 - **Extension.** A block of prose whose text begins with a candidate another collector proposed for the field (the
   JSON-LD, microdata or Open Graph description, or its ellipsis-cut form) and goes on: it is the whole of what that
   candidate begins. A block that equals a candidate is its corroboration. Of the blocks that begin with it, the
-  outermost wins: a description's paragraphs are siblings, and the block holding them all is the description.
+  outermost wins: a description's paragraphs are siblings, and the block holding them all is the description. It does
+  not go on past a heading after the stated text: a heading opens another section (HTML Standard §4.3.6), such as
+  delivery and returns or an importer's address.
 - **Labelled section.** The content that follows a heading (HTML Standard §4.3.6, WAI-ARIA `heading`) up to the next
   heading, or that a section names with `aria-label` or `aria-labelledby` (WAI-ARIA 1.2), when the label's words are
   one of the field's labels (`collect.labels`: its name, schema.org property, description and drafted synonyms), as
@@ -365,11 +367,25 @@ def _extending(blocks: _Blocks, stated: Sequence[tuple[str, str]]) -> _Block | N
     matching = {
         b.node.mem_id: b
         for b in blocks.blocks.values()
-        if any(is_cut_of(form, b.form, word_boundary=True) for _, form in stated)
+        if (begun := [form for _, form in stated if is_cut_of(form, b.form, word_boundary=True)])
+        and not _crosses_heading(b, max(map(len, begun)))
     }
     equal = [b for b in matching.values() if solid(b.form) in solids]
     outer = [b for b in matching.values() if not any(a.mem_id in matching for a in _ancestors(b.node, blocks.region))]
     return _only(equal) or _only(outer)
+
+
+def _crosses_heading(block: _Block, start: int) -> bool:
+    """Whether the block goes on past a heading after its first `start` characters, the stated value it begins with:
+    a heading opens another section (HTML Standard §4.3.6), so what follows it (delivery and returns, an importer's
+    address) is that section's, not more of the value. A heading the stated value holds is within it."""
+    titles = {collapse(h.text(deep=True, separator=" ")) for h in block.node.css(_HEADING)} - {""}
+    at = 0
+    for line in filter(None, map(collapse, block.raw.split("\n"))):
+        if at >= start and line in titles:
+            return True
+        at += len(line) + 1
+    return False
 
 
 def _full(stated: Sequence[tuple[str, str]]) -> list[str]:

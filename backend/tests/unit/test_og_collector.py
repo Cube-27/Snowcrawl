@@ -93,7 +93,7 @@ def test_each_ogp_property_maps_to_the_field_of_its_role() -> None:
             _og(
                 "image_url",
                 "/img/widget.png",
-                Ok("https://shop.example.test/img/widget.png", stated="/img/widget.png"),
+                Ok("https://shop.example.test/img/widget.png"),
                 "meta:og:image",
             ),
         ),

@@ -70,6 +70,18 @@ def test_block_extending_a_summary_is_the_description() -> None:
     assert found == {"description": f"{FIRST}\n{SECOND}"}
 
 
+def test_the_description_does_not_go_on_past_a_heading_after_the_stated_text() -> None:
+    # The title, the text, then a lower-ranked section of its own, all in one block.
+    body = f"<main><div><h1>Kettle</h1><p>{FIRST}</p><h2>Delivery</h2><p>Ships in a day.</p></div></main>"
+    assert _read(body, _stated("og", SUMMARY)) == {"description": FIRST}
+
+
+def test_a_heading_the_stated_text_holds_is_within_the_description() -> None:
+    stated = f"{FIRST} Usage {SECOND}"
+    body = f"<main><h1>Kettle</h1><div><p>{FIRST}</p><h3>Usage</h3><p>{SECOND}</p></div></main>"
+    assert _read(body, _stated("jsonld", stated)) == {"description": f"{FIRST}\nUsage\n{SECOND}"}
+
+
 def test_review_and_tangential_blocks_are_not_the_description() -> None:
     body = (
         "<main><h1>Kettle</h1>"

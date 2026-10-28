@@ -52,7 +52,7 @@ def test_a_body_value_equal_to_another_kinds_candidate_is_admitted_and_not_indep
                 entity_id="page",
                 source_kind="xhr",
                 raw="/p/1",
-                normalized=Ok(PAGE_URL, stated="/p/1"),
+                normalized=Ok(PAGE_URL),
                 locator="xhr:1:$['data']['href']",
                 independent=False,
             ),

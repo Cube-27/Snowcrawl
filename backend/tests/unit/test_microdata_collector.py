@@ -96,10 +96,7 @@ def test_a_product_with_nested_items() -> None:
             "images",
             product,
             ["/a.png", "https://shop.example.test/b.png"],
-            Ok(
-                ["https://shop.example.test/a.png", "https://shop.example.test/b.png"],
-                stated=["/a.png", "https://shop.example.test/b.png"],
-            ),
+            Ok(["https://shop.example.test/a.png", "https://shop.example.test/b.png"]),
             f"{product}/img[1]",
         ),
     )

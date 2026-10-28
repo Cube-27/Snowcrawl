@@ -34,6 +34,7 @@ skipped: a page-level pair says nothing of one row.
 """
 
 import re
+import unicodedata
 from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass
 
@@ -295,7 +296,7 @@ def _colon_line(element: LexborNode) -> Iterator[Pair]:
     cut = _COLON.search(full)
     if cut is None or cut.start() > len(lead):
         if len(parts) == 2 and not first.is_element_node and parts[1].is_element_node and element.tag not in _HEADINGS:
-            yield lead, parts[1], _text(parts[1]), _LINE
+            yield lead, parts[1], _unseparated(_text(parts[1])), _LINE
         return
     value = _line_value(element, first, full[cut.end() :].strip(), lead[cut.end() :].strip())
     if value is not None and not _COLON.search(value[1]):
@@ -331,7 +332,16 @@ def _repeated_pairs(parent: LexborNode) -> Iterator[Pair]:
         if len(group) >= MIN_REPEATS:
             for container in group:
                 label, value = children(container)
-                yield _text(label), value, _text(value), _SIBLINGS
+                yield _text(label), value, _unseparated(_text(value)), _SIBLINGS
+
+
+def _unseparated(value: str) -> str:
+    """A value element's text without the separator that opens it: a dash (Unicode `Dash_Punctuation`, Pd) and white
+    space between a label and its value (`Color <span>— Red</span>`) part them as a colon does, and is no part of the
+    value. A dash written against what follows (`-5`) is the value's own."""
+    rest = value[1:].lstrip()
+    separated = value[:1] and unicodedata.category(value[0]) == "Pd" and value[1:2].isspace()
+    return rest if separated and rest else value
 
 
 def _typed_found(
