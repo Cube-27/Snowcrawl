@@ -22,9 +22,10 @@ landmark, WAI-ARIA 1.2, else the document's one `article`), outside the region's
   (`_gallery`). A slide need not be shown: a carousel hides its slides but the current one.
 - **An image's source.** Its `src`, unless its `srcset` leaves `src` out of its source set (HTML Standard §4.8.4.3:
   width descriptors, or a candidate of pixel density 1, which a candidate without a descriptor is): then the widest
-  candidate, else the first. A lazy loader keeps an image's sources in the custom data attributes named after the
-  standard ones (`data-srcset`, `data-src`, HTML Standard §3.2.6.6) and a placeholder in `src` and `srcset` until a
-  script moves them in: they are its sources.
+  candidate, else the densest (a `2x` candidate is a larger rendition of the image a `1x` one shows). A lazy loader
+  keeps an image's sources in the custom data attributes named after the standard ones (`data-srcset`, `data-src`,
+  HTML Standard §3.2.6.6) and a placeholder in `src` and `srcset` until a script moves them in: they are its
+  sources.
 """
 
 import re
@@ -294,17 +295,21 @@ def image_source(attributes: Mapping[str, str | None]) -> str | None:
     Standard §4.8.4.3: a URL, then optional descriptors, candidates separated by commas); an inline `data:` URL is
     none. A `srcset` with width descriptors, or with a candidate of pixel density 1, leaves `src` out of the image's
     source set ("update the source set"): the image never shows it (a lazy loader's placeholder), so its source is the
-    widest candidate, else the first. A lazy loader's `data-srcset` and `data-src` stand for `srcset` and `src`."""
+    widest candidate, else the densest (§4.8.4.2: a pixel density descriptor states how many image pixels a CSS pixel
+    holds, so a `2x` candidate is a larger rendition of what a `1x` one shows), the first of equals. A lazy loader's
+    `data-srcset` and `data-src` stand for `srcset` and `src`."""
     lazy = attributes.get(_LAZY + _SRCSET) or attributes.get(_LAZY + _SRC)
     srcset = attributes.get(_LAZY + _SRCSET if lazy else _SRCSET) or ""
     src = attributes.get(_LAZY + _SRC if lazy else _SRC) or ""
     candidates = _srcset(srcset)
     widths = [width for _, width, _ in candidates]
+    densities = [density for _, _, density in candidates]
     if any(width is not None for width in widths):
         widest = max(range(len(candidates)), key=lambda i: widths[i] or 0)
         sources = [candidates[widest][0]]
-    elif any(one for _, _, one in candidates):
-        sources = [candidates[0][0]]
+    elif 1 in densities:
+        densest = max(range(len(candidates)), key=lambda i: densities[i] or 0)
+        sources = [candidates[densest][0]]
     else:
         sources = [src, *(url for url, _, _ in candidates[:1])]
     for source in (s.strip() for s in sources):
@@ -313,12 +318,13 @@ def image_source(attributes: Mapping[str, str | None]) -> str | None:
     return None
 
 
-def _srcset(srcset: str) -> list[tuple[str, int | None, bool]]:
+def _srcset(srcset: str) -> list[tuple[str, int | None, float | None]]:
     """A `srcset`'s image candidate strings (HTML Standard §4.8.4.3, "parse a srcset attribute"): each URL, with its
-    width descriptor's value when it has one, and whether its pixel density is 1 (a `1x` descriptor, or no descriptor
-    at all). A URL runs to white space, trailing commas ending its candidate; its descriptors run to the next comma,
-    which may follow the last one without white space (`a.jpg 600w,b.jpg 800w`)."""
-    candidates: list[tuple[str, int | None, bool]] = []
+    width descriptor's value when it has one, and its pixel density (1 for a candidate without a descriptor), none
+    with a width descriptor or a descriptor it does not read. A URL runs to white space, trailing commas ending its
+    candidate; its descriptors run to the next comma, which may follow the last one without white space
+    (`a.jpg 600w,b.jpg 800w`)."""
+    candidates: list[tuple[str, int | None, float | None]] = []
     position = 0
     while (start := _next_candidate(srcset, position)) < len(srcset):
         end = _token_end(srcset, start)
@@ -328,7 +334,7 @@ def _srcset(srcset: str) -> list[tuple[str, int | None, bool]]:
             comma = srcset.find(",", position)
             position = len(srcset) if comma < 0 else comma
             descriptors = srcset[end:position].split()
-        candidate: tuple[str, int | None, bool] = (url.rstrip(","), None, True)
+        candidate: tuple[str, int | None, float | None] = (url.rstrip(","), None, 1.0)
         for descriptor in descriptors:
             candidate = _described(candidate, descriptor)
         candidates.append(candidate)
@@ -348,13 +354,15 @@ def _token_end(srcset: str, position: int) -> int:
     return position
 
 
-def _described(candidate: tuple[str, int | None, bool], descriptor: str) -> tuple[str, int | None, bool]:
+def _described(
+    candidate: tuple[str, int | None, float | None], descriptor: str
+) -> tuple[str, int | None, float | None]:
     url, width, _ = candidate
     if _WIDTH_DESCRIPTOR.fullmatch(descriptor):
-        return url, int(descriptor[:-1]), False
+        return url, int(descriptor[:-1]), None
     if _DENSITY_DESCRIPTOR.fullmatch(descriptor) and descriptor != "x":
-        return url, width, float(descriptor[:-1]) == 1
-    return url, width, False
+        return url, width, float(descriptor[:-1])
+    return url, width, None
 
 
 def decorative(attributes: Mapping[str, str | None]) -> bool:

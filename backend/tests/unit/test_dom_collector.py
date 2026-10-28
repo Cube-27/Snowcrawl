@@ -166,7 +166,7 @@ def test_blocks_that_link_elsewhere_or_repeat_one_source_are_no_gallery(others: 
 @pytest.mark.parametrize(
     ("body", "image"),
     [
-        ('<div role="main"><img srcset="/p/s.jpg 1x, /p/l.jpg 2x"></div>', "https://shop.example.test/p/s.jpg"),
+        ('<div role="main"><img srcset="/p/s.jpg 1x, /p/l.jpg 2x"></div>', "https://shop.example.test/p/l.jpg"),
         (
             '<article><header><img src="/h.png"></header><img src="/p/a.jpg"></article>',
             "https://shop.example.test/p/a.jpg",
@@ -271,8 +271,9 @@ def test_slides_named_after_the_main_file_are_its_gallery_wherever_the_block_hol
 
 
 def test_a_lazy_or_hidden_slide_gives_its_source_to_the_gallery() -> None:
-    # HTML Standard §4.8.4.3: a srcset candidate without a descriptor is 1x, which leaves the placeholder `src` out; a
-    # lazy loader keeps the sources in `data-srcset`/`data-src`; a carousel hides the slides but the current one.
+    # HTML Standard §4.8.4.3: a srcset candidate without a descriptor is 1x, which leaves the placeholder `src` out,
+    # and its 2x candidate is the larger rendition; a lazy loader keeps the sources in `data-srcset`/`data-src`; a
+    # carousel hides the slides but the current one.
     slides = (
         '<div><img src="/ph.svg" srcset="/p/a.jpg, /p/a2.jpg 2x" alt="P"></div>'
         '<div style="display:none"><img src="/ph.svg" data-srcset="/p/b.jpg 300w,/p/b-big.jpg 900w" alt="P"></div>'
@@ -280,8 +281,8 @@ def test_a_lazy_or_hidden_slide_gives_its_source_to_the_gallery() -> None:
     )
     found = _values(f"<main><div>{slides}</div></main>")
 
-    assert found["image_url"] == ["https://shop.example.test/p/a.jpg"]
-    assert found["images"] == [[f"https://shop.example.test/p/{n}.jpg" for n in ("a", "b-big", "c")]]
+    assert found["image_url"] == ["https://shop.example.test/p/a2.jpg"]
+    assert found["images"] == [[f"https://shop.example.test/p/{n}.jpg" for n in ("a2", "b-big", "c")]]
 
 
 def test_the_stated_main_image_is_each_sources_first_image() -> None:

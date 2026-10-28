@@ -437,6 +437,14 @@ DESCRIBED = _schema(
             id="escaped-markup",
         ),
         pytest.param("Sizes 1 &lt; 2", "Sizes 1 < 2", "Sizes 1 < 2", id="escaped-no-element"),
+        # A line at either end that is only a link is a control around the text; a link within it is its text.
+        pytest.param(
+            '<a href="/c">Shop all</a><br>Soft <a href="/f">cotton</a>.<p><a href="#d">More details</a></p>',
+            "Soft cotton.",
+            "Soft cotton.",
+            id="edge-links",
+        ),
+        pytest.param('<a href="/b">Acme</a>', "Acme", "Acme", id="only-a-link"),
     ],
 )
 def test_a_text_value_holding_element_markup_is_read_as_its_rendered_text(

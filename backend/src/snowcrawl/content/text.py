@@ -10,8 +10,10 @@ misnested tags). The lxml tree is a copy of that tree (`acquire.items.lxml_of`),
 """
 
 import re
+from bisect import bisect_right
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Literal, NamedTuple
 
 from selectolax.lexbor import LexborHTMLParser, LexborNode
@@ -97,6 +99,51 @@ class CleanedText:
     offsets: tuple[TextRun, ...]
     marks: tuple[Mark, ...] = ()
 
+    @cached_property
+    def _links(self) -> tuple[list[int], list[int]]:
+        """The starts and ends of the shown links' texts, ordered by start (links do not nest, HTML Standard §4.5.1:
+        an `a` has no interactive content descendant)."""
+        spans = sorted((m.start, m.end) for m in self.marks if m.kind == "link" and m.end > m.start)
+        return [s for s, _ in spans], [e for _, e in spans]
+
+    def without_edge_links(self, start: int, end: int) -> tuple[int, int]:
+        """The span `[start, end)` of the text without its leading and trailing lines that are each wholly a shown
+        link's text: a line that is only a hyperlink (HTML Standard §4.6.1) is a control leading elsewhere ("shop all
+        colors", "more details"), set around the block's text, not part of it. The span as it is when every line is
+        one."""
+        lines = _line_spans(self.text, start, end)
+        first, last = 0, len(lines)
+        while first < last and self._link_line(*lines[first]):
+            first += 1
+        while last > first and self._link_line(*lines[last - 1]):
+            last -= 1
+        if first == last:
+            return start, end
+        return lines[first][0], lines[last - 1][1]
+
+    def only_links(self, start: int, end: int) -> bool:
+        """Whether the span `[start, end)` holds text and every line of it is wholly a shown link's text."""
+        lines = _line_spans(self.text, start, end)
+        return bool(lines) and all(self._link_line(*line) for line in lines)
+
+    def _link_line(self, start: int, end: int) -> bool:
+        starts, ends = self._links
+        at = bisect_right(starts, start) - 1
+        return at >= 0 and ends[at] >= end
+
+
+def _line_spans(text: str, start: int, end: int) -> list[tuple[int, int]]:
+    """The spans of the non-blank lines of `text[start:end]`, white space at their ends aside."""
+    spans: list[tuple[int, int]] = []
+    at = start
+    for line in text[start:end].split("\n"):
+        stripped = line.strip()
+        if stripped:
+            begin = at + line.index(stripped[0])
+            spans.append((begin, begin + len(stripped)))
+        at += len(line) + 1
+    return spans
+
 
 class VisibleIndex:
     """The visible text lines and the shown attributes of visible elements, in the schema text form."""
@@ -147,13 +194,16 @@ def fragment_text(value: str) -> str | None:
     """The text `value` renders when it is an HTML fragment holding element markup, as structured data's text
     sometimes is (a description written as `<p>…</p><ul>…</ul>`), else `None`: a value without an element (`1 < 2`)
     is text. HTML Standard parsing builds the fragment's elements and decodes its character references once; its text
-    is rendered as the page's (`render`), block boxes on lines of their own."""
+    is rendered as the page's (`render`), block boxes on lines of their own, without the lines at its ends that are
+    only a link (`CleanedText.without_edge_links`)."""
     if "<" not in value:
         return None
     body = LexborHTMLParser(value).body
     if body is None or next(body.iter(), None) is None:  # no element child, so no element at all
         return None
-    return render(body)[0].text
+    cleaned = render(body)[0]
+    start, end = cleaned.without_edge_links(0, len(cleaned.text))
+    return cleaned.text[start:end]
 
 
 class _Enter(NamedTuple):
