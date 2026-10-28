@@ -196,23 +196,42 @@ def test_a_product_page_shows_the_variant_its_url_selects_else_the_first_availab
     # Only the shown variant's availability is the item's: `available: true` names no one value, so another
     # variant's OutOfStock never publishes for it.
     assert result.entity["availability"].value == ("OutOfStock" if shown == 0 else None)
+    # Each variant's row states the page that shows it (Liquid `variant.url`): the product's URL with its `?variant=`.
+    rows = result.entity["variants"].value
+    assert isinstance(rows, list)
+    assert [row.get("url") for row in rows if isinstance(row, dict)] == [
+        f"{SHOP}/products/widget?variant={100 + n}" for n in range(3)
+    ]
 
 
 def _jsonld(node: Mapping[str, object]) -> str:
     return f'<script type="application/ld+json">{json.dumps({"@context": "https://schema.org", **node})}</script>'
 
 
-def test_the_shown_variants_identifiers_yield_to_those_the_page_states_for_the_product() -> None:
+@pytest.mark.parametrize(
+    ("query", "identifiers"),
+    [
+        ("", ("STYLE-1", "9780306406157")),  # the first available variant: the product's own identifiers publish
+        ("?variant=101", ("W-1", "4006381333931")),  # the variant the URL selects, by its row's URL
+    ],
+)
+def test_the_shown_variants_identifiers_yield_to_those_the_page_states_for_the_product_unless_the_url_selects_it(
+    query: str, identifiers: tuple[str, str]
+) -> None:
     # Variant fill: the answer states its sku and barcode on the variants only; the product's own
     # sku and gtin, as the page states them, publish, and the shown variant's are no rivals of them. They still name
-    # the variant the page shows, whose price is the item's.
-    variants = [_variant(0, 1000, available=True), {**_variant(1, 1200, available=True), "barcode": "4006381333931"}]
+    # the variant the page shows, whose price is the item's. A variant the request URL selects states the record's
+    # values: its row's URL is the request URL.
+    variants = [
+        _variant(0, 1000, available=False),
+        {**_variant(1, 1200, available=True), "barcode": "4006381333931"},
+    ]
     product = {"@type": "Product", "name": "Widget", "sku": "STYLE-1", "gtin13": "9780306406157"}
 
-    result = _product_page(variants, query="?variant=101", markup=_jsonld(product))
+    result = _product_page(variants, query=query, markup=_jsonld(product))
 
     assert result.entity is not None
-    assert (result.entity["sku"].value, result.entity["gtin"].value) == ("STYLE-1", "9780306406157")
+    assert (result.entity["sku"].value, result.entity["gtin"].value) == identifiers
     assert result.entity["price"].value == {"amount": "12.00", "currency": "EUR"}
 
 
@@ -231,6 +250,25 @@ def test_a_product_answer_is_the_page_groups_item_not_the_shown_variant() -> Non
     rows = result.entity["variants"].value
     assert isinstance(rows, list)
     assert [row["sku"] for row in rows if isinstance(row, dict)] == ["W-0", "W-1"]
+
+
+def test_the_page_s_offers_and_the_answer_s_variants_stating_one_url_are_that_variant() -> None:
+    # The page states one Offer per variant by its URL only, the answer each variant by its `variant.url`: two sources'
+    # rows stating one URL are one variant, keyed by it, not the group's URL (one source's rows repeat that).
+    variants: list[dict[str, JsonValue]] = [
+        {"id": 100 + n, "title": f"Colour {n}", "price": 1000, "available": True} for n in range(2)
+    ]
+    offers = [{"@type": "Offer", "url": f"{SHOP}/products/widget?variant={100 + n}"} for n in range(2)]
+    product = {"@type": "Product", "name": "Widget", "url": f"{SHOP}/products/widget", "offers": offers}
+
+    result = _product_page(variants, markup=_jsonld(product))
+
+    assert result.entity is not None
+    rows = result.entity["variants"].value
+    assert isinstance(rows, list)
+    assert [(row.get("url"), row.get("name")) for row in rows if isinstance(row, dict)] == [
+        (f"{SHOP}/products/widget?variant={100 + n}", f"Colour {n}") for n in range(2)
+    ]
 
 
 def test_the_products_lowest_price_the_page_states_is_no_rival_of_the_shown_variants() -> None:
