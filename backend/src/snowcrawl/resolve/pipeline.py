@@ -50,6 +50,7 @@ from snowcrawl.resolve.derive import Derived, fill, is_application_field, is_pag
 from snowcrawl.resolve.evidence import Calibration, assess, assess_fields, load_calibration
 from snowcrawl.resolve.intent import AmbiguousTarget, primary_types, select_target, sole_primary
 from snowcrawl.resolve.listing import listing_rows, row_lists
+from snowcrawl.resolve.main_image import without_main_image
 from snowcrawl.resolve.ownership import EntityGraph
 from snowcrawl.resolve.page_state import out_of_stock, render_bound, was_rendered
 from snowcrawl.resolve.pagination import next_page_candidate, next_page_links
@@ -716,10 +717,12 @@ def _finish(
     asked: tuple[str, ...] = (),
 ) -> FieldSet:
     """The one stage after resolution, run on a detail page's fields, a listing's page fields and each listing row:
-    every unpublished field's reason, in order role C's (`_unanswered`, with `reply`, the call that asked `asked`), the
-    config's (`_absent`), then the page's own evidence (`_unpublished_reasons`). Role C's reasons are never a row's:
-    a listing's reply names the page fields' failure and unverified fields only (`ListingGapReply`), so rows pass no
-    `reply`. A reason stage added here applies to all three."""
+    the main image left out of its list of images (`main_image`), then every unpublished field's reason, in order role
+    C's (`_unanswered`, with `reply`, the call that asked `asked`), the config's (`_absent`), then the page's own
+    evidence (`_unpublished_reasons`). Role C's reasons are never a row's: a listing's reply names the page fields'
+    failure and unverified fields only (`ListingGapReply`), so rows pass no `reply`. A stage added here applies to all
+    three."""
+    fields = without_main_image(source.schema, fields)
     if reply is not None:
         if reply.failure is not None:
             fields = _unanswered(fields, asked, reply.failure)

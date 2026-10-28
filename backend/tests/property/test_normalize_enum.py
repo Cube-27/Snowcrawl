@@ -9,7 +9,7 @@ import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
-from snowcrawl.normalize import enum, vocab
+from snowcrawl.normalize import dispatch, enum, vocab
 from snowcrawl.normalize.base import Ambiguous, Context, Invalid, Ok
 from snowcrawl.schemas.types import FieldSpec, FieldType
 
@@ -106,3 +106,42 @@ def test_an_unknown_vocabulary_declines(ref: str) -> None:
 def test_a_malformed_vocabulary_is_refused(codes: dict[str, list[str]], error: str) -> None:
     with pytest.raises(ValueError, match=error):
         vocab.Entries.of(codes)
+
+
+GENDER = FieldSpec(type=FieldType.ENUM, vocab="type:gender")
+_codes = st.sampled_from(["male", "female", "unisex", "kids"])
+_languages = st.sampled_from([None, "en", "de", "ja"])
+
+
+@given(_codes, _languages)
+def test_a_gender_code_is_read_in_any_case_and_page_language(code: str, language: str | None) -> None:
+    ctx = Context(captured_at=CTX.captured_at, html_lang=language)
+
+    assert enum.normalize(code.upper(), GENDER, ctx) == Ok(code)
+    assert enum.normalize(f"{code.title()}.", GENDER, ctx) == Ok(code)
+
+
+@pytest.mark.parametrize(("raw", "code"), [("https://schema.org/Male", "male"), ({"@id": "schema:Female"}, "female")])
+def test_a_schema_org_gender_iri_states_its_code(raw: object, code: str) -> None:
+    assert enum.normalize(raw, GENDER, CTX) == Ok(code)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("raw", "code"),
+    [(f"Men{chr(0x2019)}s", "male"), ("MENS", "male"), ("womens", "female"), ("Ladies", "female"), ("Girl's", "kids")],
+)
+def test_a_listed_page_term_states_its_code_whatever_its_case_or_apostrophe(raw: str, code: str) -> None:
+    assert enum.normalize(raw, GENDER, Context(captured_at=CTX.captured_at, html_lang="en")) == Ok(code)
+
+
+@pytest.mark.parametrize(
+    "raw", ["Boy", "Women's shoes", "https://example.test/male", "https://schema.org/Male/Other", "female and more"]
+)
+def test_a_term_the_gender_vocabulary_does_not_list_states_no_code(raw: str) -> None:
+    assert enum.normalize(raw, GENDER, CTX) == Invalid("no_match")
+
+
+def test_only_a_schema_org_enumeration_is_evidence_by_its_syntax() -> None:
+    # A type vocabulary's codes are common words (a navigation's "Kids"), admitted by equality only.
+    assert dispatch.checkable("InStock", SCHEMA)
+    assert not dispatch.checkable("kids", GENDER)

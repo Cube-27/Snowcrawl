@@ -1,0 +1,6 @@
+{
+  "female": ["female", "woman", "women", "women's", "womens", "ladies"],
+  "kids": ["kids", "kid's", "children", "child", "boys", "boy's", "girls", "girl's", "youth", "junior", "baby", "toddler", "infant"],
+  "male": ["male", "man", "men", "men's", "mens"],
+  "unisex": ["unisex"]
+}

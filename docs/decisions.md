@@ -19,6 +19,14 @@ Reasoning for a single change goes in its PR body.
   (flagged), else the symbol's CLDR primary currency (`$` = USD, flagged), else null. Contested amounts are conflicts.
 - **Variants.** Values that vary publish only in `variants` rows (2 or more variants); a top-level field publishes only a
   value every variant shares; no URL-named default variant.
+- **Gender is one of `male`, `female`, `unisex`, `kids`** (`type:gender`): the codes from schema.org `suggestedGender`
+  and Google Merchant Center `gender`/`age_group`, and the page terms the owner maps to them ("Men's", "Womens",
+  "Ladies", "Boys", ...) in `backend/data/vocab/gender/en.json`, pinned in the manifest. Terms match whatever their case
+  or possessive apostrophe; a term the file doesn't list stays unpublished. Why: owner 2026-10-28, normalize gender to
+  one value per meaning; the term list is the owner's C4 approval.
+- **The main image is not repeated in the image list.** A list of images that reads the same schema.org property as
+  the record's main image field (`additional_images` beside `image_url`) leaves out that file and its renditions
+  (`images.same_file`). Why: owner 2026-10-28, the list is the other images.
 - **Brand over vendor.** A stated brand outranks a platform's vendor field. Why: aggregator vendors are not the brand.
 - **Jobs.** A page holding its own application form is its `apply_url`.
 - **Canonical link wins** for a detail page's own URL.

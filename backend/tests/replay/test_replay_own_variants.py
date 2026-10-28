@@ -78,4 +78,4 @@ def test_an_image_stated_in_several_widths_is_one_image_its_widest() -> None:
     entity = _entity({"url": PAGE_URL, "sku": "W-1", "image": [f"{IMAGE}{w}" for w in (100, 900, 300)]})
 
     assert entity["image_url"] == f"{IMAGE}900"
-    assert entity["additional_images"] == [f"{IMAGE}900"]
+    assert entity["additional_images"] is None  # its one file is the main image
