@@ -8,9 +8,10 @@
   `type:` path reads it, against each type vocabulary whose codes are all members of the enumeration
   (`type:availability` for `ItemAvailability`, `type:condition` for `OfferItemCondition`), and a member name in any
   case also counts (`instock`), so a page that states "In stock (5 available)" gives `InStock`.
-- `type:<name>`: the input is a string; it states a code when the tokens of its first clause are exactly one of the
-  code's phrases (`snowcrawl.normalize.vocab`), and no other code's phrase appears later in it. "Not in stock" states
-  nothing.
+- `type:<name>`: the input is a string, a schema.org IRI (read as its term's name) or a node reference to one; it
+  states a code when the tokens of its first clause are exactly one of the code's phrases in the page's languages
+  (`snowcrawl.normalize.vocab`) or the code itself in any case and any page language, and no other code's phrase
+  appears later in it. "Not in stock" states nothing.
 
 No match is `Invalid`; two members in one input are `Ambiguous`.
 """
@@ -106,16 +107,20 @@ def _type_code(raw: Raw, name: str, ctx: Context) -> NormalizeResult:
     by_language = vocab.type_vocabulary(name)
     if by_language is None:
         return Invalid("unknown_vocab")
+    # JSON-LD 1.1 §9.5: a node reference is a node object holding only `@id`.
+    if isinstance(raw, dict) and raw.keys() == {"@id"}:
+        raw = raw["@id"]
     if not isinstance(raw, str):
         return Invalid("not_a_string")
     if has_surrogate(raw):
         return Invalid("surrogate")
-    if not vocab.tokens(raw):
+    # A schema.org IRI names its term (schema.org, "Data model"): `https://schema.org/Male` states the term `Male`.
+    term = _schema_term(raw.strip())
+    text = raw if term is None else term
+    if not vocab.tokens(text):
         return Invalid("empty")
-    entries = _page_entries(by_language, ctx)
-    if not entries:
-        return Invalid("no_vocabulary_for_language")
-    return _one_code(vocab.stated_codes(raw, entries), "no_match")
+    entries = [*_page_entries(by_language, ctx), vocab.code_entries(by_language)]
+    return _one_code(vocab.stated_codes(text, entries), "no_match")
 
 
 def _page_entries(by_language: Mapping[str, vocab.Entries], ctx: Context) -> list[vocab.Entries]:

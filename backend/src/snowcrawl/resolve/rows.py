@@ -20,6 +20,7 @@ from snowcrawl.collect.scope import LISTS, RELATIONS
 from snowcrawl.normalize.base import Ok
 from snowcrawl.normalize.dispatch import equal, equality_key
 from snowcrawl.normalize.url_key import DocumentKey, document_key
+from snowcrawl.resolve.check_digits import CHECK_DIGIT_CHANCE, chance_passes
 from snowcrawl.resolve.evidence import BELOW_MIN_CONFIDENCE, Calibration, assess
 from snowcrawl.resolve.identity import VARIANT
 from snowcrawl.resolve.offers import source_of
@@ -85,11 +86,14 @@ class _Variant:
 def resolve_rows(row_field: RowField, candidates: Sequence[Candidate]) -> FieldOutcome:
     """The field's outcome: the published rows as its value, with `items` and `dropped`."""
     mine = [c for c in candidates if c.field.startswith(f"{row_field.name}.")]
+    chance = chance_passes(row_field.name, row_field.sub_fields, mine)
+    mine = [c for c in mine if c not in chance]
     rows = row_entities(row_field.graph, row_field.target, row_field.spec)
     row_of = _row_of(row_field.graph, rows)
     in_rows = [c for c in mine if row_of(c) is not None]
     variants, dropped, reasons = _variants(row_field, rows, in_rows, row_of)
     resolved = _Resolved(rejected=[(c, NOT_IN_ROW) for c in mine if row_of(c) is None], dropped=dropped)
+    resolved.rejected.extend((c, CHECK_DIGIT_CHANCE) for c in chance)
     resolved.rejected.extend(_dropped_candidates(in_rows, row_of, dropped))
     for variant in variants:
         resolved.add(row_field, variant, in_rows, row_of)

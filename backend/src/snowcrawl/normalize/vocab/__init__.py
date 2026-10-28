@@ -169,6 +169,13 @@ def name_entries(members: frozenset[str]) -> Entries:
     return Entries.of({member: [" ".join(tokens(member))] for member in members})
 
 
+def code_entries(by_language: Mapping[str, Entries]) -> Entries:
+    """Each code of a type vocabulary as a phrase of its own, in token form, whatever the page's language: a type
+    vocabulary's codes are its standard's own values (a schema.org member name, a product data attribute value), which
+    a page writes the same in any language, as `name_entries` reads a schema.org member name."""
+    return name_entries(frozenset(code for entries in by_language.values() for code in entries.phrases.values()))
+
+
 def entries_for(by_language: Mapping[str, Entries], languages: frozenset[str]) -> list[Entries]:
     """A type vocabulary's entries for the page's `languages` (`page_languages` in `normalize/locales.py`), or for
     every language when the page states none; languages without a file have none."""

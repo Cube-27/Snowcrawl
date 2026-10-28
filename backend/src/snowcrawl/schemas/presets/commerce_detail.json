@@ -76,7 +76,7 @@
     "additional_images": {
       "type": "list",
       "item": { "type": "image_url" },
-      "description": "Every product image URL the page states for the product, in page order, the main image included",
+      "description": "Every product image URL the page states for the product, in page order, other than the main image (image_url)",
       "schema_org": "Product.image"
     },
     "color": {
@@ -90,8 +90,9 @@
       "schema_org": "Product.material.name"
     },
     "gender": {
-      "type": "text",
-      "description": "Gender the product is meant for, as the page states it",
+      "type": "enum",
+      "vocab": "type:gender",
+      "description": "Audience the product is meant for: male, female, unisex or kids",
       "schema_org": "Product.audience.suggestedGender"
     },
     "condition": {
