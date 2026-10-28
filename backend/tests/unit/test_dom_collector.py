@@ -270,6 +270,28 @@ def test_slides_named_after_the_main_file_are_its_gallery_wherever_the_block_hol
     assert values["images"] == [f"https://shop.example.test/i/{n}?h=900" for n in ("P1_m", "P1_d1", "P1_d2", "P1")]
 
 
+def test_the_main_image_and_its_slides_publish_at_the_largest_rendition_the_region_states() -> None:
+    # A thumbnail strip comes first; the slides and a `picture` state the same files larger, another file is no copy.
+    thumbs = "".join(f'<div><img src="/p/{n}.jpg?v=1&w=180" alt="{n}"></div>' for n in "ab")
+    slides = (
+        '<div><img src="/p/a.jpg?v=1&w=2000" alt="a"></div>'
+        '<div><picture><source srcset="/p/b.jpg?v=1&w=1600 1600w">'
+        '<img src="/p/b.jpg?v=1&w=800" alt="b"></picture></div>'
+        '<div><img src="/p/c.jpg?v=1&w=4000" alt="c"></div>'
+    )
+    found = _collect(f"<main><div>{thumbs}</div><div>{slides}</div></main>")
+
+    assert found["image_url"] == [
+        ("https://shop.example.test/p/a.jpg?v=1&w=2000", "dom:/html[1]/body[1]/main[1]/div[2]/div[1]/img[1]")
+    ]
+    assert found["images"] == [
+        (
+            ["https://shop.example.test/p/a.jpg?v=1&w=2000", "https://shop.example.test/p/b.jpg?v=1&w=1600"],
+            "dom:/html[1]/body[1]/main[1]/div[1]",
+        )
+    ]
+
+
 def test_a_lazy_or_hidden_slide_gives_its_source_to_the_gallery() -> None:
     # HTML Standard §4.8.4.3: a srcset candidate without a descriptor is 1x, which leaves the placeholder `src` out,
     # and its 2x candidate is the larger rendition; a lazy loader keeps the sources in `data-srcset`/`data-src`; a
