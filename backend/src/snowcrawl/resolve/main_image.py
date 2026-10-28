@@ -29,10 +29,13 @@ def without_main_image(schema: SchemaDef, fields: FieldSet) -> FieldSet:
         if outcome is None or outcome.status != "published" or not _image_list(spec):
             continue
         main = _main_fields(schema, spec, out)
+        # Both renditions: `same_file` is not transitive (an image service's prefix), so an item naming the file the
+        # main image first stated stays left out after it is promoted.
+        stated = [out[n].value for n in main]
         for n in main:
             out[n] = _at_largest(out[n], outcome)
         if main:
-            out[name] = _apart(outcome, [out[n].value for n in main])
+            out[name] = _apart(outcome, [*stated, *(out[n].value for n in main)])
     return out
 
 
