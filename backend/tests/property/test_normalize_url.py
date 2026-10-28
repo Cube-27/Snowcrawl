@@ -100,7 +100,8 @@ def test_relative_urls_resolve_against_the_document_base_and_need_one(raw: str, 
     ctx = Context(captured_at=AT, base_url="https://example.test/a/b", page_url="https://example.test/other")
 
     result = url.normalize(raw, URL, ctx)
-    assert _value(result) == expected
+    assert isinstance(result, Ok)
+    assert result.value == expected
     # It publishes absolute, in the page's spelling (a fragment the page writes stays).
     assert result.published == urljoin("https://example.test/a/b", raw)
     assert url.normalize(raw, URL, CTX) == Invalid("relative_without_base")
