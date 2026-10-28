@@ -235,7 +235,8 @@ def test_a_remembered_browser_start_that_fails_asks_http_once_and_keeps_only_its
         for http, kept in outcomes:
             stubs = web(http, browser)
             result = stubs.acquire(remembered="browser")
-            assert (result.method, result.block_class) == kept
+            outcome = (result.method, result.block_class)
+            assert outcome == kept
             assert _attempts(result) == [("browser", browser), ("http", http)]
     # A browser `ok`, a job's own browser and a field source's render ask nothing over HTTP.
     passed, own, planned = web("ok", "ok"), web("ok", "blocked"), web("ok", "blocked")

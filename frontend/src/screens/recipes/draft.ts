@@ -84,8 +84,10 @@ export function fieldSources(recipe: CustomRecipe): ReadonlyMap<string, readonly
 /** A page step as people read it: an XPath as written, a JSON-LD path with its type, any other step as JSON. */
 function stepText(step: PageField["steps"][number]): string {
   if ("xpath" in step) return step.xpath;
-  if ("jsonld" in step)
-    return `JSON-LD ${step.jsonld}${step.when_type == null ? "" : ` of type ${step.when_type}`}`;
+  if ("jsonld" in step) {
+    const type = step.when_type == null ? "" : ` of type ${step.when_type}`;
+    return `JSON-LD ${step.jsonld}${type}`;
+  }
   return JSON.stringify(step);
 }
 

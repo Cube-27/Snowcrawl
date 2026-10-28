@@ -222,7 +222,6 @@ def _document_class(
 ) -> BlockClass:
     """The class of a 2xx HTML document (`classify`), fetched as `fetch` (its page kind and redirect): its structure,
     then where a redirect led."""
-    page_kind, redirect = fetch
     tree = LexborHTMLParser(text)
     # Read before the shell rule strips script data blocks from the tree.
     documents = _json_ld(tree)
@@ -239,6 +238,20 @@ def _document_class(
         return "blocked"
     if unstructured is not None:
         return unstructured
+    return _structured_class(tree, text, fetch, structured=structured, described=described)
+
+
+def _structured_class(
+    tree: LexborHTMLParser,
+    text: str,
+    fetch: tuple[PageKind | None, Redirect | None],
+    *,
+    structured: bool,
+    described: bool,
+) -> BlockClass:
+    """The class of a document that is no shell (`_document_class`): a listing that lists nothing, then where a
+    redirect led, then its script state."""
+    page_kind, redirect = fetch
     base = None if redirect is None else redirect.answered
     if page_kind == "listing" and not structured and not lists_items(text, base):
         return "shell"
