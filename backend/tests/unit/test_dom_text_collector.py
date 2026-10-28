@@ -110,11 +110,37 @@ def test_main_text_stands_for_a_description_only_an_og_summary_states() -> None:
     assert found["description"] == f"{FIRST}\n{SECOND}"
 
 
-def test_a_block_of_notes_is_no_main_text() -> None:
-    # Each line opens with a superscript marker (Unicode `<super>`): the page's notes, however long.
-    notes = "".join(f"<p>{mark}Pay monthly at 0% APR over twelve months, subject to approval.</p>" for mark in "¹²³")
-    body = f"<main><h1>Kettle</h1><div><p>{FIRST}</p></div><div>{notes}</div></main>"
-    assert _read(body, _stated("og", "A sturdy kettle that boils fast.")) == {"description": FIRST}
+_NOTE = "Pay monthly at 0% APR over twelve months, subject to approval."
+
+
+@pytest.mark.parametrize(
+    ("first", "notes", "text"),
+    [
+        # Each line opens with a superscript marker (Unicode `<super>`).
+        (FIRST, "".join(f"<p>{mark}{_NOTE}</p>" for mark in "¹²³"), FIRST),
+        # Numbered notes the text refers to in `sup` (HTML Standard §4.13.8), then unreferenced and signed ones.
+        (
+            f"{FIRST}<sup>1</sup>",
+            "<ul>"
+            + "".join(f"<li><span>{n}</span> <span>{_NOTE}</span></li>" for n in "123")
+            + f"</ul><ul><li><span>*</span> <span>{_NOTE}</span></li></ul>",
+            f"{FIRST}1",
+        ),
+        # A marker written with punctuation (`1.`) is the note the text refers to as `[1]`.
+        (f"{FIRST}<sup>[1]</sup>", "".join(f"<p>{n}. {_NOTE}</p>" for n in "12"), f"{FIRST}[1]"),
+    ],
+)
+def test_a_block_of_notes_is_no_main_text(first: str, notes: str, text: str) -> None:
+    # The page's notes, however long, are no main text.
+    body = f"<main><h1>Kettle</h1><div><p>{first}</p></div><div>{notes}</div></main>"
+    assert _read(body, _stated("og", "A sturdy kettle that boils fast.")) == {"description": text}
+
+
+def test_a_numbered_list_the_text_never_refers_to_is_the_main_text() -> None:
+    steps = "".join(f"<p>{n} {_NOTE} Then rinse it twice.</p>" for n in "123")
+    body = f"<main><h1>Kettle</h1><div><p>Short.</p></div><div>{steps}</div></main>"
+    found = _read(body, _stated("og", "Pay monthly at 0% APR."))
+    assert found["description"].startswith("1 Pay monthly")
 
 
 @pytest.mark.parametrize(

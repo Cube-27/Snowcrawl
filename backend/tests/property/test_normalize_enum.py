@@ -72,12 +72,14 @@ def test_text_opening_with_a_member_phrase_matches_through_the_type_vocabulary(
 
 
 _IN_STOCK = ["available", "available now", "ready to ship", "in stock now"]
-_OUT_OF_STOCK = ["sold", "unavailable", "not available", "currently unavailable", "no longer available"]
+_OUT_OF_STOCK = ["sold", "unavailable", "not available", "currently unavailable", "no longer available", "oos"]
 _spacing = st.sampled_from([" ", "  ", "\u00a0", "\u2009"])
 
 
 @given(
-    st.sampled_from([*((t, "InStock") for t in _IN_STOCK), *((t, "OutOfStock") for t in _OUT_OF_STOCK)]),
+    st.sampled_from(
+        [*((t, "InStock") for t in _IN_STOCK), *((t, "OutOfStock") for t in _OUT_OF_STOCK), ("pending", "BackOrder")]
+    ),
     st.sampled_from([str.upper, str.lower, str.title]),
     _spacing,
     _rest,
@@ -87,7 +89,8 @@ def test_a_listed_stock_term_states_its_member_whatever_its_case_or_spacing(
 ) -> None:
     written = case(term[0]).replace(" ", space)
 
-    assert enum.normalize(written + rest, SCHEMA, CTX) == Ok(term[1], checked=False)
+    # A code the owner's table maps is as checked as one a member's name states.
+    assert enum.normalize(written + rest, SCHEMA, CTX) == Ok(term[1])
     assert enum.normalize(written, TYPE, Context(captured_at=CTX.captured_at, html_lang="en")) == Ok(term[1])
 
 
@@ -127,8 +130,8 @@ def test_a_rival_stock_term_later_in_the_text_is_ambiguous() -> None:
     ),
     _rest,
 )
-def test_a_listed_condition_term_states_its_member_unchecked(term: tuple[str, str], rest: str) -> None:
-    assert enum.normalize(term[0] + rest, CONDITION, CTX) == Ok(term[1], checked=False)
+def test_a_listed_condition_term_states_its_member(term: tuple[str, str], rest: str) -> None:
+    assert enum.normalize(term[0] + rest, CONDITION, CTX) == Ok(term[1])
 
 
 @pytest.mark.parametrize(("raw", "member"), [("Used condition", "UsedCondition"), ("newcondition", "NewCondition")])
@@ -196,12 +199,11 @@ def test_a_listed_page_term_states_its_code_whatever_its_case_or_apostrophe(raw:
     assert enum.normalize(raw, GENDER, Context(captured_at=CTX.captured_at, html_lang="en")) == Ok(code)
 
 
-def test_only_a_schema_org_enumeration_is_evidence_by_its_syntax() -> None:
-    # A type vocabulary's codes are common words (a navigation's "Kids"), admitted by equality only.
+def test_a_mapped_value_is_evidence_whichever_vocabulary_maps_it() -> None:
+    # Which text is the field's value is told by where the page states it, not by which table maps it.
     assert dispatch.checkable("InStock", SCHEMA)
-    assert not dispatch.checkable("kids", GENDER)
-    # A pinned stock term ("Sold") normalizes but shows no checked syntax: a navigation link writes the same word.
-    assert enum.normalize("Sold", SCHEMA, CTX) == Ok("OutOfStock", checked=False)
+    assert dispatch.checkable("kids", GENDER)
+    assert enum.normalize("Sold", SCHEMA, CTX) == Ok("OutOfStock")
 
 
 _DETAIL = next(p for p in load_presets() if p.name == "commerce_detail").fields

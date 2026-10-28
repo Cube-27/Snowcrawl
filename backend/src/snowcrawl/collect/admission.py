@@ -12,7 +12,14 @@ each field's normalizer, the only filter, and becomes a candidate only when:
   identifier another source kind gives to another identifier field is that field's (a sku whose digits pass a GTIN
   check digit is no GTIN): it is not admitted this way. Text,
   location and other opaque types admit by equality only: any visible string normalizes as text or as a location's
-  text, so visibility alone says nothing of which field a leaf is (owner, accuracy Q2 option a).
+  text, so visibility alone says nothing of which field a leaf is (owner, accuracy Q2 option a). An enum's values are
+  words (a vocabulary's codes and terms: "Men", "New", "Available"), which a script also holds as its interface's
+  text (a message catalog, a menu); so a visible enum value is admitted this way only from an object that states the
+  page's item: one holding, as a member, the very string (in the text form) another source kind states for a field
+  that names or identifies the item, schema.org `name`, an identifier (`sku`, `gtin`, `mpn`, `productID`, the
+  subproperties of `identifier`) or `url`. A brand or colour names many items, and a message catalog writes the
+  store's name, so they state none. Where the page states a word, not which table maps it, tells the item's value
+  from its interface's text.
 
 A visible value inside an array row is owned by that row, not by the page (owner, accuracy Q2 option b, Appendix A
 #55): an object item of a JSON array holding two or more objects is one of a set of items (related products,
@@ -38,11 +45,13 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 
 from snowcrawl.collect.base import ARRAY_ROW, PAGE, Candidate, Entity
 from snowcrawl.collect.json_doc import ROOT, is_scalar, member
+from snowcrawl.collect.labels import properties
 from snowcrawl.collect.locator import format_locator
 from snowcrawl.collect.schema_org_map import canonical_urls
 from snowcrawl.content.page import ParsedPage
 from snowcrawl.normalize.base import Context, Ok, raw_key
 from snowcrawl.normalize.dispatch import checkable, equal, equality_key, normalize
+from snowcrawl.normalize.text import text_form
 from snowcrawl.normalize.url import media_type
 from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
 
@@ -154,6 +163,7 @@ def admit(
     readings: dict[tuple[type, str | int | float], tuple[_Reading, ...]] = {}
     candidates = _Distinct()
     rows = _Rows(kind, ctx)
+    scopes = _ItemScopes(schema, kind, others)
     for index, document in enumerate(documents):
         for leaf in _leaves(document.data, ctx):
             rows.see(index, leaf)
@@ -162,6 +172,8 @@ def admit(
                 readings[key] = tuple(_readings(leaf.value, page, schema, ctx, anchors))
             locator = document.locator(kind, leaf.path)
             for reading in readings[key]:
+                if reading.independent and not scopes.admits(reading.field, leaf.holder):
+                    continue
                 candidates.add(
                     reading.normalized.value,
                     Candidate(
@@ -206,18 +218,20 @@ class _Leaf:
     path: str
     value: str | int | float
     rows: tuple[str, ...]
+    holder: JsonValue = field(compare=False)  # the innermost object holding it, else the document
 
 
 def _leaves(document: JsonValue, ctx: Context) -> Iterator[_Leaf]:
-    """Every string and number in `document` (as `json_doc.scalars`) with the rows holding it. Iterative, as
-    `json_doc.nodes`."""
-    stack: list[tuple[str, JsonValue, tuple[str, ...]]] = [(ROOT, document, ())]
+    """Every string and number in `document` (as `json_doc.scalars`) with the rows holding it and its innermost
+    object. Iterative, as `json_doc.nodes`."""
+    stack: list[tuple[str, JsonValue, tuple[str, ...], JsonValue]] = [(ROOT, document, (), document)]
     while stack:
-        path, value, rows = stack.pop()
+        path, value, rows, holder = stack.pop()
         if is_scalar(value):
-            yield _Leaf(path, value, rows)
+            yield _Leaf(path, value, rows, holder)
         else:
-            stack.extend(reversed(_children(path, value, rows, ctx)))
+            inner = value if isinstance(value, dict) else holder
+            stack.extend((p, child, r, inner) for p, child, r in reversed(_children(path, value, rows, ctx)))
 
 
 def _children(
@@ -316,6 +330,53 @@ class _Rows:
 # The start of an http(s) URL (RFC 3986 §3.1, scheme case-insensitive) or of a path-absolute or network-path reference;
 # which of them name a document is `canonical_urls`'s, asked only for the rows that own a value.
 _WRITTEN_URL = re.compile(r"(?:https?:)?/", re.IGNORECASE)
+
+
+class _ItemScopes:
+    """Whether an object states the page's item (module docstring), asked once per object."""
+
+    def __init__(self, schema: SchemaDef, kind: StateKind, others: Sequence[Candidate]) -> None:
+        self._schema = schema
+        # Strings as stated, not normalized: a normalizer reads a value out of a sentence ("up to $100") or resolves
+        # any fragment to the page's URL, and an object holding such text states no item.
+        self._stated = frozenset(
+            text_form(o.raw)
+            for o in others
+            if o.source_kind != kind
+            and isinstance(o.raw, str)
+            and (spec := schema.fields.get(o.field)) is not None
+            and _identifies(spec)
+        ) - {""}
+        self._states: dict[int, bool] = {}
+
+    def admits(self, name: str, holder: JsonValue) -> bool:
+        """Whether a visible value of field `name` held by `holder` may be admitted: any but an enum's, and an enum's
+        when `holder` states the page's item. Objects are told apart by identity, as the documents live through
+        `admit`."""
+        if _leaf(self._schema.fields[name]).type is not FieldType.ENUM:
+            return True
+        key = id(holder)
+        if key not in self._states:
+            members = holder.values() if isinstance(holder, dict) else holder if isinstance(holder, list) else ()
+            self._states[key] = any(isinstance(m, str) and text_form(m) in self._stated for m in members)
+        return self._states[key]
+
+
+# The schema.org properties of a Thing that name or identify one item: `name`, `url` and `identifier`, whose
+# subproperties (sku, gtin, mpn, productID) an identifier field reads.
+_NAME = "name"
+_IDENTIFYING = frozenset({FieldType.IDENTIFIER, FieldType.URL})
+
+
+def _leaf(spec: FieldSpec) -> FieldSpec:
+    """The spec of a field's values: a list's item, as `normalize.dispatch.checkable` reads it."""
+    while spec.type is FieldType.LIST and spec.item is not None:
+        spec = spec.item
+    return spec
+
+
+def _identifies(spec: FieldSpec) -> bool:
+    return spec.type in _IDENTIFYING or _NAME in properties(spec)
 
 
 @dataclass(frozen=True, slots=True)

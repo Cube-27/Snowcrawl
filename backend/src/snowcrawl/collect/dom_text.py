@@ -27,7 +27,9 @@ reviews, related items and the blocks outside the product container (`collect.pr
 - **Main text.** For a description that only a summary states (the Open Graph description, or a value of another kind
   stating its text: the page's summary restated as the item's description), or that nothing does, the longest prose
   block, when it holds at least two sentences (UAX #29 sentence boundaries, approximated): one line is a control's
-  caption or a notice, not running text; nor is a block of notes, every line opening with a superscript marker (¹, ²).
+  caption or a notice, not running text; nor is a block of notes: every line opens with a marker, a superscript form
+  (¹, ²) or a first word holding no letter (`1`, `*`), and its first line's marker is one the page's text references,
+  a superscript form or the text of a `sup` element (HTML Standard §4.13.8, footnotes).
   A summary is shorter than what it summarizes and restates it, so the block must be longer than the summary and hold
   most of the summary's words other than the title's (the page's `h1`), unless the summary holds fewer words of its
   own than of the title, a line that only names the item ("Buy <title> at <site>"); and it must not be the buy box: a
@@ -518,7 +520,10 @@ def _largest(blocks: _Blocks) -> _Block | None:
     notice, not a text. A block of mostly links is no text; a heading that opens a block names it, it is not its
     text."""
     maximal = [b for b in blocks.blocks.values() if b.node.parent is None or blocks.prose(b.node.parent) is None]
-    ranked = sorted((b for b in maximal if not (_linked(b) or _notes(b))), key=lambda b: len(b.form), reverse=True)[:2]
+    references = _references(blocks.region)
+    ranked = sorted(
+        (b for b in maximal if not (_linked(b) or _notes(b, references))), key=lambda b: len(b.form), reverse=True
+    )[:2]
     if not ranked or (len(ranked) == 2 and len(ranked[0].form) == len(ranked[1].form)):
         return None
     return ranked[0] if len(sentences(ranked[0].form)) >= _RUNNING_TEXT else None
@@ -530,12 +535,49 @@ def _linked(block: _Block) -> bool:
     return 2 * links > len(block.form)
 
 
-def _notes(block: _Block) -> bool:
-    """Whether every line of the block opens with a superscript (a character whose Unicode compatibility decomposition
-    is `<super>`, UAX #44): each is a note marked as notes are referenced (¹, ²), so the block is the page's notes
-    (financing terms, disclaimers), not its main text."""
-    lines = [line.strip() for line in block.raw.splitlines()]
-    return all(unicodedata.decomposition(line[0]).startswith(_SUPERSCRIPT) for line in lines if line)
+def _references(region: LexborNode) -> frozenset[str]:
+    """The note references the region's text states: the text of its `sup` elements. HTML has no element for a
+    footnote; a reference to one is its marker set in superscript where the text refers to it (HTML Standard §4.13.8,
+    §4.5.19 `sup`), its punctuation aside (`_bare`)."""
+    return frozenset(text for sup in region.css("sup") if (text := _bare(collapse(sup.text(deep=True)))))
+
+
+def _bare(marker: str) -> str:
+    """A marker without the punctuation around it (Unicode general category P, UAX #44): `1.`, `(1)` and `[1]` are the
+    marker `1`."""
+    start, end = 0, len(marker)
+    while start < end and unicodedata.category(marker[start]).startswith("P"):
+        start += 1
+    while end > start and unicodedata.category(marker[end - 1]).startswith("P"):
+        end -= 1
+    return marker[start:end]
+
+
+def _notes(block: _Block, references: frozenset[str]) -> bool:
+    """Whether the block is the page's notes (financing terms, disclaimers), not its main text: every line opens with a
+    note's marker (`_marker`), and the first is one the text refers to, a superscript form (a character whose Unicode
+    compatibility decomposition is `<super>`, UAX #44) or a `references` text (HTML Standard §4.13.8). The notes that
+    follow are marked so too, or by a sign no reference names (`*`): the block holds nothing but notes. A numbered
+    list whose first number the text never sets as a reference is a list, not notes."""
+    markers = [_marker(line) for line in map(str.strip, block.raw.splitlines()) if line]
+    if not markers or None in markers:
+        return False
+    first = markers[0]
+    return first is not None and (_superscript(first) or _bare(first) in references)
+
+
+def _marker(line: str) -> str | None:
+    """The note marker a line opens with: its first character when that is a superscript form (¹ may touch its
+    note's first word), else its first word when that holds no letter (a numeral or a sign: `1`, `*`); None when the
+    line opens with a word, as running text does."""
+    if _superscript(line[0]):
+        return line[0]
+    word = line.split(maxsplit=1)[0]
+    return None if any(ch.isalpha() for ch in word) else word
+
+
+def _superscript(text: str) -> bool:
+    return bool(text) and unicodedata.decomposition(text[0]).startswith(_SUPERSCRIPT)
 
 
 def _untitled(block: _Block) -> _Block:

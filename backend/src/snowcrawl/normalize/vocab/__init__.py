@@ -9,8 +9,9 @@ Two kinds, each a directory with a `JUSTIFICATION.md` that names its source:
 A type vocabulary may instead be pinned data (`backend/data/manifest.json` names its source):
 `data/vocab/<name>/<language>.json`, a JSON object from code to its terms as a page writes them. A term matches in its
 token form, and, when it holds an apostrophe, also with the apostrophe dropped ("men's" as "mens"): case and the
-possessive's apostrophe do not tell two writings of one term apart. Such terms are page terms (`Entries.pinned`):
-words a page's navigation also writes ("Sold", "Available"), so a code they state is not evidence by itself.
+possessive's apostrophe do not tell two writings of one term apart. A term the data maps states its code as the
+standard's own name does (owner decision 2026-10-28): which text is a value of the field is told by where the page
+states it, not by which table maps it.
 
 Everything is read once, at import, so a normalizer that uses it stays a pure function.
 """
@@ -39,14 +40,12 @@ def tokens(text: str) -> Tokens:
 
 @dataclass(frozen=True, slots=True)
 class Entries:
-    """One language's phrases of one type vocabulary, each with its code; `pinned` when they are pinned page terms
-    (module docstring)."""
+    """One language's phrases of one type vocabulary, each with its code."""
 
     phrases: Mapping[str, str]
-    pinned: bool = False
 
     @classmethod
-    def of(cls, codes: Mapping[str, Iterable[str]], *, pinned: bool = False) -> "Entries":
+    def of(cls, codes: Mapping[str, Iterable[str]]) -> "Entries":
         """Entries from code → phrases, the file form. A phrase must be in token form, so it matches exactly as
         written, and belongs to one code: a phrase under two codes would make every input that holds it ambiguous."""
         phrases: dict[str, str] = {}
@@ -56,7 +55,7 @@ class Entries:
                     raise ValueError(f"vocabulary phrase {phrase!r} is not in token form")
                 if phrases.setdefault(phrase, code) != code:
                     raise ValueError(f"vocabulary phrase {phrase!r} is listed under two codes")
-        return cls(phrases, pinned)
+        return cls(phrases)
 
     def matches(self, words: Tokens) -> list[tuple[int, int, str]]:
         """Each run of `words` that is a phrase (token sequences, never substrings), as its start, end and code."""
@@ -234,7 +233,7 @@ def _load_data_type() -> dict[str, dict[str, Entries]]:
         return {}
     return {
         vocabulary.name: {
-            e.stem: Entries.of(_token_forms(json.loads(e.read_text(encoding="utf-8"))), pinned=True)
+            e.stem: Entries.of(_token_forms(json.loads(e.read_text(encoding="utf-8"))))
             for e in sorted(vocabulary.glob("*" + _JSON))
         }
         for vocabulary in sorted(root.iterdir())

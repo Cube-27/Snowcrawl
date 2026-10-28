@@ -113,18 +113,14 @@ def _named_member(term: str, members: frozenset[str]) -> NormalizeResult:
 def _stated_member(text: str, members: frozenset[str], ctx: Context) -> NormalizeResult:
     """The member that `text` states through the type vocabularies whose codes are all `members` (their phrases name
     members of this enumeration and nothing else, the structural property the match rests on), or by a member name
-    in any case: `instock`, as Open Graph `product:availability` writes it.
-
-    A member that only pinned page terms state ("Sold", `vocab.Entries.pinned`) is not checked (`Ok.checked`):
-    a navigation writes the same words, so the text is a value of the field only where a source places it there."""
+    in any case: `instock`, as Open Graph `product:availability` writes it. A member the owner's terms state ("Sold")
+    is as checked as one its name states: the text maps to a code, and whether it is the field's value is told by
+    where the page states it (`collect.admission`, `resolve.ownership`), never by which table maps it."""
     entries = [
         *(e for v in vocab.type_vocabularies_within(members) for e in _page_entries(v, ctx)),
         vocab.name_entries(members),
     ]
-    result = _one_code(vocab.stated_codes(text, entries), "not_a_member")
-    if isinstance(result, Ok) and vocab.stated_codes(text, [e for e in entries if not e.pinned]) != {result.value}:
-        return Ok(result.value, checked=False)
-    return result
+    return _one_code(vocab.stated_codes(text, entries), "not_a_member")
 
 
 def _type_code(raw: Raw, name: str, ctx: Context) -> NormalizeResult:

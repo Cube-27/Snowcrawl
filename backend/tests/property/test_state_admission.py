@@ -119,3 +119,35 @@ def test_js_state_admits_exactly_by_equality_or_visibility(
 
     _check(admitted, "js_state", candidates, page)
     assert len(admitted) == len(_expected(document, "js_state", candidates, page))
+
+
+GENDER = FieldSpec(type=FieldType.ENUM, description="g", vocab="type:gender")
+_WITH_GENDER = SCHEMA.model_copy(update={"fields": {"name": NAME, "gender": GENDER}})
+
+
+@given(
+    st.sampled_from(["Alpha Shoe", "Beta", "alpha  shoe"]), st.booleans(), st.sampled_from(["Men", "Women's", "Kids"])
+)
+def test_a_visible_enum_word_is_admitted_only_from_an_object_naming_the_item(
+    held: str, listed: bool, word: str
+) -> None:
+    # A message catalog writes the same words as an item's data; only the object naming the item states its value.
+    item = Candidate.model_validate(
+        {
+            "field": "name",
+            "entity_id": "page",
+            "source_kind": "jsonld",
+            "raw": "Alpha Shoe",
+            "normalized": normalize("Alpha Shoe", NAME, CTX),
+            "locator": _LOCATORS["jsonld"],
+            "independent": True,
+        }
+    )
+    document = {"title": held, "tags": [word, "sale"] if listed else word}
+    script = f"var s = {json.dumps(document)};"
+    page = ParsedPage(f"<html><head><script>{script}</script></head><body><p>{word}</p></body></html>")
+
+    admitted = JsStateCollector().collect(page, _WITH_GENDER, CTX, [item]).candidates
+
+    names_item = held.split() == ["Alpha", "Shoe"]
+    assert [c.raw for c in admitted if c.field == "gender"] == ([word] if names_item else [])
