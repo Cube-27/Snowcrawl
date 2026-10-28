@@ -242,6 +242,9 @@ def test_a_top_level_value_no_variant_shares_is_a_conflict_and_a_shared_one_fill
         ("?item=101", ("W-1", "Red", "40.00", "InStock")),  # an id one row states
         ("?id=W", None),  # a part of every sku: no row is named
         ("?colour=blue&item=101", None),  # two rows named: none selected
+        ("?v=2&utm_source=x", ("W-2", "Blue", "45.00", "OutOfStock")),  # a row's own URL, with a pair it lacks added
+        ("?w=2&utm_source=x", None),  # pairs no row's URL has all of
+        ("?v=1&v=2", None),  # two rows' URLs, each with all its pairs among the request's
     ],
 )
 def test_the_variant_the_request_url_selects_states_the_top_level_values(

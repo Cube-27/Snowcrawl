@@ -12,8 +12,9 @@ from dataclasses import dataclass
 
 from snowcrawl.collect.base import Candidate, Entity
 from snowcrawl.normalize.base import Ok
+from snowcrawl.normalize.url_key import refined_by
 from snowcrawl.resolve.identity import VARIANT
-from snowcrawl.resolve.ownership import OFFER, EntityGraph, names_any, names_item
+from snowcrawl.resolve.ownership import OFFER, EntityGraph, names_item
 from snowcrawl.resolve.score import Group, same_value
 from snowcrawl.schemas.paths import parse_paths
 from snowcrawl.schemas.types import FieldSpec, FieldType
@@ -76,7 +77,7 @@ class TargetOffers:
         request_url: str,
     ) -> tuple[frozenset[str], frozenset[str]]:
         """The Offers of the variant the target shows: of the target's Offers and variants, those
-        whose sku or gtin (a field's or a row sub-field's) equals one of `own`, or whose own URL is `request_url`
+        whose sku or gtin (a field's or a row sub-field's) equals one of `own`, or whose own URL `request_url` refines
         (`addressed`), at most one per source, with every other source's Offer stating the same sku or gtin as one of
         them (GS1 GTIN and a seller's SKU identify one variant, whichever source states it); none when no unit matches
         or a source names two. Second, the Offers whose sku or gtin names another variant than those: never the shown
@@ -93,13 +94,14 @@ class TargetOffers:
         return self._offers_of(matched), self._offers_of(other)
 
     def addressed(self, request_url: str) -> set[str]:
-        """The target's variants and Offers whose own URL is the request URL, where it is not the target's own: a
-        variant's URL (schema.org `url`, an Offer's `url`) addresses the page showing that variant, so a request for
-        it is a request for the page with that variant selected."""
+        """The target's variants and Offers whose own URL the request URL refines (`url_key.refined_by`: the same
+        document, every query pair of the unit's URL among the request's, RFC 3986 §3.4), where the request URL is not
+        the target's own: a variant's URL (schema.org `url`, an Offer's `url`) addresses the page showing that variant,
+        so a request for it, whatever pairs it adds, is a request for the page with that variant selected."""
         if names_item(self.target, request_url):
             return set()
         units = [*self.graph.variants(self.target), *self.graph.offers(self.target)]
-        return {unit.id for unit in units if names_any(unit, (request_url,))}
+        return {unit.id for unit in units if any(refined_by(own, request_url) for own in unit.urls)}
 
     def _offers_of(self, units: set[str]) -> frozenset[str]:
         return frozenset(offer for unit in units for offer in self._unit_offers(unit))

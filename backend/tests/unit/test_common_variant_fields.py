@@ -115,6 +115,7 @@ def test_a_requested_variant_url_selects_that_variant() -> None:
     selected = _resolve(document, VARIANT_URLS[1])
     assert _value(selected["price"])["amount"] == "12.00"  # type: ignore[index]
     assert (_value(selected["sku"]), _value(selected["gtin"])) == ("W-12", "4006381333948")
+    assert _value(_resolve(document, VARIANT_URLS[1] + "&utm_source=x")["sku"]) == "W-12"  # a pair the URL lacks
     one_unstated = _group(_variant(VARIANT_URLS[0], "10.00"), _variant(VARIANT_URLS[1], "12.00", sku="W-12"))
     assert _value(_resolve(one_unstated, VARIANT_URLS[1])["sku"]) == "W-12"
     unselected = _resolve(document)

@@ -1,10 +1,11 @@
-"""`normalize.url_key.document_key` and `item_key`: the one rule by which two URLs name one document or one item."""
+"""`normalize.url_key.document_key`, `item_key` and `refined_by`: the one rule by which two URLs name one document,
+one item, or one item and that item refined."""
 
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from snowcrawl.normalize.url_key import document_key, item_key
+from snowcrawl.normalize.url_key import document_key, item_key, refined_by
 
 
 @pytest.mark.parametrize(
@@ -51,3 +52,15 @@ def test_the_keys_hold_under_one_trailing_slash_and_query_order(
     written, reordered = pairs
     assert item_key(_url(path, written)) == item_key(_url(path + "/" * slash, reordered))
     assert document_key(_url(path, written)) == document_key(_url(path + "/" * slash, []))
+
+
+@given(_segments, _pairs, _pairs, st.booleans())
+def test_a_url_is_refined_by_one_adding_pairs_only_when_it_has_a_query(
+    segments: list[str], own: list[tuple[str, str]], added: list[tuple[str, str]], slash: bool
+) -> None:
+    path = "/" + "/".join(segments)
+    url, request = _url(path, own), _url(path + "/" * slash, [*added, *own])
+    assert refined_by(url, request) is (bool(own) or not added)
+    assert refined_by(url, _url(path + "x", [*own, *added])) is False  # another document
+    if added:  # a pair `url` lacks: the request names another item than `url`, never a refinement of it
+        assert refined_by(request, url) is False
