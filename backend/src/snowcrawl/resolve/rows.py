@@ -17,6 +17,7 @@ from pydantic import JsonValue
 
 from snowcrawl.collect.base import Candidate, Entity
 from snowcrawl.collect.scope import LISTS, RELATIONS
+from snowcrawl.normalize import money
 from snowcrawl.normalize.base import Ok
 from snowcrawl.normalize.dispatch import equal, equality_key
 from snowcrawl.normalize.url_key import DocumentKey, document_key
@@ -25,9 +26,9 @@ from snowcrawl.resolve.identity import VARIANT
 from snowcrawl.resolve.offers import source_of
 from snowcrawl.resolve.ownership import AGGREGATE_OFFER, EntityGraph
 from snowcrawl.resolve.preference import Orders, PageFacts, Resolver
-from snowcrawl.resolve.types import DroppedRow, Evidence, FieldOutcome, FieldStatus, RowOutcome
+from snowcrawl.resolve.types import DroppedRow, Evidence, FieldOutcome, FieldSet, FieldStatus, RowOutcome
 from snowcrawl.schemas.paths import MappedPath, parse_paths
-from snowcrawl.schemas.types import FieldSpec, FieldType
+from snowcrawl.schemas.types import FieldSpec, FieldType, SchemaDef
 
 # The row whose scope holds a candidate's owner, or None.
 _Keys = dict[str, list[JsonValue]]  # a row's key values, by key sub-field
@@ -47,6 +48,8 @@ _URL = FieldSpec(type=FieldType.URL)
 # Owner, 2026-10-16 (Appendix A #48): a product without variants has no variant list; the list is published only for
 # two or more variants, and one row's values publish at the top level by the common-value rule.
 _MIN_ROWS = 2
+# A top-level value no variant row shares (`with_variants`).
+VARIANTS_DISAGREE: Final = "variants_disagree"
 
 
 @dataclass(frozen=True, slots=True)
@@ -491,3 +494,74 @@ def _published(
         items=tuple(row for _, row in rows),
         dropped=dropped,
     )
+
+
+def with_variants(schema: SchemaDef, fields: FieldSet) -> FieldSet:
+    """A detail target's fields with each top-level field checked against the variant rows (owner decision: a
+    top-level field publishes only a value every variant shares). A row sub-field of the top-level field's type and
+    `schema_org` path states that property of each variant (the same schema.org property, read on each variant's
+    Product or Offer). Where every published row states one value of it, the top-level field publishes that value:
+    a missing one takes it from the rows, and another value is a `conflict` (`variants_disagree`), as the record
+    would state two values of one fact (C7: decline rather than guess). Unchanged elsewhere."""
+    checked = dict(fields)
+    for name, spec in schema.fields.items():
+        outcome = fields.get(name)
+        if outcome is None or spec.row_mapped or spec.schema_org is None:
+            continue
+        shared = next((s for s in _shared_values(schema, fields, spec) if s is not None), None)
+        if shared is not None:
+            checked[name] = _agreeing(outcome, shared, spec)
+    return checked
+
+
+def _shared_values(schema: SchemaDef, fields: FieldSet, spec: FieldSpec) -> Iterator[FieldOutcome | None]:
+    """For each published row-mapped field with a sub-field of `spec`'s type and path, the first row's outcome of it
+    when every row publishes it alike, else None."""
+    for name, list_spec in schema.fields.items():
+        items = fields[name].items if list_spec.row_mapped and name in fields else None
+        sub_fields = (list_spec.item.fields or {}) if items and list_spec.item is not None else {}
+        for sub, sub_spec in sub_fields.items():
+            if (sub_spec.type, sub_spec.schema_org) == (spec.type, spec.schema_org) and items:
+                yield _alike([row.fields.get(sub) for row in items], spec)
+
+
+def _alike(outcomes: Sequence[FieldOutcome | None], spec: FieldSpec) -> FieldOutcome | None:
+    """The first of the rows' outcomes when every row publishes one value, else None."""
+    stated = [o for o in outcomes if o is not None and o.status == "published"]
+    if not stated or len(stated) != len(outcomes):
+        return None
+    return stated[0] if all(_same(stated[0].value, o.value, spec) for o in stated) else None
+
+
+def _agreeing(outcome: FieldOutcome, shared: FieldOutcome, spec: FieldSpec) -> FieldOutcome:
+    """The top-level outcome given the value every variant shares (`with_variants`)."""
+    if outcome.status == "missing":
+        return shared
+    if outcome.status != "published" or _same(outcome.value, shared.value, spec):
+        return outcome
+    chosen = () if outcome.chosen is None else ((outcome.chosen, VARIANTS_DISAGREE),)
+    return FieldOutcome(
+        status="conflict",
+        reason=VARIANTS_DISAGREE,
+        value=None,
+        evidence=None,
+        confidence=None,
+        calibrated=False,
+        source_kind=None,
+        locator=None,
+        derived_by=None,
+        chosen=None,
+        kept=outcome.kept,
+        rejected=(*outcome.rejected, *chosen),
+    )
+
+
+def _same(a: JsonValue, b: JsonValue, spec: FieldSpec) -> bool:
+    """Whether two values state one value of the field; two prices do when they state one amount and no two different
+    currencies (C7: an unclear currency is not a rival price, but two stated currencies are two prices)."""
+    if spec.type is not FieldType.MONEY:
+        return equal(a, b, spec)
+    x, y = money.amount_and_currency(a), money.amount_and_currency(b)
+    if x is None or y is None:
+        return False
+    return x[0] == y[0] and (x[1] == y[1] or None in (x[1], y[1]))

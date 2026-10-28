@@ -189,3 +189,44 @@ def test_a_listing_price_takes_the_currency_a_page_wide_data_attribute_declares(
     assert {json.dumps(row["price"].value) for row in result.rows} >= {
         json.dumps({"amount": "10.50", "currency": "GBP"})
     }
+
+
+def test_the_main_entity_of_a_page_naming_another_document_is_not_the_page_s_product() -> None:
+    # A WebPage naming another document states that page's main entity (schema.org `mainEntity`), not this page's.
+    stub = {
+        "@context": "https://schema.org",
+        "@type": "WebPage",
+        "url": "https://shop.example.test/other",
+        "mainEntity": {"@type": "Product", "name": "Widget Old", "brand": {"@type": "Brand", "name": "Acme"}},
+    }
+
+    result = _extract(_jsonld(stub) + _og(("og:title", "Widget New")), "<h1>Widget New</h1>")
+
+    assert _outcomes(result, "title", "brand") == {
+        "title": ("published", None, "Widget New"),
+        "brand": ("missing", "not_owned", None),
+    }
+
+
+def _variant(n: int, availability: str, **values: Any) -> dict[str, Any]:
+    offer = _offer("50.00", f"https://schema.org/{availability}")
+    return {"@type": "Product", "sku": f"W-{n}", "url": f"{PAGE_URL}?v={n}", "offers": offer, **values}
+
+
+def test_a_top_level_value_no_variant_shares_is_a_conflict_and_a_shared_one_fills() -> None:
+    # Every variant is out of stock and red; the group's own Offer says in stock and names no colour.
+    group = _product(
+        **{"@type": "ProductGroup"},
+        name="Widget One",
+        url=PAGE_URL,
+        offers=_offer("50.00", "https://schema.org/InStock"),
+        hasVariant=[_variant(1, "OutOfStock", color="Red"), _variant(2, "OutOfStock", color="Red")],
+    )
+
+    result = _extract(_jsonld(group), "<h1>Widget One</h1>")
+
+    assert _outcomes(result, "availability", "color", "price") == {
+        "availability": ("conflict", "variants_disagree", None),
+        "color": ("published", None, "Red"),
+        "price": ("published", None, {"amount": "50.00", "currency": "EUR"}),
+    }
